@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { registerScoped, secretPersist } from "./storage";
 
-export interface SessionState {
+interface SessionState {
   /** Backend bearer token (7 days) or a mock token. Saved in the secure store, never AsyncStorage. */
   token: string | null;
   wallet: string | null;

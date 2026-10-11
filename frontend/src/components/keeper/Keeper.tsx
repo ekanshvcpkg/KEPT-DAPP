@@ -1,15 +1,17 @@
-// The Keeper: the parametric rig from design/reference/Keeper.dc.html (KeeperSvg: moods × props × anims,
-// blink and breathing on the UI thread). No PNG fallback ships (DECISIONS D-33): Reduce Motion holds the still pose.
+// The Keeper: the parametric rig from design/reference/Keeper.dc.html (moods × props × anims, blink and
+// breathing on the UI thread), drawn with Skia (KeeperSkia). No PNG fallback ships (DECISIONS D-33):
+// Reduce Motion holds the still pose.
 import { View } from "react-native";
 import type { KeeperMood } from "@/copy";
 import { t } from "@/copy";
-import { KeeperSvg } from "./KeeperSvg";
+import { env } from "@/config/env";
+import { KeeperSkia } from "./KeeperSkia";
 import type { KeeperAnimName, KeeperPropName } from "./rig";
 
 export type KeeperProp = KeeperPropName;
 export type KeeperAnim = KeeperAnimName;
 
-export interface KeeperProps {
+interface KeeperProps {
   mood: KeeperMood;
   prop?: KeeperProp;
   anim?: KeeperAnim;
@@ -23,7 +25,7 @@ export interface KeeperProps {
 export function Keeper({ mood, prop = "none", anim = "idle", size, bust, animate = true }: KeeperProps) {
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={t("additions.a11y.keeper")}>
-      <KeeperSvg mood={mood} prop={prop} anim={anim} size={size} bust={!!bust} animate={animate} />
+      <KeeperSkia mood={mood} prop={prop} anim={anim} size={size} bust={!!bust} animate={animate && !env.keeperStill} />
     </View>
   );
 }

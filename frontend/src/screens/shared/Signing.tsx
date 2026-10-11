@@ -25,7 +25,7 @@ import { skrWhole } from "@/features/oaths/present";
 import { useIsDemo } from "@/state/mode";
 
 /** Where a failed signature goes. `retry` re-runs the same signing screen with the same params. */
-export interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
+interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
 
 function failureOutcome(e: unknown, r: FailRoutes): SignOutcome {
   if (isApiError(e)) {

@@ -1,6 +1,6 @@
 {
   "$meta": {
-    "about": "KEPT Oath rule vectors (design/rules.md + docs/DECISIONS.md amendments, money model D-91). Amounts are SKR base units (6 decimals) as strings.",
+    "about": "KEPT Oath rule vectors (design/rules.md + docs/DECISIONS.md amendments, money model D-93). Amounts are SKR base units (6 decimals) as strings.",
     "moneyRule": "Each miss costs missBps/10000 of the ORIGINAL stake (floor), capped at the member's balance. Each missed member's forfeiture is split on its own into k + 1 equal shares (k = that day's keepers, one more for KEPT); each share floors and the dust goes to KEPT. A missed member gets no share. No entry fee. A day with no keepers sends all of its forfeitures to the treasury (owner-confirmed; see nobody-keeps-day and the solo vectors). A broken Oath (HP 0) sends half of every start-of-day balance to the treasury and holds half for the 7-day Rematch window, after which the program sweeps it to the treasury (`held`). `fee` is KEPT's shares including dust; `toTreasury` is money outside the split.",
     "generatedBy": "packages/engine/scripts/write-vectors.ts",
     "marks": "one string per finished day, one char per member: k = kept, m = missed"
@@ -225,7 +225,7 @@
     },
     {
       "name": "owner-example-one-miss",
-      "description": "D-91: 4 × 100 SKR, one member misses once. The miss costs 10 SKR, split between the 3 keepers and KEPT: 2.5 each.",
+      "description": "D-93: 4 × 100 SKR, one member misses once. The miss costs 10 SKR, split between the 3 keepers and KEPT: 2.5 each.",
       "terms": {
         "stake": "100000000",
         "days": 3,
@@ -355,7 +355,7 @@
     },
     {
       "name": "two-misses-one-day",
-      "description": "D-91: 4 × 1,000 SKR, two members miss the same day: 200 SKR split 3 ways (2 keepers + KEPT). Not divisible: 66.666666 each, the dust goes to KEPT.",
+      "description": "D-93: 4 × 1,000 SKR, two members miss the same day: 200 SKR split 3 ways (2 keepers + KEPT). Not divisible: 66.666666 each, the dust goes to KEPT.",
       "terms": {
         "stake": "1000000000",
         "days": 3,
@@ -485,7 +485,7 @@
     },
     {
       "name": "worked-example",
-      "description": "D-91 version of the rules.md §3 example: 4 × 1,000 SKR, 3 days. Day 1 B and D miss (200 split 3 ways); day 2 all keep; day 3 D misses again (100 split 4 ways, still 100: no escalation).",
+      "description": "D-93 version of the rules.md §3 example: 4 × 1,000 SKR, 3 days. Day 1 B and D miss (200 split 3 ways); day 2 all keep; day 3 D misses again (100 split 4 ways, still 100: no escalation).",
       "terms": {
         "stake": "1000000000",
         "days": 3,
@@ -615,7 +615,7 @@
     },
     {
       "name": "repeated-misses-7",
-      "description": "D-91: 1,000 SKR / 7 days. One member misses three times and pays 100 SKR each time (flat, not 143 / 214 / 321); the others split each 100 four ways.",
+      "description": "D-93: 1,000 SKR / 7 days. One member misses three times and pays 100 SKR each time (flat, not 143 / 214 / 321); the others split each 100 four ways.",
       "terms": {
         "stake": "1000000000",
         "days": 7,
@@ -857,7 +857,7 @@
     },
     {
       "name": "miss-cost-ignores-length-14",
-      "description": "D-91: a 14-day Oath costs the same per miss as a 3-day one (10% of 2,500 = 250 SKR); the 250 is split 3 ways (2 keepers + KEPT).",
+      "description": "D-93: a 14-day Oath costs the same per miss as a 3-day one (10% of 2,500 = 250 SKR); the 250 is split 3 ways (2 keepers + KEPT).",
       "terms": {
         "stake": "2500000000",
         "days": 14,
@@ -1249,7 +1249,7 @@
     },
     {
       "name": "nobody-keeps-day",
-      "description": "D-91 (owner-confirmed): everyone misses day 1, so there are no keepers. All of the lost money (2 × 50 SKR) goes to KEPT.",
+      "description": "D-93 (owner-confirmed): everyone misses day 1, so there are no keepers. All of the lost money (2 × 50 SKR) goes to KEPT.",
       "terms": {
         "stake": "500000000",
         "days": 3,
@@ -1353,7 +1353,7 @@
     },
     {
       "name": "rounding-dust",
-      "description": "D-91: stake 1,000.000007 SKR, so a miss is floor(10%) = 100.000000 SKR; split 3 ways (2 keepers + KEPT) = 33.333333 each, the 1 dust unit goes to KEPT.",
+      "description": "D-93: stake 1,000.000007 SKR, so a miss is floor(10%) = 100.000000 SKR; split 3 ways (2 keepers + KEPT) = 33.333333 each, the 1 dust unit goes to KEPT.",
       "terms": {
         "stake": "1000000007",
         "days": 3,
@@ -1470,7 +1470,7 @@
     },
     {
       "name": "owner-example-two-misses",
-      "description": "D-91: 4 × 100 SKR, two members miss: each forfeits 10 SKR; each forfeiture is split 3 ways (2 keepers + KEPT). Keepers get 6.666666 each over both, KEPT 6.666668.",
+      "description": "D-93: 4 × 100 SKR, two members miss: each forfeits 10 SKR; each forfeiture is split 3 ways (2 keepers + KEPT). Keepers get 6.666666 each over both, KEPT 6.666668.",
       "terms": {
         "stake": "100000000",
         "days": 3,
@@ -1600,7 +1600,7 @@
     },
     {
       "name": "rounding-per-forfeiture",
-      "description": "D-91: stake 30 base units (a miss is 3), 3 members, two miss: each 3-unit forfeiture is split 2 ways (1 keeper + KEPT) = 1 + 2, so the keeper gets 2 and KEPT 4 (not 3 and 3 from splitting the 6 once).",
+      "description": "D-93: stake 30 base units (a miss is 3), 3 members, two miss: each 3-unit forfeiture is split 2 ways (1 keeper + KEPT) = 1 + 2, so the keeper gets 2 and KEPT 4 (not 3 and 3 from splitting the 6 once).",
       "terms": {
         "stake": "30",
         "days": 3,
@@ -1808,7 +1808,7 @@
     },
     {
       "name": "solo-missed-some",
-      "description": "D-1 / D-91: solo misses cost 10% each (flat) and go to KEPT, −35 HP each.",
+      "description": "D-1 / D-93: solo misses cost 10% each (flat) and go to KEPT, −35 HP each.",
       "terms": {
         "stake": "1000000000",
         "days": 7,

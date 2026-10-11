@@ -4,7 +4,7 @@
 //! appended after each struct, so accounts written by earlier program versions still deserialize:
 //! - An Oath account of exactly `OATH_BASE_LEN` bytes predates terms and settles under rules v1.
 //! - Newer Oath accounts carry `OathTerms` at `OATH_BASE_LEN`, fixed when the Oath is created.
-//! - Rules v3 (the owner's money model, docs/DECISIONS.md D-91) is what every new Oath records. Its daily
+//! - Rules v3 (the owner's money model, docs/DECISIONS.md D-93) is what every new Oath records. Its daily
 //!   settlement is replayed from the `days_kept` bitmasks (`replay_v3`); v1 and v2 Oaths keep their own rules.
 //! - `Economics` (rules v2 settings) can still sit after `Config`, but no longer affects new Oaths.
 use anchor_lang::prelude::*;
@@ -17,7 +17,7 @@ pub const BPS_DENOMINATOR: u64 = 10_000;
 pub const RULES_LEGACY: u8 = 1;
 /// Rules v2: fee charged on top of the stake at create/join, one freeze credit per member, and a 50% slash.
 pub const RULES_V2: u8 = 2;
-/// Rules v3 (owner, D-91): no entry fee; each missed day costs 10 % of the original stake, split per forfeiture
+/// Rules v3 (owner, D-93): no entry fee; each missed day costs 10 % of the original stake, split per forfeiture
 /// between that day's keepers and KEPT; HP as in design/rules.md, with the 50 % hold on a break.
 pub const RULES_V3: u8 = 3;
 /// What one miss costs under rules v3, in basis points of the member's original stake.

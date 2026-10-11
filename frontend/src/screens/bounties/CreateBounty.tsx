@@ -27,7 +27,7 @@ const WINDOWS = [12, 24, 48, null] as const; // null = "Day 1 ends"
 const RATES = [0.6, 0.7, 0.8, 0.9] as const;
 const pinnedOne = metrics.button.height + metrics.pinned.bottom;
 
-export interface BountyDraft {
+interface BountyDraft {
   name: string; objectId: number; numDays: 3 | 7 | 14; window: number; poolIndex: number; message: string; link: string;
   minRateOn: boolean; rateIndex: number; tokenOn: boolean;
 }

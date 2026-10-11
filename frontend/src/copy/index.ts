@@ -25,12 +25,12 @@ export type CopyKey =
   | `toasts.${number}`
   | `additions.${Leaves<Additions>}`;
 
-export type Vars = Record<string, string | number>;
+type Vars = Record<string, string | number>;
 
 const SCREEN_IDS = Object.keys(copyJson.screens).sort((a, b) => b.length - a.length);
 const TEMPLATES = templatesJson as unknown as Record<string, { template: string; sample: Record<string, string> } | undefined>;
 
-/** Owner amendments to design strings (D-91); a key here wins over design/copy.json. */
+/** Owner amendments to design strings (D-93); a key here wins over design/copy.json. */
 const AMENDMENTS = amendmentsJson as Record<string, string>;
 
 function lookup(key: string): string | undefined {

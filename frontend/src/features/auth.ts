@@ -50,7 +50,7 @@ export async function restoreSession(api: KeptApi): Promise<boolean> {
  * The backend rejected the stored token mid-session (expired after 7 days, or revoked): sign out, say
  * so, and go to Connect wallet (A2) with A1 under it. Live only; Demo's token never expires.
  */
-export function expireSession(): void {
+function expireSession(): void {
   if (useMode.getState().mode !== "live" || !useSession.getState().token) return;
   useSession.getState().signOut();
   queryClient.clear();

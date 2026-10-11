@@ -305,6 +305,22 @@ export const mockOaths = {
   decideReview(id: string, wallet: string, approved: boolean) { mockOaths.prove(id, wallet, approved ? "kept" : "none"); },
   /** Tests only. */
   reset() { oaths.clear(); deltas.clear(); seededFor = null; counter = 0; mockBounties.reset(); },
+  /**
+   * Dev screenshots only (kept://dev/open/B1?cards=N): `n` more Oaths due today, alternating group Oaths
+   * with a long goal and the Keeper-kept float, and solo ones with a short goal.
+   */
+  addDueForDev(wallet: string, n: number) {
+    const goals = ["take a cold shower before breakfast and log how long it lasted", "stretch", "practise guitar scales for fifteen minutes", "walk 5 km", "write one page of the journal before bed", "meditate"];
+    for (let i = 0; i < n; i++) {
+      const day = 2, left = 6 * 3600;
+      const extra = { goal: goals[i % goals.length]!, day1StartsAt: startFor(day, left), creator: wallet };
+      if (i % 2 === 0) {
+        group(`Dev Oath ${i + 1}`, (i + 2) % 6, 7, 500, wallet, [me(wallet, { daysKept: mask("kk"), proofDay: day }), person("riya", mask("kk"), "kept", day), person("arjun", mask("kk"), "none", day)], extra);
+      } else {
+        add({ name: `Dev Solo ${i + 1}`, objectId: (i + 2) % 6, numDays: 14, stake: skr(300), isSolo: true, reviewMode: "ai", status: "active", members: [me(wallet, { daysKept: mask("kk"), proofDay: day })], seeded: true, ...extra });
+      }
+    }
+  },
 };
 
 const deltas = new Map<string, bigint>();

@@ -119,7 +119,7 @@ export function calculatePayoutsV2(stake: bigint, successes: boolean[], feesColl
   return { payouts, slashed, toTreasury, carryover, dust };
 }
 
-// ---- Rules v3: the owner's money model (docs/DECISIONS.md D-91). Mirrors `replay_v3` in the program's economics.rs ----
+// ---- Rules v3: the owner's money model (docs/DECISIONS.md D-93). Mirrors `replay_v3` in the program's economics.rs ----
 // Every new Oath records rules v3: no entry fee; each missed day costs 10% of the original stake (capped at the
 // balance); each member's forfeiture is split on its own into k + 1 equal shares between that day's k keepers and
 // KEPT, with every remainder going to KEPT; a day nobody kept goes to KEPT; HP as in design/rules.md, and on a break

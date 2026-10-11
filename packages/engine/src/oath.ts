@@ -1,4 +1,4 @@
-// The Oath money and HP rules: design/rules.md §2–4 plus docs/DECISIONS.md › Rules amendments (D-91: the owner's
+// The Oath money and HP rules: design/rules.md §2–4 plus docs/DECISIONS.md › Rules amendments (D-93: the owner's
 // money model replaced rules.md §3: a flat 10 % of the original stake per miss, shared equally by the day's keepers and KEPT).
 // Pure and deterministic. All amounts are bigint base units; no floats touch money.
 
@@ -30,7 +30,7 @@ export interface DayResult {
   /** What each member lost to misses today (capped at their balance). */
   lost: bigint[];
   lostTotal: bigint;
-  /** KEPT's equal share of today's lost money, rounding dust included (D-91). */
+  /** KEPT's equal share of today's lost money, rounding dust included (D-93). */
   fee: bigint;
   /** What each member won today. */
   won: bigint[];
@@ -51,7 +51,7 @@ export interface OathState {
   brokeOnDay: number | null;
   /** Each member's live balance, base units. 0 for everyone once broken. */
   balances: bigint[];
-  /** How many times each member has missed (a count; every miss costs the same since D-91). */
+  /** How many times each member has missed (a count; every miss costs the same since D-93). */
   misses: number[];
   keptDays: number[];
   /** Per-member totals across all days. */
@@ -64,7 +64,7 @@ export interface OathState {
 }
 
 /**
- * What a miss costs (D-91): 10 % of the member's ORIGINAL stake, rounded down, the same for every miss and every
+ * What a miss costs (D-93): 10 % of the member's ORIGINAL stake, rounded down, the same for every miss and every
  * Oath length. A member never pays more than they have left (applyDay and nextMissCost cap it).
  */
 export function missCost(stake: bigint): bigint {
@@ -73,7 +73,7 @@ export function missCost(stake: bigint): bigint {
 }
 
 /**
- * Splits a day's lost money equally between the day's keepers and one more share for KEPT (D-91). Each share is
+ * Splits a day's lost money equally between the day's keepers and one more share for KEPT (D-93). Each share is
  * rounded down and the rounding dust goes to KEPT, so `each × keepers + kept === lost`. With no keepers KEPT
  * takes everything.
  */
@@ -109,7 +109,7 @@ export function initialState(terms: OathTerms): OathState {
 }
 
 /**
- * Applies one finished day. Order (rules.md §2, D-91, amendments 2):
+ * Applies one finished day. Order (rules.md §2, D-93, amendments 2):
  * 1. each missed member pays a miss (10 % of the original stake), capped at their balance (D-3)
  * 2. damage: −20 (−35 solo) per missed member
  * 3. if HP ≤ 0 the Oath breaks: no heal, no keeper payout, no fee. Each member's balance at the
@@ -180,7 +180,7 @@ export function applyDay(state: OathState, marks: readonly DayMark[]): OathState
   if (lostTotal > 0n) {
     const keepers = marks.map((m, i) => (m === "k" ? i : -1)).filter((i) => i >= 0);
     if (keepers.length === 0) {
-      // Confirmed by the owner (docs/DECISIONS.md D-91): a day nobody kept sends all of its forfeitures to KEPT (what
+      // Confirmed by the owner (docs/DECISIONS.md D-93): a day nobody kept sends all of its forfeitures to KEPT (what
       // k = 0 gives: no keeper shares, one KEPT share). The program does the same (economics.rs `replay_v3`).
       toTreasury = lostTotal;
     } else {

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import Svg, { Defs, RadialGradient, Rect, Stop } from "react-native-svg";
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { GESTURES } from "@kept/config";
@@ -27,10 +27,11 @@ function ScanLine({ height }: { height: number }) {
   const p = useSharedValue(0);
   const onLayout = useAnimationLifecycle([p], () => {
     if (reduce) return;
-    p.value = withRepeat(withTiming(1, { duration: duration.scan, easing: Easing.inOut(Easing.ease) }), -1, true);
+    p.set(withRepeat(withTiming(1, { duration: duration.scan, easing: Easing.inOut(Easing.ease) }), -1, true));
   }, [reduce], { pauseOnBlur: true });
-  const a = useAnimatedStyle(() => ({ top: height * (0.14 + 0.7 * p.value) }));
-  return <Animated.View onLayout={onLayout} pointerEvents="none" style={[{ position: "absolute", left: metrics.camera.scanInset, right: metrics.camera.scanInset, height: 2, backgroundColor: color.lime.base, boxShadow: `0 0 16px 4px ${color.lime.ring45}` }, a]} />;
+  // Moves with a transform (motion rework): its glow is drawn once and the view slides, no layout per frame.
+  const a = useAnimatedStyle(() => ({ transform: [{ translateY: height * 0.7 * p.value }] }));
+  return <Animated.View onLayout={onLayout} pointerEvents="none" style={[{ position: "absolute", top: height * 0.14, left: metrics.camera.scanInset, right: metrics.camera.scanInset, height: 2, backgroundColor: color.lime.base, boxShadow: `0 0 16px 4px ${color.lime.ring45}` }, a]} />;
 }
 
 /**
@@ -113,7 +114,8 @@ export function Shutter({ onShutter, onFlip, disabled }: { onShutter: () => void
           <View style={{ width: s.inner, height: s.inner, borderRadius: s.inner / 2, backgroundColor: color.text.primary }} />
         </View>
       </PressScale>
-      <Pressable onPress={onFlip} accessibilityRole="button" accessibilityLabel={t("additions.a11y.flip")} style={side}><Icon name="camera-flip-outline" size={22} /></Pressable>
+      {/* Press feedback at touch-down like the shutter (the camera itself takes longer than 100 ms to turn). */}
+      <PressScale onPress={onFlip} scale={s.pressScale} accessibilityLabel={t("additions.a11y.flip")} hit={{ w: s.side, h: s.side }}><View style={side}><Icon name="camera-flip-outline" size={22} /></View></PressScale>
     </View>
   );
 }

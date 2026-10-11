@@ -88,7 +88,7 @@ const TERMS_TAG = "KEPTTRM1";
 
 /** The rules an Oath was created under, from the region appended after the Oath struct (economics.rs `OathTerms`). */
 export interface OathTerms {
-  /** 1 = legacy (no terms region), 2 = fee + freezes (never activated on Devnet), 3 = the owner's model (D-91). */
+  /** 1 = legacy (no terms region), 2 = fee + freezes (never activated on Devnet), 3 = the owner's model (D-93). */
   rulesVersion: 1 | 2 | 3;
   /** Rules v3: cost of one miss in basis points of the original stake; 0 otherwise. */
   missBps: number;

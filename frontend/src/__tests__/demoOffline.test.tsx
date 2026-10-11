@@ -9,6 +9,7 @@ import { ToastHost } from "@/components/chrome";
 import { queryClient } from "@/api/queries";
 import { RootNavigator } from "@/app/RootNavigator";
 import { navigateTo } from "@/app/nav";
+import { layOutDeck } from "@/testing/deck";
 import type { DesignId } from "@/app/routes";
 import { setAppMode } from "@/features/mode";
 import { mockOaths } from "@/features/oaths/mockStore";
@@ -60,6 +61,7 @@ it("onboards in Demo and opens the core screens without touching the network", a
   expect(useMode.getState().mode).toBe("demo");
   expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
   // The judges' Today: Iron Week with photo 2 due and the claim banner.
+  await layOutDeck();
   expect(await screen.findAllByText("Iron Week", {}, slow)).not.toHaveLength(0);
 
   const iron = mockOaths.list(MOCK_WALLET).find((o) => o.name === "Iron Week" && o.status === "active")!;

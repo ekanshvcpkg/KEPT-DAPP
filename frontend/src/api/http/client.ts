@@ -3,14 +3,14 @@ import type { z } from "zod";
 import { env } from "@/config/env";
 import { ApiError, toApiError } from "../errors";
 
-export type TokenSource = () => string | null;
+type TokenSource = () => string | null;
 
 /** Called when the backend rejects the stored token mid-session (features/auth › expireSession). */
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(f: (() => void) | null): void { onUnauthorized = f; }
 
 /** A request that hasn't answered by then is given up on, like no network: M2 offers the retry. */
-export const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export interface HttpClient {
   get<S extends z.ZodType>(path: string, schema: S): Promise<z.output<S>>;

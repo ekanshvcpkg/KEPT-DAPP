@@ -1,6 +1,6 @@
 // Generates src/app/routes.gen.json from design/flows.md › Route table (plus src/app/routes.amend.json):
-// every screen id, its name and the screens it goes to. The navigator registers every id from it, and placeholder screens link to
-// their destinations. Run after design/flows.md changes: pnpm --filter @kept/mobile routes:gen
+// every screen id, its name and the screens it goes to. The navigator registers every id from it, and
+// routes.test.ts checks the edges against flows.md. Run after design/flows.md changes: pnpm --filter @kept/mobile routes:gen
 import { readFileSync, writeFileSync } from "node:fs";
 
 /** routes.amend.json: app-only screens and edges (DECISIONS D-80), applied after the design's table. */

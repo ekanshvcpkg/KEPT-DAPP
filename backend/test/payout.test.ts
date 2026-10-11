@@ -138,7 +138,7 @@ test("a freeze-covered day counts toward the full mask; v2 settles one Oath day 
 });
 
 
-// ---- Rules v3 (owner money model, D-91): the same numbers as the program and the app's engine ----
+// ---- Rules v3 (owner money model, D-93): the same numbers as the program and the app's engine ----
 import { closedDayCount, missCostV3, replayV3 } from "../src/shared/payout.js";
 
 test("v3: the owner's examples", () => {

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { View } from "react-native";
-import Animated, { useAnimatedProps, useReducedMotion, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
-import Svg, { Path } from "react-native-svg";
+import { useReducedMotion, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
+import { Canvas, Group, Path } from "@shopify/react-native-skia";
 import { t } from "@/copy";
 import { color, duration, easing, fontFamily, gradient, metrics, space } from "@/theme";
 import { haptic } from "@/lib/haptics";
@@ -9,13 +9,14 @@ import { CheckK, FadeIn, Pop, Surface, Text, useAnimationLifecycle } from "../pr
 import Constants from "expo-constants";
 import { env } from "@/config/env";
 
-const APath = Animated.createAnimatedComponent(Path);
-/** Length of the check stroke M23 44L40 60L78 24 in the 100-unit mark. */
-const CHECK_LEN = 76;
 /** motion.md §1 splash timeline (ms). */
 const SPLASH = { check: 350, stem: 600, leg: 750, word: 900, tagline: 1050, inMs: 250, textMs: 400 };
 
-/** The ink Check-K drawn in: check stroke `draw` 320 ms, then the stem and leg fade in (motion.md §1). */
+/**
+ * The ink Check-K drawn in: check stroke `draw` 320 ms, then the stem and leg fade in (motion.md §1). Skia
+ * (motion rework): the check is the stroke trimmed to `draw` of its length, the same reveal as the
+ * prototype's SVG dash offset, without animating SVG props.
+ */
 function CheckKReveal({ size }: { size: number }) {
   const reduce = useReducedMotion();
   const draw = useSharedValue(reduce ? 1 : 0);
@@ -24,25 +25,26 @@ function CheckKReveal({ size }: { size: number }) {
   const onLayout = useAnimationLifecycle([draw, stem, leg], () => {
     if (reduce) return;
     const ease = easing("enter");
-    draw.value = withDelay(SPLASH.check, withTiming(1, { duration: duration.drawCheck, easing: ease }));
-    stem.value = withDelay(SPLASH.stem, withTiming(1, { duration: SPLASH.inMs, easing: ease }));
-    leg.value = withDelay(SPLASH.leg, withTiming(1, { duration: SPLASH.inMs, easing: ease }));
+    draw.set(withDelay(SPLASH.check, withTiming(1, { duration: duration.drawCheck, easing: ease })));
+    stem.set(withDelay(SPLASH.stem, withTiming(1, { duration: SPLASH.inMs, easing: ease })));
+    leg.set(withDelay(SPLASH.leg, withTiming(1, { duration: SPLASH.inMs, easing: ease })));
   }, [reduce]);
   useEffect(() => {
     if (reduce) return;
     const id = setTimeout(haptic.light, SPLASH.check);
     return () => clearTimeout(id);
   }, [reduce]);
-  const checkP = useAnimatedProps(() => ({ strokeDashoffset: CHECK_LEN * (1 - draw.value) }));
-  const stemP = useAnimatedProps(() => ({ opacity: stem.value }));
-  const legP = useAnimatedProps(() => ({ opacity: leg.value }));
   const ink = color.text.onLime;
   return (
-    <Svg onLayout={onLayout} viewBox="0 0 100 100" width={size} height={size} accessible={false}>
-      <APath animatedProps={legP} d="M54 45L78 76" fill="none" stroke={ink} strokeWidth={15} strokeLinecap="round" />
-      <APath animatedProps={checkP} d="M23 44L40 60L78 24" fill="none" stroke={ink} strokeWidth={15} strokeLinecap="round" strokeLinejoin="round" strokeDasharray={`${CHECK_LEN} ${CHECK_LEN}`} />
-      <APath animatedProps={stemP} d="M23 24V76" fill="none" stroke={ink} strokeWidth={15} strokeLinecap="round" />
-    </Svg>
+    <View onLayout={onLayout} style={{ width: size, height: size }} accessible={false}>
+      <Canvas style={{ width: size, height: size }}>
+        <Group transform={[{ scale: size / 100 }]}>
+          <Path path="M54 45L78 76" color={ink} style="stroke" strokeWidth={15} strokeCap="round" opacity={leg} />
+          <Path path="M23 44L40 60L78 24" color={ink} style="stroke" strokeWidth={15} strokeCap="round" strokeJoin="round" start={0} end={draw} />
+          <Path path="M23 24V76" color={ink} style="stroke" strokeWidth={15} strokeCap="round" opacity={stem} />
+        </Group>
+      </Canvas>
+    </View>
   );
 }
 

@@ -1,23 +1,27 @@
-// E · Join an Oath (screens.md E1–E3). E1 takes a code typed, pasted, scanned from a QR or carried
-// in by `kept://join/<code>`, and routes to the preview or the matching E3 state.
+// E · Join an Oath (screens.md E1–E3). E1 offers a choice (D-91): scan a QR (E1·scan) or type the code
+// (E1·code); a code carried in by `kept://join/<code>`, an inbox invite or onboarding is looked up at
+// once. Each routes to the preview or the matching E3 state.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { keeperLines, t } from "@/copy";
 import type { CopyKey, ScreenId } from "@/copy";
 import { Button, ButtonRow } from "@/components/actions";
 import { NavBar, useToast } from "@/components/chrome";
-import { BodyText, Breakdown, Title } from "@/components/content/Basics";
+import { BodyText, Breakdown, Skeleton, Title } from "@/components/content/Basics";
 import { ProofCamera } from "@/components/content/Camera";
 import { SentenceInput } from "@/components/content/Inputs";
 import { OathCard } from "@/components/content/Oath";
 import { RowList } from "@/components/content/Rows";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
-import { metrics } from "@/theme";
+import { color, metrics } from "@/theme";
+import { env } from "@/config/env";
+import { useScreenFocused } from "@/lib/focus";
 import { getApi, isApiError } from "@/api";
 import { qk, queryClient, useBalances } from "@/api/queries";
-import { useGo, useParams } from "@/app/nav";
+import { backToStep, useGo, useParams } from "@/app/nav";
 import type { DesignId } from "@/app/routes";
 import { oathActions, useOath } from "@/features/oaths/hooks";
 import { oathView } from "@/features/oaths/model";
@@ -39,20 +43,27 @@ export const codeFrom = (s: string) => {
   return m;
 };
 
-// ── E1 Enter invite ──
-export function E1() {
-  const { back, go } = useGo();
-  const toast = useToast();
-  const p = useParams<{ code: string }>();
-  const [code, setCode] = useState(p.code ? codeFrom(p.code) : "");
-  // A second join link returns to this E1 with a new code (RootNavigator › reuseJoin): take it.
-  const [linked, setLinked] = useState(p.code);
-  if (p.code !== linked) { setLinked(p.code); if (p.code) setCode(codeFrom(p.code)); }
-  const [busy, setBusy] = useState(false);
-  const [perm, requestPerm] = useCameraPermissions();
-  const scanned = useRef(false);
-  useBalances(); // loads the balance the E3·skr check reads from the cache
+/**
+ * The invite code in a scanned QR: a KEPT invite link (kept://join/…, or the app's site /o/…) or a bare
+ * code like IRON-7K2Q. Null for any other QR (E1·scan keeps scanning).
+ */
+export function inviteFromQr(data: string): string | null {
+  const s = data.trim();
+  const site = env.identity.uri.replace(/\/$/, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const link = s.match(new RegExp(`^(?:kept://join/|${site}/o/)([^/?#\\s]+)`, "i"))?.[1];
+  if (link) return decodeURIComponent(link);
+  return /^[A-Za-z]+-[A-Za-z0-9]{4}$/.test(s) ? s : null;
+}
 
+/** The E1 step a lookup started from: E3's way back returns there (D-91). */
+type JoinStep = "E1·scan" | "E1·code";
+
+/** Looks a code up and routes to E2 or the matching E3 state. */
+function useFindOath(from: JoinStep) {
+  const { go } = useGo();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  useBalances(); // loads the balance the E3·skr check reads from the cache
   const find = useCallback(async (raw: string) => {
     const c = codeFrom(raw);
     if (!c) return;
@@ -61,7 +72,7 @@ export function E1() {
       const wallet = useSession.getState().wallet!;
       const { oath, alreadyStarted } = await getApi().oaths.byInvite(c, wallet);
       const v = oathView(oath, nowSeconds(), wallet);
-      const params = { id: oath.id, code: c };
+      const params = { id: oath.id, code: c, from };
       const to: DesignId = v.me >= 0 ? "E3·in"
         : alreadyStarted ? "E3·late"
         : !oath.isSolo && !useSession.getState().genesis ? "E3·elig"
@@ -69,42 +80,123 @@ export function E1() {
         : "E2";
       go(to, params);
     } catch (e) {
-      if (isApiError(e) && (e.code === "INVITE_NOT_FOUND" || e.code === "NOT_FOUND")) go("E3·code");
+      if (isApiError(e) && (e.code === "INVITE_NOT_FOUND" || e.code === "NOT_FOUND")) go("E3·code", { code: c, from });
       else if (isApiError(e) && e.code === "OFFLINE") go("M2");
       else toast(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
-      scanned.current = false;
     }
-  }, [go, toast]);
+  }, [go, toast, from]);
+  return { find, busy };
+}
 
-  // A deep link arrives with the code: look it up straight away (only once per unique code).
-  const autoChecked = useRef<string | null>(null);
+// ── E1 Enter invite (D-91) ── first a choice: scan a QR or type the code. No camera or keyboard here.
+// A code that's already known (a kept://join link, an inbox invite, the invite carried through
+// onboarding) skips the choice and is looked up at once.
+export function E1() {
+  const { back, go } = useGo();
+  const p = useParams<{ code: string }>();
+  const { find } = useFindOath("E1·code");
+  const [looking, setLooking] = useState<string | null>(p.code ? codeFrom(p.code) : null);
+  // Each known code is looked up once; a second join link returns here with a new one (RootNavigator › reuseJoin).
+  const checked = useRef<string | null>(null);
   useEffect(() => {
-    if (!p.code || autoChecked.current === p.code) return;
-    autoChecked.current = p.code;
-    const timer = setTimeout(() => { void find(p.code!); }, 0);
-    return () => clearTimeout(timer);
+    if (!p.code || checked.current === p.code) return;
+    checked.current = p.code;
+    const c = codeFrom(p.code);
+    setLooking(c);
+    let live = true;
+    const timer = setTimeout(() => { void find(c).finally(() => { if (live) setLooking(null); }); }, 0);
+    return () => { live = false; clearTimeout(timer); };
   }, [p.code, find]);
 
-  const live = perm?.granted;
+  const bar = <NavBar onBack={back} close title={t("screens.E1.nav.title")} />;
+  if (looking) {
+    return (
+      <Screen bar={bar} bottomInset={pinned(1)} pinned={<Button kind="p" label={t("screens.E1.pin.0")} loading onPress={() => {}} />}>
+        <Title heading={t("screens.E1.b0.title")} sub={t("additions.join.looking", { code: looking })} />
+        <Skeleton height={metrics.skeleton.cards[0]} />
+      </Screen>
+    );
+  }
   return (
-    <Screen bar={<NavBar onBack={back} close title={t("screens.E1.nav.title")} />} bottomInset={pinned(1)}
-      pinned={<Button kind="p" label={t("screens.E1.pin.0")} loading={busy} disabled={!code.trim()} onPress={() => { void find(code); }} />}>
+    <Screen bar={bar}>
       <Title heading={t("screens.E1.b0.title")} sub={t("screens.E1.b0.sub")} />
-      <ProofCamera state={live ? "scan" : "off"} object="qrcode" label={t("screens.E1.b1.label")} height={220}>
+      <RowList rows={[
+        { title: t("additions.join.scan"), sub: t("additions.join.scanSub"), chevron: true, leading: { kind: "icon", icon: "qrcode-scan", bg: color.lime.base, fg: color.text.onLime }, onPress: () => go("E1·scan") },
+        { title: t("additions.join.code"), sub: t("additions.join.codeSub"), chevron: true, leading: { kind: "icon", icon: "keyboard-outline" }, onPress: () => go("E1·code") },
+      ]} />
+    </Screen>
+  );
+}
+
+// ── E1·scan Scan an invite QR (D-91) ── the camera and its permission only from here. Leaving the step
+// (back, or on to E2 / E3) releases the camera; coming back to it turns it on again.
+export function E1scan() {
+  const { back, replace } = useGo();
+  const toast = useToast();
+  const { find, busy } = useFindOath("E1·scan");
+  // Asked as this step opens: the user picked Scan, an action that needs the camera.
+  const [perm, , getPerm] = useCameraPermissions({ request: true });
+  // Back from Settings: read the permission again.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => { if (s === "active") void getPerm(); });
+    return () => sub.remove();
+  }, [getPerm]);
+  const focused = useScreenFocused();
+  const handled = useRef<{ data: string; at: number } | null>(null);
+  const onScan = useCallback((data: string) => {
+    if (busy) return;
+    // The same QR stays in view: act on it once, and say "not an invite" once every few seconds.
+    const last = handled.current;
+    if (last && last.data === data && Date.now() - last.at < metrics.join.rescanMs) return;
+    handled.current = { data, at: Date.now() };
+    const code = inviteFromQr(data);
+    if (!code) { toast(t("additions.join.notInvite")); return; }
+    void find(code);
+  }, [busy, find, toast]);
+  useEffect(() => { if (focused) handled.current = null; }, [focused]);
+
+  const bar = <NavBar onBack={back} title={t("screens.E1.nav.title")} />;
+  // Over the choice, not instead of it: back from the code step is still the choice.
+  const insteadButton = <Button kind="t" label={t("additions.join.codeInstead")} onPress={() => { if (!backToStep("E1", "E1·code")) replace("E1·code"); }} />;
+  if (perm && !perm.granted && perm.status === "denied") {
+    return (
+      <Screen bar={bar} bottomInset={pinned(2)} pinned={<>
+        <Button kind="p" icon="cog-outline" label={t("additions.camera.openSettings")} onPress={() => { void Linking.openSettings(); }} />
+        {insteadButton}
+      </>}>
+        <ProofCamera state="off" object="camera-off-outline" label={t("screens.E1.b1.label")} height={metrics.join.permCamera} />
+        <Title heading={t("additions.join.permTitle")} sub={t("additions.join.permSub")} align="center" />
+      </Screen>
+    );
+  }
+  const live = !!perm?.granted && focused;
+  return (
+    <Screen bar={bar} bottomInset={pinned(1)} pinned={insteadButton}>
+      <Title heading={t("additions.join.scan")} sub={t("additions.join.scanSub")} />
+      <ProofCamera state={live ? "scan" : "off"} object="qrcode" label={t("screens.E1.b1.label")}>
         {live ? (
-          <CameraView style={{ flex: 1 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-            onBarcodeScanned={({ data }) => {
-              if (scanned.current || busy) return;
-              scanned.current = true;
-              setCode(codeFrom(data));
-              void find(data);
-            }} />
+          <CameraView testID="join-camera" style={{ flex: 1 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+            onBarcodeScanned={({ data }) => onScan(data)} />
         ) : undefined}
       </ProofCamera>
-      {!live ? <Button kind="s" size="row" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void requestPerm(); }} /> : null}
-      <SentenceInput label={t("screens.E1.b2.label")} value={code} onChange={setCode} mono max={16} suggestions={[]} placeholder={t("screens.E1.b2.sug.0")} />
+    </Screen>
+  );
+}
+
+// ── E1·code Type an invite code (D-91) ── the field with the keyboard up, and Paste. No camera.
+export function E1code() {
+  const { back } = useGo();
+  const toast = useToast();
+  const p = useParams<{ code: string }>();
+  const [code, setCode] = useState(p.code ? codeFrom(p.code) : "");
+  const { find, busy } = useFindOath("E1·code");
+  return (
+    <Screen bar={<NavBar onBack={back} title={t("screens.E1.nav.title")} />} bottomInset={pinned(1)}
+      pinned={<Button kind="p" label={t("screens.E1.pin.0")} loading={busy} disabled={!code.trim()} onPress={() => { void find(code); }} />}>
+      <Title heading={t("additions.join.code")} sub={t("additions.join.codeSub")} />
+      <SentenceInput label={t("additions.join.codeLabel")} value={code} onChange={setCode} mono max={16} suggestions={[]} placeholder={t("screens.E1.b2.sug.0")} autoFocus />
       <ButtonRow>
         <Button kind="s" size="row" icon="content-paste" label={t("screens.E1.b3.btn.0")} onPress={() => {
           void Clipboard.getStringAsync().then((s) => {
@@ -174,13 +266,22 @@ export function E2s() {
   return <SigningScreen title={t("screens.E2·s.b2.title", { name: view.facts.name })} sub={t("screens.E2·s.b2.sub", { amount: skrWhole(view.facts.stake), names: listNames(others) })} task={task} onDone={onDone} fail={fail} />;
 }
 
-// ── E3 states ── Keeper + title + two pinned actions each.
+// ── E3 states ── Keeper + title + two pinned actions each. "Try again" / "Back" (to E1) return to the
+// step the lookup came from, a typed code kept so it can be corrected (D-91).
 function E3({ id, title, sub, pins }: { id: ScreenId; title: string; sub: string; pins: { label: string; to: DesignId; params?: Record<string, string> }[] }) {
   const { back, replace } = useGo();
+  const { from, code } = useParams<{ from: JoinStep; code: string }>();
   const k = keeperLines(id)[0]!;
+  const open = (to: DesignId, params?: Record<string, string>) => {
+    if (to === "E1" && from) {
+      if (!backToStep("E1", from, from === "E1·code" && code ? { code } : undefined)) replace(from, code ? { code } : undefined);
+      return;
+    }
+    replace(to, params);
+  };
   return (
     <Screen bar={<NavBar onBack={back} title={t("screens.E1.nav.title")} />} bottomInset={pinned(pins.length)} pinned={<>
-      {pins.map((p, i) => <Button key={p.label} kind={i === 0 ? "p" : "t"} label={p.label} onPress={() => replace(p.to, p.params)} />)}
+      {pins.map((p, i) => <Button key={p.label} kind={i === 0 ? "p" : "t"} label={p.label} onPress={() => open(p.to, p.params)} />)}
     </>}>
       <ScreenKeeper id={id} lines={[k]} />
       <Title heading={title} sub={sub} align="center" />

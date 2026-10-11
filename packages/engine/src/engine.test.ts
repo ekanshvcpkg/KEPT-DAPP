@@ -16,7 +16,7 @@ const SKR = stakeUnits(1);
 /** Base units → SKR rounded half-up to 2 decimals, as rules.md displays them. */
 const skr2 = (u: bigint) => (Number((u * 100n + SKR / 2n) / SKR) / 100).toFixed(2);
 
-test("worked example (D-91): 4 × 1,000 SKR over 3 days, B and D miss day 1, D misses day 3", () => {
+test("worked example (D-93): 4 × 1,000 SKR over 3 days, B and D miss day 1, D misses day 3", () => {
   const s = simulate({ stake: stakeUnits(1000), days: 3, members: 4, solo: false }, parseMarks(["kmkm", "kkkk", "kkkm"]));
   // Day 1: B and D lose 100 each; 200 splits in 3 (A, C, KEPT). Day 3: D loses 100 again (flat); 100 splits in 4 (A, B, C, KEPT).
   assert.deepEqual(s.balances, [1_091_666_666n, 925_000_000n, 1_091_666_666n, 800_000_000n]);
@@ -39,7 +39,7 @@ test("worked example (D-91): 4 × 1,000 SKR over 3 days, B and D miss day 1, D m
   assert.deepEqual(b.map((m) => [m.lost, m.won]), [[0n, 91_666_666n], [100_000_000n, 25_000_000n], [0n, 91_666_666n], [200_000_000n, 0n]]);
 });
 
-test("the owner's example (D-91): 100 SKR stake, one miss costs 10 SKR, split between 3 keepers and KEPT", () => {
+test("the owner's example (D-93): 100 SKR stake, one miss costs 10 SKR, split between 3 keepers and KEPT", () => {
   const s = simulate({ stake: stakeUnits(100), days: 3, members: 4, solo: false }, parseMarks(["kkkm"]));
   assert.equal(s.dayResults[0]!.lostTotal, 10_000_000n);
   assert.deepEqual(s.dayResults[0]!.won, [2_500_000n, 2_500_000n, 2_500_000n, 0n]);
@@ -184,7 +184,7 @@ test("solo: losses go to the treasury; breaks on the 4th straight miss", () => {
   assert.equal(broke.brokeOnDay, 3);
 });
 
-test("nobody keeps: all the day's losses go to KEPT (owner-confirmed, D-91)", () => {
+test("nobody keeps: all the day's losses go to KEPT (owner-confirmed, D-93)", () => {
   const s = simulate({ stake: stakeUnits(500), days: 3, members: 2, solo: false }, parseMarks(["mm"]));
   assert.equal(s.feeTotal, 0n);
   assert.equal(s.toTreasuryTotal, 2n * missCost(stakeUnits(500)));

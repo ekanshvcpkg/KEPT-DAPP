@@ -211,7 +211,7 @@ function recapOf(views: OathView[]): RecapRow[] {
   return views.filter((v) => v.lastDay && v.me >= 0 && (v.life === "active" || v.life === "broken") && v.dayIndex === (v.lastDay.day + 1)).map((v) => ({
     v,
     missed: v.members.filter((m) => !m.isMe && (v.lastDay!.lost[m.index] ?? 0n) > 0n).map(memberName),
-    // A projection is not a win: only demo Oaths show what the day paid (D-91; the chain pays at settlement).
+    // A projection is not a win: only demo Oaths show what the day paid (D-93; the chain pays at settlement).
     won: v.estimated ? 0n : (v.lastDay!.won[v.me] ?? 0n),
   }));
 }

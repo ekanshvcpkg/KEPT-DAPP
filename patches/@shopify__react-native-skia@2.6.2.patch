@@ -1,0 +1,26 @@
+diff --git a/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp b/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
+index e8e4c0314b7a11600827b5ccd4924c337fd59833..6556163899fa16e686702d4da431c24f1fa25494 100644
+--- a/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
++++ b/android/cpp/rnskia-android/RNSkOpenGLCanvasProvider.cpp
+@@ -50,18 +50,9 @@ bool RNSkOpenGLCanvasProvider::renderToCanvas(
+   if (_surfaceHolder != nullptr && cb != nullptr) {
+     // Get the surface
+     auto surface = _surfaceHolder->getSurface();
+-    if (_jSurfaceTexture) {
+-      JNIEnv *env = facebook::jni::Environment::current();
+-      env->CallVoidMethod(_jSurfaceTexture, _updateTexImageMethod);
+-
+-      // Check for exceptions
+-      if (env->ExceptionCheck()) {
+-        RNSkLogger::logToConsole(
+-            "updateAndRelease() failed. The exception above "
+-            "can safely be ignored");
+-        env->ExceptionClear();
+-      }
+-    }
++    // KEPT patch: updateTexImage() was called here on every frame for a transparent canvas. The
++    // SurfaceTexture belongs to the TextureView (its consumer), so the call always threw
++    // IllegalStateException ("not attached") on this thread and logged two lines per frame.
+     if (surface) {
+       // Draw into canvas using callback
+       cb(surface->getCanvas());

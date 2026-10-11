@@ -14,7 +14,7 @@ import type { OathDraft } from "@/state/drafts";
 import { useNow } from "../time";
 import { useDeviceOaths } from "./device";
 import { oathView } from "./model";
-import type { OathFacts, OathSource, OathView } from "./model";
+import type { OathFacts, OathSource } from "./model";
 import { oathName } from "./names";
 import { mockOaths } from "./mockStore";
 
@@ -125,4 +125,3 @@ export const oathActions = {
   },
 };
 
-export type { OathView };

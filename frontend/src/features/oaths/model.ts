@@ -65,18 +65,18 @@ export interface OathFacts {
 export type Life = "open" | "waiting" | "active" | "over" | "broken" | "settled" | "cancelled";
 
 /** DayMemberGrid cell codes (components/content/Oath.tsx › CellState). */
-export type Cell = "k" | "m" | "p" | "h" | "r" | "x" | "f";
+type Cell = "k" | "m" | "p" | "h" | "r" | "x" | "f";
 
 export interface MemberView {
   index: number;
   facts: MemberFacts;
   isMe: boolean;
-  /** The engine's balance for this member: a projection of the rules (D-91), not money paid. */
+  /** The engine's balance for this member: a projection of the rules (D-93), not money paid. */
   balance: bigint;
   /**
    * What is really theirs to show as "in play": the engine balance for demo Oaths, but for a chain Oath that hasn't
    * settled just the stake locked in its vault. Even where the program settles by the same rules (rules v3, DECISIONS
-   * D-91), money only moves at settlement and the days to come are unplayed, so a projected balance must not read as
+   * D-93), money only moves at settlement and the days to come are unplayed, so a projected balance must not read as
    * money held or earned; older Oaths (rules v1) settle differently altogether.
    */
   inPlay: bigint;

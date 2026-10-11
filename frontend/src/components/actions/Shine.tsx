@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { duration, gradient } from "@/theme";
-import { Gradient, loopCycles, useAnimationLifecycle } from "../primitives";
+import { Gradient, MotionStill, loopCycles, useAnimationLifecycle } from "../primitives";
 
 /** The shine sweep (motion.md `shine`): a 40 % white strip, −120 % → 320 % by 55 % of the cycle, then rest (for LOOP_BUDGET_MS after focus). */
-export function Shine({ period = duration.shine, delay = 1000, widthPct = 0.4 }: { period?: number; delay?: number; widthPct?: number }) {
+type ShineProps = { period?: number; delay?: number; widthPct?: number };
+export function Shine(props: ShineProps) {
+  return useContext(MotionStill) ? null : <ShineLive {...props} />;
+}
+function ShineLive({ period = duration.shine, delay = 1000, widthPct = 0.4 }: ShineProps) {
   const reduce = useReducedMotion();
   const [w, setW] = useState(0);
   const p = useSharedValue(0);

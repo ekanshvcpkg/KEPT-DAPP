@@ -2,7 +2,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { env } from "@/config/env";
 
 /** An RPC request that hasn't answered by then is dropped (web3.js has no timeout of its own). */
-export const RPC_TIMEOUT_MS = 20_000;
+const RPC_TIMEOUT_MS = 20_000;
 
 /** fetch with a timeout, for the Connection: a hung RPC ends on M2 instead of a skeleton that never goes. */
 export function timedFetch(timeoutMs = RPC_TIMEOUT_MS, f: typeof fetch = fetch): typeof fetch {

@@ -10,7 +10,7 @@ import { useBalances, useInbox } from "@/api/queries";
 import { useGo } from "@/app/nav";
 import type { DesignId } from "@/app/routes";
 
-export type TabId = "today" | "oaths" | "bounties" | "profile";
+type TabId = "today" | "oaths" | "bounties" | "profile";
 const TAB_SCREEN: Record<TabId, DesignId> = { today: "B1", oaths: "D0", bounties: "H1", profile: "I1" };
 
 /** Space under the content for the floating tab bar (bottom 28 + height 64 + 16). */

@@ -6,7 +6,7 @@ import { registerScoped, scopedPersist } from "./storage";
 
 export type Audience = 0 | 1 | 2; // Everyone · Oath partners · Only me (I7 segments)
 
-export interface SettingsState {
+interface SettingsState {
   notify: { nudges: boolean; deadline: boolean; reviews: boolean; results: boolean };
   visibility: { oaths: Audience; bounties: Audience; socials: Audience };
   findByName: boolean;

@@ -54,7 +54,7 @@ export const BPS = 10_000n;
 /** KEPT fee on a Bounty pool at funding (rules.md §6). */
 export const BOUNTY_FEE_BPS = 1_000n;
 /**
- * What one miss costs, as a share of the member's ORIGINAL stake (D-91, owner model): 10 %, the same for every
+ * What one miss costs, as a share of the member's ORIGINAL stake (D-93, owner model): 10 %, the same for every
  * miss, never more than what the member has left. It replaced stake / days × 1.5^k.
  */
 export const MISS_BPS = 1_000n;

@@ -12,10 +12,10 @@ import { Banner, BodyText, Breakdown, Chip, ChipRow, Note, OddsChip, SearchBar, 
 import { SeatSlots } from "@/components/content/Inputs";
 import type { Seat } from "@/components/content/Inputs";
 import { DayMemberGrid, gridToday, HPPanel, OathCard } from "@/components/content/Oath";
-import { RowList } from "@/components/content/Rows";
+import { RowList, rowListItems } from "@/components/content/Rows";
 import type { RowProps } from "@/components/content/Rows";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import { formatSkr, shortDuration } from "@/lib/format";
 import { color, metrics } from "@/theme";
 import { useGo, useParams, useSheetRoute } from "@/app/nav";
@@ -286,7 +286,7 @@ function Active({ v }: { v: OathView }) {
         sub: f.rematchOf ? recoveryLine(v, m.index) : m.facts.keptRate === null ? t("common.keptRateNew") : t("screens.D2.b6.r0.s", { rate: Math.round(m.facts.keptRate * 100), days: m.facts.rateDays }),
         leading: m.facts.avatar ? { kind: "avatar", config: m.facts.avatar } : { kind: "initial", initial: memberInitial(m), bg: memberColor(m) },
         value: t("screens.D2.b6.r0.r", { amount: formatSkr(m.balance) }),
-        // On chain the program pays out (D-14); until it settles by the same rule (D-91) this is a projection, not money earned.
+        // On chain the program pays out (D-14); until it settles by the same rule (D-93) this is a projection, not money earned.
         valueSub: m.missed.length === 0 ? t(v.estimated ? "additions.core.estimate" : "screens.D2.b6.r0.rs")
           : (text => (v.estimated ? t("additions.core.estimateAfter", { text }) : text))(m.missed.length === 1 ? t("screens.D2.b6.r2.rs", { day: m.missed[0]! + 1 }) : t("screens.D2·low.b3.r2.rs", { n: m.missed.length })),
         ...(m.missed.length ? { valueColor: color.orange.base } : {}),
@@ -412,12 +412,11 @@ export function D5() {
       <Segmented items={[0, 1, 2, 3].map((i) => t(`screens.D5.b1.seg.${i}` as never))} value={seg} onChange={setSeg} />
       <Banner tone="grey" icon="chart-box-outline" title={t("screens.D5.b2.title", { n: totals.n, kept: totals.kept, broken: totals.broken })}
         sub={t("screens.D5.b2.sub", { won: skrWhole(totals.won), lost: skrWhole(totals.lost) })} />
-      {months.map((m) => (
-        <RowList key={m} label={m.split(" ")[0]!.toUpperCase()} rows={shown.filter((r) => month(r) === m).map((r) => ({
-          title: r.name, sub: r.sub, value: net(r.net), valueColor: r.net < 0n ? color.red.base : r.net > 0n ? color.lime.base : color.text.secondary,
-          leading: { kind: "icon" as const, icon: r.rematch ? "sword-cross" as const : objectIcon(r.objectId) },
-        }))} />
-      ))}
+      {/* Virtualised: history only grows (Live). Each month is a labelled section, as RowLists were. */}
+      <ScreenList items={months.flatMap((m, k) => rowListItems(m, shown.filter((r) => month(r) === m).map((r) => ({
+        title: r.name, sub: r.sub, value: net(r.net), valueColor: r.net < 0n ? color.red.base : r.net > 0n ? color.lime.base : color.text.secondary,
+        leading: { kind: "icon" as const, icon: r.rematch ? "sword-cross" as const : objectIcon(r.objectId) },
+      })), { label: m.split(" ")[0]!.toUpperCase(), gapBefore: k ? metrics.screen.gap : 0 }))} />
     </Screen>
   );
 }

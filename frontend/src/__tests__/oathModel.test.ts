@@ -15,7 +15,7 @@ const oath = (o: Partial<OathFacts> = {}): OathFacts => ({
 });
 
 describe("oathView", () => {
-  it("reproduces the D-91 worked example (engine test vectors) once all 3 days are over", () => {
+  it("reproduces the D-93 worked example (engine test vectors) once all 3 days are over", () => {
     const v = oathView(oath(), 3 * DAY + 10, W[0]!);
     expect(v.life).toBe("over");
     expect(v.results.map((r) => r.final)).toEqual([1_091_666_666n, 925_000_000n, 1_091_666_666n, 800_000_000n]);
@@ -31,7 +31,7 @@ describe("oathView", () => {
     expect(v.hp).toBe(70); // day 1: B and D missed → −40, +10
     expect(v.members[0]!.pendingToday).toBe(false);
     expect(v.preview?.member).toBe(1);
-    expect(v.myMissCost).toBe(100_000_000n); // 10% of 1,000 SKR, whatever the length (D-91)
+    expect(v.myMissCost).toBe(100_000_000n); // 10% of 1,000 SKR, whatever the length (D-93)
     // If B misses today, A / C / D (the keepers) and KEPT split B's 100.
     expect(v.preview?.result.fee).toBe(25_000_000n);
   });
@@ -56,7 +56,7 @@ describe("oathView", () => {
     const f = oath({ source: "chain", status: "active" });
     const v = oathView(f, 3 * DAY + 10, W[0]!);
     expect(v.estimated).toBe(true);
-    expect(v.members[0]!.balance).toBe(1_091_666_666n); // the projection (D-91), for D2's "estimate" row
+    expect(v.members[0]!.balance).toBe(1_091_666_666n); // the projection (D-93), for D2's "estimate" row
     expect(v.members.map((m) => m.inPlay)).toEqual(Array(4).fill(1000n * SKR_UNIT));
     expect(v.claimable).toBe(0n);
     const demo = oathView(oath(), 3 * DAY + 10, W[0]!);

@@ -98,7 +98,7 @@ pub mod kept_test {
         oath.members = [Member::default(); MAX_MEMBERS];
         oath.members[0] = Member { authority: ctx.accounts.creator.key(), staked: true, days_kept: 0, claimed: false, payout: 0 };
         initialize_keeper(&mut ctx.accounts.keeper, ctx.accounts.creator.key(), ctx.bumps.keeper);
-        // Every new Oath records rules v3 (the owner's money model, DECISIONS D-91): no entry fee, so a member's
+        // Every new Oath records rules v3 (the owner's money model, DECISIONS D-93): no entry fee, so a member's
         // vault balance is exactly the stake. Fixed here, so later program or Config changes cannot alter this Oath.
         // The zero-stake solo path has no tokens to escrow; group creators transfer the stake.
         let terms = OathTerms::new_v3();

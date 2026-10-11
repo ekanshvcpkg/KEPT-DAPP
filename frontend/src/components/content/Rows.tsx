@@ -1,3 +1,4 @@
+import type { ListItem } from "../layout/list";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
@@ -79,16 +80,32 @@ export function RowList({ rows, label }: { rows: RowProps[]; label?: string }) {
   );
 }
 
+/**
+ * RowList's look as ScreenList rows (layout/Screen): the label, then each row, spaced as RowList spaces them.
+ * `gapBefore`: the space above the section (the screen column's gap between sections; 0 for the first).
+ */
+export function rowListItems(key: string, rows: RowProps[], opts: { label?: string; gapBefore?: number } = {}): ListItem[] {
+  const items: ListItem[] = [];
+  const first = opts.gapBefore ?? 0;
+  if (opts.label) {
+    const label = opts.label;
+    items.push({ key: `${key}:label`, gapBefore: first, render: () => <Text variant="monoLabel" style={{ marginVertical: space[2] }}>{label}</Text> });
+  }
+  rows.forEach((r, i) => items.push({ key: `${key}:${r.title}-${i}`, gapBefore: i === 0 && !opts.label ? first : metrics.row.listGap, render: () => <Row {...r} /> }));
+  return items;
+}
+
 /** Toggle: 46×28, knob 22 at x 3 / 21, 150 ms. */
 export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
   const reduce = useReducedMotion();
   const k = useSharedValue(on ? 1 : 0);
-  const onLayout = useAnimationLifecycle([k], () => { k.value = reduce ? (on ? 1 : 0) : withTiming(on ? 1 : 0, { duration: duration.toggle }); }, [on, reduce]);
-  const knob = useAnimatedStyle(() => ({ left: metrics.toggle.inset + (metrics.toggle.on - metrics.toggle.inset) * k.value }));
+  const onLayout = useAnimationLifecycle([k], () => { k.set(reduce ? (on ? 1 : 0) : withTiming(on ? 1 : 0, { duration: duration.toggle })); }, [on, reduce]);
+  // The knob slides with a transform (motion rework: no layout animation); it sits at x 3, moves to x 21.
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: (metrics.toggle.on - metrics.toggle.inset) * k.value }] }));
   return (
     <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={label} onPress={() => onChange(!on)} hitSlop={10}>
       <View style={{ width: metrics.toggle.w, height: metrics.toggle.h, borderRadius: metrics.toggle.radius, backgroundColor: on ? color.lime.base : color.line.toggleOff }}>
-        <Animated.View onLayout={onLayout} style={[{ position: "absolute", top: metrics.toggle.inset, width: metrics.toggle.knob, height: metrics.toggle.knob, borderRadius: metrics.toggle.knob / 2, backgroundColor: on ? color.text.onLime : color.extra.toggleKnobOff }, knob]} />
+        <Animated.View onLayout={onLayout} style={[{ position: "absolute", top: metrics.toggle.inset, left: metrics.toggle.inset, width: metrics.toggle.knob, height: metrics.toggle.knob, borderRadius: metrics.toggle.knob / 2, backgroundColor: on ? color.text.onLime : color.extra.toggleKnobOff }, knob]} />
       </View>
     </Pressable>
   );

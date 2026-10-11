@@ -15,7 +15,7 @@ describe("copy", () => {
       expect(interpolate(tpl.template, tpl.sample)).toBe(__lookup(key));
     }
   });
-  it("amendments (D-91) replace existing design keys only, and none keeps the old 1.5× / 10% fee wording", () => {
+  it("amendments (D-93) replace existing design keys only, and none keeps the old 1.5× / 10% fee wording", () => {
     const design = (key: string) => {
       const rest = key.slice("screens.".length);
       const id = Object.keys(designCopy.screens).sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${s}.`))!;
@@ -63,7 +63,7 @@ describe("theme", () => {
   });
   it("maps type tokens to loaded fonts", () => {
     expect(typeStyles.title).toMatchObject({ fontFamily: "Geist_600SemiBold", fontSize: 30, lineHeight: 33, letterSpacing: -1.1 });
-    expect(typeStyles.monoLabel).toMatchObject({ fontFamily: "GeistMono_600SemiBold", textTransform: "uppercase", color: "#6A6A6A" });
+    expect(typeStyles.monoLabel).toMatchObject({ fontFamily: "GeistMono_600SemiBold", textTransform: "uppercase", color: "#808080" });
     expect(typeStyles.display.fontVariant).toEqual(["tabular-nums"]);
   });
   it("converts CSS gradient angles", () => {

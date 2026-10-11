@@ -1,7 +1,8 @@
 // F · Daily proof (screens.md F1–F5). Two live photos a day, no gallery: F1/F4 shoot with the
 // back camera, F2/F4·chk check, then pass / fail / unavailable / expired. Photo 1 is mocked on chain
 // Oaths and photo 2 goes to POST /api/proof (DECISIONS D-23, BACKEND_GAPS P0-2).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Linking } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { create } from "zustand";
 import { keeperLines, t } from "@/copy";
@@ -16,6 +17,7 @@ import { DayStrip, SignStatus } from "@/components/content/Status";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
 import { clock as hms } from "@/lib/format";
+import { useScreenFocused } from "@/lib/focus";
 import { color, metrics } from "@/theme";
 import { getApi, isApiError } from "@/api";
 import type { Challenge, ProofOutcome } from "@/api";
@@ -82,10 +84,20 @@ function useChallenge(v: OathView | null, photo: 1 | 2, fresh = false) {
 export function F1perm() {
   const { back, replace, close } = useGo();
   const { id, photo } = useProofScreen();
-  const [, request] = useCameraPermissions();
+  const [perm, request, getPerm] = useCameraPermissions();
+  const shoot = useCallback(() => replace(photo === 2 ? "F4" : "F1", { id, photo }), [replace, photo, id]);
+  // Back from Settings with the camera allowed: on to the camera.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => { if (s === "active") void getPerm().then((r) => { if (r.granted) shoot(); }); });
+    return () => sub.remove();
+  }, [getPerm, shoot]);
+  // Android won't ask again once access is denied for good: the way to allow it is Settings (D-91).
+  const blocked = !!perm && !perm.granted && !perm.canAskAgain;
   return (
     <Screen bar={<NavBar onBack={() => close()} close />} bottomInset={pinned(2)} pinned={<>
-      <Button kind="p" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void request().then((r) => { if (r.granted) replace(photo === 2 ? "F4" : "F1", { id, photo }); }); }} />
+      {blocked
+        ? <Button kind="p" icon="cog-outline" label={t("additions.camera.openSettings")} onPress={() => { void Linking.openSettings(); }} />
+        : <Button kind="p" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void request().then((r) => { if (r.granted) shoot(); }); }} />}
       <Button kind="t" label={t("screens.F1·perm.pin.1")} onPress={back} />
     </>}>
       <ProofCamera state="off" object="camera-off-outline" label={t("screens.F1·perm.b1.label")} height={260} />
@@ -132,6 +144,8 @@ function Shoot({ photo }: { photo: 1 | 2 }) {
   // Only a mock Oath (Demo) takes a stand-in photo: its proof goes to the mock, which never reads the image.
   const mock = view?.facts.source === "mock";
   const [perm] = useCameraPermissions();
+  // The camera runs only while this screen is in front: checking, a failed check or anything else on top releases it.
+  const focused = useScreenFocused();
   const c = useChallenge(view, photo);
   const cam = useRef<CameraView>(null);
   const [facing, setFacing] = useState<"back" | "front">("back");
@@ -158,7 +172,7 @@ function Shoot({ photo }: { photo: 1 | 2 }) {
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, photo)} />} scroll={false}>
       <ProofCamera photo={photo} state="idle" object={view ? objectIcon(view.facts.objectId) : "camera"} label={challengeLabel(c)} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})}>
-        {perm?.granted ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
+        {perm?.granted && focused ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
       </ProofCamera>
       <ChipRow justify="center">
         <Chip text={t("screens.F1.b1.chip.0", { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` })} tone={left < 60 ? "red" : "grey"} icon="timer-outline" />

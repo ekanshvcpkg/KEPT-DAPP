@@ -11,12 +11,12 @@ import { Banner, BodyText, Breakdown, Chip, ChipRow, Note, SearchBar, Segmented,
 import { MoneyMoment, SeatSlots } from "@/components/content/Inputs";
 import type { Seat } from "@/components/content/Inputs";
 import { OathCard } from "@/components/content/Oath";
-import { RowList } from "@/components/content/Rows";
+import { RowList, rowListItems } from "@/components/content/Rows";
 import { BountyCover, HScroller } from "@/components/content/Social";
 import type { HeroItem } from "@/components/content/Social";
 import { BarChart } from "@/components/content/Status";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import { ago, shortDuration } from "@/lib/format";
 import { DAY_SECONDS as DAY } from "@kept/engine";
 import { color, metrics, tokens } from "@/theme";
@@ -360,12 +360,15 @@ export function H7() {
       <Segmented items={[0, 1, 2].map((i) => t(`screens.H7.b2.seg.${i}` as CopyKey))} value={sort} onChange={setSort} />
       <RowList rows={[{ title: t("screens.H7.b3.r0.t"), sub: categoryLabel(cat ? CATEGORIES[cat - 1]! : null), toggle: { on: eligibleOnly, onChange: setEligibleOnly } }]} />
       <BodyText mono text={t("screens.H7.b4.text", { n: rows.length })} />
-      <RowList rows={rows.map((b) => ({
-        title: b.name, sub: t("screens.H7.b5.r0.s", { brand: b.brand.name, n: b.entrants, time: shortDuration(b.joinClosesAt - now) }),
-        value: skrWhole(b.pool), valueSub: t("screens.H7.b5.r0.rs"), leading: { kind: "icon" as const, icon: objectIcon(b.objectId) },
-        chevron: true, onPress: () => go("H2", { id: b.id }),
-      }))} />
-      <Note text={t("screens.H7.b6.text")} />
+      {/* Virtualised: every open Bounty (Live can list many). */}
+      <ScreenList items={[
+        ...rowListItems("bounties", rows.map((b) => ({
+          title: b.name, sub: t("screens.H7.b5.r0.s", { brand: b.brand.name, n: b.entrants, time: shortDuration(b.joinClosesAt - now) }),
+          value: skrWhole(b.pool), valueSub: t("screens.H7.b5.r0.rs"), leading: { kind: "icon" as const, icon: objectIcon(b.objectId) },
+          chevron: true, onPress: () => go("H2", { id: b.id }),
+        }))),
+        { key: "note", gapBefore: rows.length ? metrics.screen.gap : 0, render: () => <Note text={t("screens.H7.b6.text")} /> },
+      ]} />
     </Screen>
   );
 }

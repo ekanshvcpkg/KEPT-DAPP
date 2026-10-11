@@ -1,4 +1,4 @@
-// Devnet end-to-end settlement of the rules v3 money model (DECISIONS D-91), verified from chain data.
+// Devnet end-to-end settlement of the rules v3 money model (DECISIONS D-93), verified from chain data.
 //
 //   cd onchain && npx tsx scripts/e2e_devnet_v3.ts [--keys <file>]
 //

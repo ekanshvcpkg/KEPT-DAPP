@@ -159,7 +159,7 @@ get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
 get("/api/economics", async (_req, res) => {
   const c = await readConfigEconomics();
   if (!c) return res.status(503).json({ error: "Program config is not readable" });
-  // Every new Oath records rules v3 (DECISIONS D-91): stake only, no entry fee, no freezes.
+  // Every new Oath records rules v3 (DECISIONS D-93): stake only, no entry fee, no freezes.
   return res.json({
     rulesVersion: RULES_V3, entryFee: false, feeBps: 0, feeAmount: "0", freezePrice: null,
     missBps: MISS_BPS, forfeitureSplit: "equal shares between that day's keepers and KEPT; remainders to KEPT; a day nobody kept goes to KEPT",

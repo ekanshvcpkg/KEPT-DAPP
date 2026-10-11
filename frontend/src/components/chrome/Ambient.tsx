@@ -9,9 +9,9 @@ import { color, duration, metrics, svgStop as stop } from "@/theme";
 import { Icon, LOOP_BUDGET_MS, loopCycles, useAnimationLifecycle } from "../primitives";
 import type { IconName } from "../primitives";
 
-export type Tone = "lime" | "red" | "ember" | "grey" | "lock";
-export type AmbientColor = "lime" | "red" | "ember" | "vio" | "sky";
-export interface AmbientProps { tone?: Tone | null; ambient?: AmbientColor | null; beam?: boolean; decor?: readonly string[] }
+type Tone = "lime" | "red" | "ember" | "grey" | "lock";
+type AmbientColor = "lime" | "red" | "ember" | "vio" | "sky";
+interface AmbientProps { tone?: Tone | null; ambient?: AmbientColor | null; beam?: boolean; decor?: readonly string[] }
 
 const A = metrics.ambient;
 

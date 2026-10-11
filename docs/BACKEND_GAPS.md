@@ -123,7 +123,7 @@ The checklist for the backend developer. Each line points to the full item below
 - **Breaking day (decided, DECISIONS D-10):** on the day HP reaches 0 there's **no heal, no keeper payout and no fee**. The whole remaining pot (every member's balance, including that day's miss costs) splits **50 % held for the Rematch** (per member, P1-2) and **50 % to the KEPT treasury**. Held money that isn't recovered is also released to the treasury.
 
 ### P0-6. Settlement math · CONFIRMED (money rules superseded by P0-12, 2026-10-11)
-> The owner changed the money model after this item was written (DECISIONS D-91). The 1.5× cost, the 10 % fee and the days-kept weighting below are **no longer the target**; build P0-12. The "Now" description of the program and the replay-from-bitmasks approach still apply.
+> The owner changed the money model after this item was written (DECISIONS D-93). The 1.5× cost, the 10 % fee and the days-kept weighting below are **no longer the target**; build P0-12. The "Now" description of the program and the replay-from-bitmasks approach still apply.
 
 - **Now:** all-or-nothing. A member "succeeded" only if `days_kept == full` (`lib.rs:159-160`). `calculate_payouts` (`lib.rs:227-250`) gives failed members 0, splits their **whole** stakes equally among full keepers after the fee, and if **nobody** kept every day, refunds everyone 90 % (`lib.rs:236-239`). Members who missed one day are treated like members who missed all of them. There's also a dead branch for 16-day Oaths (`lib.rs:159`).
 - **Design** (rules.md §3):
@@ -248,7 +248,7 @@ Authorised by the owner for frontend, backend and program. **Source:** `onchain/
 ### P1-5. Max members · CONFIRMED (decision)
 - **Now:** `MAX_MEMBERS = 4` (`state.rs:3`); error text "Oath has four members already" (`lib.rs:381`).
 - **Design:** "2+"; D1 shows four seats and the demo uses four members.
-- **Decision:** DECISIONS D-11 (assume 4); the owner confirmed 4 again on 2026-10-11 (D-91). Raising it is listed in P0-12.
+- **Decision:** DECISIONS D-11 (assume 4); the owner confirmed 4 again on 2026-10-11 (D-93). Raising it is listed in P0-12.
 
 ### P1-6. Goal length · CONFIRMED
 - **Now:** 1–120 characters (`v4.ts:120-121`).

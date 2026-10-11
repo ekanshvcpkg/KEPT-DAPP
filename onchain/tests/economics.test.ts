@@ -366,7 +366,7 @@ describe("KEPT rules v2 economics", () => {
   });
 });
 
-describe("KEPT rules v3 settlement (owner money model, DECISIONS D-91)", () => {
+describe("KEPT rules v3 settlement (owner money model, DECISIONS D-93)", () => {
   const SKR = 1_000_000n;
   const days = (n: number) => (1 << n) - 1;
   /** One mask per member from marks like ["kkkm","kkkk"] (day by day, member by member). */

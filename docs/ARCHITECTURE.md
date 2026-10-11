@@ -106,11 +106,11 @@ Versions checked on the npm registry on 2026-10-09. Expo `latest` is **SDK 57 (5
 | Client state | **Zustand 5**: stores `session`, `balances`, `drafts`, `ui` | Small, no providers, persists drafts easily. |
 | Validation | **Zod 4** on every API response (mock included) | Keeps mock fixtures honest and catches backend drift at the edge. |
 | Animation | **Reanimated 4** (+ `react-native-worklets`), **Gesture Handler** | motion.md is written for Reanimated 3; v4 keeps the same `withTiming/withSpring/withSequence` API and is what SDK 57 ships. |
-| Drawing | **react-native-svg**, **expo-linear-gradient** | Keeper rig, Check-K, HP segments, rings; gradients for tiles, buttons and cards. |
+| Drawing | **react-native-svg**, **expo-linear-gradient**, **@shopify/react-native-skia** (2.6.2, Expo SDK 57's) | SVG for static icons and illustrations (Check-K, HP segments, rings, ambient light); Skia for anything drawn fresh each frame: the Keeper (`KeeperSkia`, still parts recorded once as pictures) and the splash Check-K reveal. Gradients for tiles, buttons and cards. |
 | Haptics | **expo-haptics** | Mapped 1:1 to motion.md's haptic calls. |
 | Fonts | **@expo-google-fonts/geist**, **@expo-google-fonts/geist-mono** | Named in DESIGN.md §3. Imported one weight per path (`theme/fonts.ts`): the package index would ship all 18 weights and italics. |
 | Icons | **@expo/vector-icons** `createIconSet` over a cut of MaterialCommunityIcons | Icon names match the prototype's `mdi-*` exactly. `pnpm icons:gen` keeps only the names the sources use (`icons.gen.json` + `assets/fonts/kept-icons.ttf`, 25 KB instead of 1.3 MB); `IconName` is typed from it, so tsc rejects a missing icon. |
-| Camera | **expo-camera** (chosen over react-native-vision-camera) | We only need live preview + `takePictureAsync` + a QR scanner (E1); there's no gallery path by construction. The checking is server-side, so vision-camera's frame processors (and its Nitro modules dependency) buy nothing. |
+| Camera | **expo-camera** (chosen over react-native-vision-camera) | We only need live preview + `takePictureAsync` + a QR scanner (E1·scan; the camera only after the user picks Scan, D-91); there's no gallery path by construction. The checking is server-side, so vision-camera's frame processors (and its Nitro modules dependency) buy nothing. |
 | QR | **qrcode** (encoder only) drawn as one SVG path | QRCard. react-native-qrcode-svg was dropped: its logo option bundled react-native-svg/css (css-tree, ~0.5 MB of JS). |
 | Wallet | **@solana-mobile/mobile-wallet-adapter-protocol-web3js 3.0** (peer `@solana/web3.js ^1.99`) | Latest MWA. The harness uses 2.3; if 3.0 regresses on the Seeker wallet, pin 2.3. Verified in Phase 2. |
 | Chain | **@solana/web3.js 1.99**, **@anchor-lang/core 1.2**, **@solana/spl-token 0.4** | Anchor's TS client still requires web3.js v1; same stack as the working harness. |
@@ -126,7 +126,9 @@ Versions checked on the npm registry on 2026-10-09. Expo `latest` is **SDK 57 (5
 
 **Release build** (`app.json` › expo-build-properties): arm64-v8a only, R8 code and resource shrinking, compressed native libraries (APK 131 MB → about 23 MB). `metro.config.js` resolves zod's locale index to English only.
 
-**Not adding:** Skia, Lottie/Rive (none supplied), NativeWind, axios, i18n frameworks, date libraries (`Intl` is enough), react-native-shadow-2 (elevation + inset Views per DESIGN §6).
+**Motion rule** (motion rework, D-84): views that move, scale, rotate or fade animate transform and opacity only, with Reanimated on the UI thread; anything drawn fresh each frame is Skia; nothing animates SVG props, layout, shadows or blur. Known exception: the tab bar's active tab widens by animating `flex` (docs/notes/MOTION_REWORK.md). On Android a transparent Skia canvas renders through a TextureView; D-92 patches out Skia's failing per-frame `updateTexImage()` call and its log line.
+
+**Not adding:** Lottie/Rive (none supplied), NativeWind, axios, i18n frameworks, date libraries (`Intl` is enough), react-native-shadow-2 (elevation + inset Views per DESIGN §6).
 
 ### Theme and copy
 - **`pnpm theme:gen`** reads `design/tokens.json` and writes `frontend/src/theme/tokens.gen.ts` (typed, `as const`, checked in). A test fails if the generated file is out of date. Components only read `theme.*`.
@@ -155,7 +157,7 @@ Picked over expo-router because:
 2. **116 screen IDs as typed route names** (`RootStackParamList`, IDs made ASCII: `C7·no` → `C7_no`) plus a lookup table back to design IDs for the Gallery and the dev "jump to screen" menu. With expo-router that would be 116 files named after IDs, and the modal, transient and moment patterns would fight the file tree. We don't target web, so file routes give us nothing.
 3. **Transient signing screens:** a `useSigningFlow()` hook calls `navigation.replace(resultRoute)` when the wallet result arrives. There's never a back stack entry pointing at a pending state (A2·s, C7, D1·go, D1·xs, E2·s, R2, J1·p, K5·p, W3·s).
    **What back goes to (D-86):** every `go` / `replace` goes through `app/history.ts › planStack`, a pure function from the root stack to the next one. Passing screens (signing, checks, outcomes, moments, sheets) never stay behind the next screen; an outcome drops its flow's steps (unless it offers a retry); create / join / Rematch / Bounty success lands on home; a screen already in the stack is gone back to, not opened twice. Tab destinations go back to the existing home (React Navigation 7's `navigate` would push a second `Tabs`). `__tests__/history.test.ts` covers each flow.
-4. **Deep links:** a `linking` config maps `kept://join/:code`. Signed out: store `session.inviteFlag = code` and continue onboarding, then the `cont:` rule sends the user to E1 with the code filled in. Signed in: E1, then resolve the code, then E2. Android App Links (`https://…/join/:code`) can be added later using the existing `assetlinks` route.
+4. **Deep links:** a `linking` config maps `kept://join/:code`. Signed out: store `session.inviteFlag = code` and continue onboarding, then the `cont:` rule sends the user to E1 with the code. Signed in: E1 with the code. A known code skips E1's choice and is looked up at once (D-91), then E2. Android App Links (`https://…/join/:code`) can be added later using the existing `assetlinks` route.
 
 Shape:
 - **Root native stack** (`headerShown:false`) holds Splash, the Onboarding group, `Tabs`, and every flow screen (`slide_from_right`).
