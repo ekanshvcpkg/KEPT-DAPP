@@ -245,8 +245,8 @@ export const mockOaths = {
   /** What this session's stakes, refunds and claims did to a wallet's SKR (the mock wallet adds it to its balance). */
   walletDelta(wallet: string): bigint { return deltas.get(wallet) ?? 0n; },
 
-  create(d: { wallet: string; goal: string; objectId: number; numDays: number; stake: bigint; isSolo: boolean; reviewMode: ReviewMode }): OathFacts {
-    const o = add({ name: oathName(d.objectId, d.numDays), goal: d.goal, objectId: d.objectId, numDays: d.numDays, stake: d.stake, isSolo: d.isSolo, reviewMode: d.reviewMode,
+  create(d: { wallet: string; goal: string; name?: string; habits?: string[]; objectId: number; numDays: number; stake: bigint; isSolo: boolean; reviewMode: ReviewMode }): OathFacts {
+    const o = add({ name: d.name || oathName(d.objectId, d.numDays), goal: d.goal, ...(d.habits ? { habits: d.habits.slice() } : {}), objectId: d.objectId, numDays: d.numDays, stake: d.stake, isSolo: d.isSolo, reviewMode: d.reviewMode,
       status: "open", creator: d.wallet, day1StartsAt: null, members: [me(d.wallet)], seeded: false });
     move(d.wallet, -d.stake);
     return facts(o);

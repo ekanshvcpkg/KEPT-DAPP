@@ -2,6 +2,7 @@
 // can't store yet from the device (names, review mode). Nothing here reads the mock (Live, D-80).
 import { PublicKey } from "@solana/web3.js";
 import { oathPda } from "@kept/chain";
+import { OBJECTS } from "@kept/config";
 import { DetailsResponse, GoalResponse, InviteCreateResponse, InviteResolveResponse, OathInviteResponse, ProofChallengeResponse } from "@kept/shared";
 import { PROGRAM_ID, listOathsOf, readOath } from "@/chain/program";
 import type { ChainOath } from "@/chain/program";
@@ -17,19 +18,20 @@ import type { GestureLabel, OathsApi, ProofApi } from "../types";
 import { myLiveBounty } from "./bounties";
 import type { HttpClient } from "./client";
 
-async function goalOf(c: HttpClient, oath: string): Promise<string | null> {
+async function goalOf(c: HttpClient, oath: string): Promise<{ goalText: string | null; habits: string[] }> {
   const d = useDeviceOaths.getState();
-  if (d.goals[oath]) return d.goals[oath]!;
+  if (d.goals[oath]) return { goalText: d.goals[oath]!, habits: d.habits[oath] ?? [d.goals[oath]!] };
   try {
-    const { goalText } = await c.get(`/api/oaths/${oath}/details`, GoalResponse);
-    if (goalText) d.remember(oath, { goal: goalText });
-    return goalText;
+    const { goalText, habits } = await c.get(`/api/oaths/${oath}/details`, GoalResponse);
+    const normalizedHabits = habits?.length ? habits : goalText ? [goalText] : [];
+    if (goalText) d.remember(oath, { goal: goalText, habits: normalizedHabits });
+    return { goalText, habits: normalizedHabits };
   } catch {
-    return null; // non-members and Genesis-less wallets get 403; the screen shows the name only
+    return { goalText: null, habits: [] }; // non-members and Genesis-less wallets get 403; the screen shows the name only
   }
 }
 
-function toFacts(o: ChainOath, goal: string | null): OathFacts {
+function toFacts(o: ChainOath, details: { goalText: string | null; habits: string[] }): OathFacts {
   const d = useDeviceOaths.getState();
   const started = o.status !== "open";
   const day = started ? Math.floor((Math.floor(clock.now() / 1000) - o.startTs) / o.daySeconds) : -1;
@@ -39,7 +41,8 @@ function toFacts(o: ChainOath, goal: string | null): OathFacts {
     oathId: o.oathId.toString(),
     creator: o.creator,
     name: d.names[o.address] ?? oathName(o.objectId, o.numDays),
-    goal,
+    goal: details.goalText,
+    habits: details.habits,
     objectId: o.objectId,
     numDays: o.numDays,
     stake: o.stake,
@@ -63,7 +66,7 @@ async function restoreInvite(c: HttpClient, oath: string): Promise<string | null
   try {
     const r = await c.get(`/api/oaths/${encodeURIComponent(oath)}/invite`, OathInviteResponse);
     if (!r.invite) return null;
-    useDeviceOaths.getState().remember(oath, { ...(r.goalText ? { goal: r.goalText } : {}), code: r.invite.code });
+    useDeviceOaths.getState().remember(oath, { ...(r.goalText ? { goal: r.goalText } : {}), ...(r.habits?.length ? { habits: r.habits } : {}), code: r.invite.code });
     return r.invite.code;
   } catch {
     // Invite restoration is an optional detail. Keep Oath reads usable if this route is unavailable.
@@ -106,14 +109,16 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     // The invite returns OathRead without the account address; it's the PDA of creator + oath_id.
     const o = await readOath(oathPda(PROGRAM_ID, new PublicKey(r.oath.creator), BigInt(r.oath.oathId)).toBase58());
     if (!o) throw new ApiError("INVITE_NOT_FOUND", "Oath account not found", 404);
-    return { oath: toFacts(o, r.goalText), alreadyStarted: r.alreadyStarted };
+    const habits = r.habits?.length ? r.habits : r.goalText ? [r.goalText] : [];
+    if (r.goalText) useDeviceOaths.getState().remember(o.address, { goal: r.goalText, habits });
+    return { oath: toFacts(o, { goalText: r.goalText, habits }), alreadyStarted: r.alreadyStarted };
   },
-  register: async (oath, goal) => {
-    await c.post("/api/oaths/details", { oath: oath.id, goalText: goal }, DetailsResponse);
+  register: async (oath, goal, habits) => {
+    await c.post("/api/oaths/details", { oath: oath.id, goalText: goal, habits }, DetailsResponse);
     let code = oath.isSolo ? null : await restoreInvite(c, oath.id);
     if (!oath.isSolo && !code) code = (await c.post("/api/invites", { oath: oath.id }, InviteCreateResponse)).code;
     await c.send("/api/oaths/watch", { oath: oath.id });
-    useDeviceOaths.getState().remember(oath.id, { goal, ...(code ? { code } : {}) });
+    useDeviceOaths.getState().remember(oath.id, { goal, habits, ...(code ? { code } : {}) });
     return code;
   },
   watch: async (oath) => {
@@ -124,7 +129,6 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
 
 /** The backend's MediaPipe labels → the app's gesture names (the design's three, rules.md §5). */
 const GESTURE: Record<string, GestureLabel> = { Thumb_Up: "thumbs_up", Victory: "victory", Open_Palm: "open_palm", Closed_Fist: "closed_fist", Pointing_Up: "pointing_up" };
-const OBJECT_TEXT = ["dumbbell", "book", "water bottle", "guitar", "running shoes", "plant", "skipping rope", "yoga mat"] as const;
 const GESTURE_TEXT: Record<GestureLabel, string> = { thumbs_up: "thumbs up", victory: "victory sign (index and middle finger in a V)", open_palm: "open palm facing the camera", closed_fist: "closed fist", pointing_up: "pointing up" };
 const VerifyResponse = z.object({ pass: z.boolean(), verificationId: z.string().nullable(), failedChecks: z.number().int().optional() });
 const StartResponse = z.object({ endAllowedAt: z.string() });
@@ -146,7 +150,8 @@ export function httpProof(c: HttpClient): ProofApi {
     },
     submit: async (oath, challenge, _image, imageUri) => {
       if (oath.bountyId || !imageUri) return { status: "unavailable" };
-      const object = OBJECT_TEXT[challenge.objectId];
+      // What the model looks for and what /proof/verify must say is the Oath's own object (the program's object_id), from the shared list.
+      const object = OBJECTS[challenge.objectId]?.text;
       const gesture = GESTURE_TEXT[challenge.gesture];
       if (!object || !gesture) return { status: "unavailable" };
       const verdict = await analyzeDevicePhoto(imageUri, object, gesture);
@@ -159,7 +164,10 @@ export function httpProof(c: HttpClient): ProofApi {
         reason: verdict.reason, model: verdict.model, ms: verdict.ms,
         expectedObject: object, expectedGesture: gesture, oath: oath.id, dayIndex: challenge.dayIndex,
       }, VerifyResponse);
-      if (!checked.pass || !checked.verificationId) return { status: "fail", attempts: checked.failedChecks ?? 1 };
+      if (!checked.pass || !checked.verificationId) return {
+        status: "fail", attempts: checked.failedChecks ?? 1,
+        objectPresent: verdict.objectPresent, gestureMatches: verdict.gestureMatches,
+      };
       if (challenge.photo === 1) {
         const started = await c.post("/api/proof/start", { oath: oath.id, dayIndex: challenge.dayIndex, verificationId: checked.verificationId }, StartResponse);
         return { status: "pass", endAllowedAt: Math.floor(Date.parse(started.endAllowedAt) / 1000) };

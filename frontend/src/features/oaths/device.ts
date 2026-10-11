@@ -1,6 +1,5 @@
-// Oath facts the backend can't store yet, kept on this device (BACKEND_GAPS P1-1, P1-7, P0-2):
-// names, review mode and goal for Oaths created here, photo 1 progress, and which result screens and
-// recaps were already shown (D-8, D-29).
+// Device-side Oath state: local names/review settings, cached server goal and habits, photo 1 progress,
+// and which result screens and recaps were already shown (D-8, D-29).
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { registerScoped, scopedPersist } from "@/state/storage";
@@ -14,6 +13,7 @@ interface DeviceOathState {
   names: Record<string, string>;
   reviewModes: Record<string, ReviewMode>;
   goals: Record<string, string>;
+  habits: Record<string, string[]>;
   /** Invite codes for Oaths created here (the backend can look them up, but not list them). */
   codes: Record<string, string>;
   /** Oath id → day index on which photo 1 passed. */
@@ -28,7 +28,7 @@ interface DeviceOathState {
   known: string[];
   /** Oath id → the HP the Oath screen last showed (motion.md §2–3: damage / heal play from it). */
   seenHp: Record<string, number>;
-  remember(id: string, extra?: { name?: string; reviewMode?: ReviewMode; goal?: string; code?: string }): void;
+  remember(id: string, extra?: { name?: string; reviewMode?: ReviewMode; goal?: string; habits?: string[]; code?: string }): void;
   rename(id: string, name: string): void;
   passPhoto1(id: string, day: number): void;
   failPhoto2(id: string, day: number): number;
@@ -37,7 +37,7 @@ interface DeviceOathState {
   seeHp(id: string, hp: number): void;
 }
 
-const EMPTY = { names: {}, reviewModes: {}, goals: {}, codes: {}, photo1: {}, fails: {}, shownResults: [], recapShownOn: null, known: [], seenHp: {} };
+const EMPTY = { names: {}, reviewModes: {}, goals: {}, habits: {}, codes: {}, photo1: {}, fails: {}, shownResults: [], recapShownOn: null, known: [], seenHp: {} };
 
 export const useDeviceOaths = create<DeviceOathState>()(persist((set, get) => ({
   ...EMPTY,
@@ -46,6 +46,7 @@ export const useDeviceOaths = create<DeviceOathState>()(persist((set, get) => ({
     ...(extra.name ? { names: { ...s.names, [id]: extra.name } } : {}),
     ...(extra.reviewMode ? { reviewModes: { ...s.reviewModes, [id]: extra.reviewMode } } : {}),
     ...(extra.goal ? { goals: { ...s.goals, [id]: extra.goal } } : {}),
+    ...(extra.habits ? { habits: { ...s.habits, [id]: extra.habits } } : {}),
     ...(extra.code ? { codes: { ...s.codes, [id]: extra.code } } : {}),
   })),
   rename: (id, name) => set((s) => ({ names: { ...s.names, [id]: name } })),

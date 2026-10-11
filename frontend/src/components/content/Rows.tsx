@@ -29,6 +29,11 @@ export interface RowProps {
   bg?: string;
   minHeight?: number;
   onPress?: () => void;
+  /** For a screen reader, when the title alone isn't enough ("Kettlebell, not available yet"). */
+  a11yLabel?: string;
+  /** A choice row: selected / disabled are announced. */
+  selected?: boolean;
+  disabled?: boolean;
 }
 
 const TILE_SHADE = `inset 0 1.5px 0 ${color.extra.tileHi22}, inset 0 -2px 0 ${color.extra.tileShade20}`;
@@ -68,7 +73,8 @@ function Row(p: RowProps) {
     </View>
   );
   if (p.toggle) return body;
-  return p.onPress ? <PressScale onPress={p.onPress} accessibilityLabel={p.title}>{body}</PressScale> : body;
+  const state = p.selected !== undefined || p.disabled !== undefined ? { accessibilityState: { ...(p.selected !== undefined ? { selected: p.selected } : {}), ...(p.disabled !== undefined ? { disabled: p.disabled } : {}) } } : {};
+  return p.onPress ? <PressScale onPress={p.onPress} accessibilityLabel={p.a11yLabel ?? p.title} {...state}>{body}</PressScale> : body;
 }
 
 export function RowList({ rows, label }: { rows: RowProps[]; label?: string }) {

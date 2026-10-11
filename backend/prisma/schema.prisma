@@ -111,6 +111,7 @@ model OathDetails {
   oath       String   @unique
   creator    String
   goalText   String
+  habits     String[] @default([])
   /// Minutes between the start and end photo; null = SESSION_MIN_MINUTES.
   minMinutes Int?
   name       String?

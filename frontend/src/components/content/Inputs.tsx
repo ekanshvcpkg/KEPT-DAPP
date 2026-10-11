@@ -224,3 +224,39 @@ export function QRCard({ code, link }: { code: string; link: string }) {
     </View>
   );
 }
+
+// ── SearchInput ── the field behind SearchBar's look (metrics.search): a magnifier, the typed query, and a clear button
+// once there is one. The lime ring on focus is the same as SentenceInput's.
+export function SearchInput({ value, onChange, placeholder, label, clearLabel, onFocusChange }: { value: string; onChange: (v: string) => void; placeholder: string; label: string; clearLabel: string; onFocusChange?: (focused: boolean) => void }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View accessibilityRole="search" style={{ height: metrics.search.h, borderRadius: metrics.search.radius, backgroundColor: color.surface[1], boxShadow: `inset 0 0 0 ${metrics.input.ring}px ${focused ? color.lime.base : color.extra.hairline07}`, flexDirection: "row", alignItems: "center", gap: space[10], paddingLeft: metrics.search.padX, paddingRight: space[6] }}>
+      <Icon name="magnify" size={metrics.search.icon} color={color.text.secondary} />
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        onFocus={() => { setFocused(true); onFocusChange?.(true); }}
+        onBlur={() => { setFocused(false); onFocusChange?.(false); }}
+        accessibilityLabel={label}
+        placeholder={placeholder}
+        // Same reading contrast as the other fields' placeholders (secondary, not ghost).
+        placeholderTextColor={color.text.secondary}
+        selectionColor={color.lime.base}
+        cursorColor={color.lime.base}
+        autoCorrect={false}
+        autoCapitalize="none"
+        spellCheck={false}
+        returnKeyType="search"
+        submitBehavior="blurAndSubmit"
+        style={{ flex: 1, padding: 0, fontFamily: fontFamily("sans", 500), fontSize: 15, color: color.text.primary }}
+      />
+      {value ? (
+        <PressScale onPress={() => onChange("")} accessibilityRole="button" accessibilityLabel={clearLabel} hit={{ w: metrics.minTouch, h: metrics.minTouch }}>
+          <View style={{ width: metrics.minTouch, height: metrics.minTouch, alignItems: "center", justifyContent: "center" }}>
+            <Icon name="close-circle-outline" size={metrics.search.icon} color={color.text.secondary} />
+          </View>
+        </PressScale>
+      ) : null}
+    </View>
+  );
+}

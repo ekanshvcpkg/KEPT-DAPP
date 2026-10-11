@@ -158,7 +158,7 @@ Genesis. Resolves an invite code. Any eligible wallet can call it; it doesn't ne
 
 ```bash
 curl -s $API/api/invites/Ab3dE9x -H "authorization: Bearer $TOKEN"
-# → {"oath":{…},"goalText":"Run every morning","alreadyStarted":false}
+# → {"oath":{…},"goalText":"Run every morning","habits":["Run every morning"],"alreadyStarted":false}
 ```
 
 Errors: `404` invite not found, or Oath not found.
@@ -170,25 +170,26 @@ Oath, plus its saved goal text. The mobile app uses this to restore invite links
 Oath list after a reload. If this wallet has not created an invite, `invite` is `null`.
 
 ```json
-{ "goalText": "Run every morning", "invite": { "code": "Ab3dE9x", "deepLink": "kept://join/Ab3dE9x" } }
+{ "goalText": "Run every morning", "habits": ["Run every morning"], "invite": { "code": "Ab3dE9x", "deepLink": "kept://join/Ab3dE9x" } }
 ```
 
 Errors: `404` Oath not found or the caller is not a member.
 
 ### POST /api/oaths/details
 
-Genesis. Only the creator can call it, and only while the Oath is Open. Saves the goal text, which must
-hash (SHA-256) to the on-chain goal hash. It can also set `minMinutes` (1–720), the wait between the
-two photos. By default the wait is `SESSION_MIN_MINUTES` (30).
+Genesis. Only the creator can call it, and only while the Oath is Open. Saves 1–8 habits (each 1–60
+characters) plus their canonical joined `goalText`, which must hash (SHA-256) to the on-chain goal hash.
+It can also set `minMinutes` (1–720), the wait between the two photos. By default the wait is
+`SESSION_MIN_MINUTES` (30). Older requests that omit `habits` are read as one habit.
 
 ```bash
 curl -s -X POST $API/api/oaths/details -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"oath":"<OATH>","goalText":"Run every morning","minMinutes":45}'
-# → {"oath":"<OATH>","goalText":"Run every morning","minMinutes":45}
+  -d '{"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"minMinutes":45}'
+# → {"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"minMinutes":45}
 ```
 
 Errors:
-- `400`: the goal is not 1–120 characters, or `minMinutes` is invalid.
+- `400`: habits are not 1–8 trimmed strings of at most 60 characters, `goalText` is not their ` · `-joined value, or `minMinutes` is invalid.
 - `403`: the caller is not the creator, or the Oath is not Open.
 - `404`: Oath not found.
 - `422`: the text doesn't match the on-chain hash.
@@ -206,7 +207,7 @@ curl -s $API/api/oaths/<OATH>/details -H "authorization: Bearer $TOKEN"
 
 ```json
 {
-  "goalText": "Run every morning", "minMinutes": 30, "dayIndex": 1,
+  "goalText": "Run every morning · Read 10 pages", "habits": ["Run every morning", "Read 10 pages"], "minMinutes": 30, "dayIndex": 1,
   "members": [
     { "wallet": "<B>", "canNudge": true, "reason": null,
       "identity": { "genesis": true, "genesisMint": "<MINT>", "source": "genesis_token", "seatGenesisMint": "<MINT>", "verifiedSeeker": true, "method": "genesis_token" },

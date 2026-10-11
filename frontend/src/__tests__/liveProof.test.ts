@@ -1,7 +1,9 @@
 // Live proof, below the screens: the backend's challenge as the app reads it, and what the shutter hands on.
 import { analyzeDevicePhoto } from "kept-gesture";
 import type { DevicePhotoVerdict } from "kept-gesture";
+import { OBJECTS } from "@kept/config";
 import { httpProof } from "@/api/http/oaths";
+import { gestureText } from "@/features/oaths/present";
 import { createHttpClient } from "@/api/http/client";
 import type { OathFacts } from "@/features/oaths/model";
 import { capture, photoToUse } from "@/screens/proof/Proof";
@@ -76,10 +78,77 @@ describe("checking a photo", () => {
   it("a rejected verdict counts as a failed try; a missing photo file or a native error is unavailable or thrown", async () => {
     (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict({ gestureMatches: false }));
     const { proof } = backend({ "/proof/verify": { pass: false, verificationId: null, failedChecks: 2 } });
-    await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).resolves.toEqual({ status: "fail", attempts: 2 });
+    await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).resolves.toEqual({ status: "fail", attempts: 2, objectPresent: true, gestureMatches: false });
     await expect(proof.submit(oath, challenge, "x")).resolves.toEqual({ status: "unavailable" });
     (analyzeDevicePhoto as jest.Mock).mockRejectedValueOnce(new Error("model failed to load"));
     await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).rejects.toThrow("model failed to load");
+  });
+});
+
+describe("what the phone checks: the Oath's object and the server's gesture", () => {
+  const verdict = (): DevicePhotoVerdict => ({
+    proofHash: "c".repeat(64), objectPresent: true, objectConfidence: 0.9, gestureSeen: "Victory", gestureMatches: true,
+    looksLikeScreenOrPrintout: false, reason: "ok", model: "test", ms: 9, inconclusive: false,
+  });
+  /** Answers /api/proof/challenge with `challenge`, records everything else. */
+  function backend(challenge: unknown) {
+    const calls: { path: string; body: Record<string, unknown> }[] = [];
+    const f = (async (url: string, init?: RequestInit) => {
+      const path = new URL(url).pathname;
+      calls.push({ path, body: JSON.parse(String(init?.body ?? "{}")) });
+      const reply = path === "/api/proof/challenge" ? challenge : path === "/proof/verify" ? { pass: true, verificationId: "v1" } : { endAllowedAt: new Date(Date.now() + 600_000).toISOString(), signature: "s", proofHash: "p" };
+      return new Response(JSON.stringify(reply), { status: 200 });
+    }) as unknown as typeof fetch;
+    return { calls, proof: httpProof(createHttpClient(() => "t", "http://api", f)) };
+  }
+  const start = (gesture: string) => ({ phase: "start", photo: 1, gesture, issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120_000).toISOString() });
+  const chosen = (objectId: number) => ({ ...oath, objectId }) as unknown as OathFacts;
+
+  it.each(OBJECTS.map((o, i) => [i, o.id, o.text] as const))("object %i (%s): the Oath's own object_id is what the model is asked for and what /proof/verify is sent", async (i, _id, text) => {
+    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
+    const { calls, proof } = backend(start("Thumb_Up"));
+    const c = await proof.challenge(chosen(i), 1, 0);
+    expect(c.objectId).toBe(i);
+    await proof.submit(chosen(i), c, "x", "file:///p.jpg");
+    expect(analyzeDevicePhoto).toHaveBeenLastCalledWith("file:///p.jpg", text, expect.any(String));
+    expect(calls.find((x) => x.path === "/proof/verify")!.body.expectedObject).toBe(text);
+  });
+
+  it("an object id the program doesn't have is never checked (unavailable, not another object)", async () => {
+    const { calls, proof } = backend(start("Thumb_Up"));
+    const c = await proof.challenge(chosen(3), 1, 0);
+    await expect(proof.submit(chosen(3), { ...c, objectId: 8 }, "x", "file:///p.jpg")).resolves.toEqual({ status: "unavailable" });
+    expect(calls.map((x) => x.path)).toEqual(["/api/proof/challenge"]);
+  });
+
+  it.each([["Thumb_Up", "thumbs_up"], ["Victory", "victory"], ["Open_Palm", "open_palm"]] as const)("photo 1: the server's %s is shown, and the same gesture goes to MediaPipe and /proof/verify", async (wire, gesture) => {
+    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
+    const random = jest.spyOn(Math, "random");
+    try {
+      const { calls, proof } = backend(start(wire));
+      const c = await proof.challenge(oath, 1, 0);
+      expect(c.gesture).toBe(gesture);
+      expect(gestureText(c.gesture)).toEqual(expect.any(String)); // what F1 shows the user
+      await proof.submit(oath, c, "x", "file:///p.jpg");
+      const [, , expected] = (analyzeDevicePhoto as jest.Mock).mock.calls.at(-1)!;
+      expect(expected).toBe(calls.find((x) => x.path === "/proof/verify")!.body.expectedGesture);
+      expect(random).not.toHaveBeenCalled(); // no gesture is drawn on the phone
+    } finally { random.mockRestore(); }
+  });
+
+  it("photo 2 uses the gesture the server issues for it (never the start photo's), and the end photo's wait passes the start gesture through", async () => {
+    const wire = { phase: "end", photo: 2, gesture: "Open_Palm", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120_000).toISOString(), startedAt: new Date().toISOString(), endAllowedAt: new Date().toISOString(), startGesture: "Victory" };
+    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
+    const { calls, proof } = backend(wire);
+    const c = await proof.challenge(oath, 2, 0);
+    expect(c).toMatchObject({ photo: 2, gesture: "open_palm" });
+    await proof.submit(oath, c, "x", "file:///p.jpg");
+    expect(calls.find((x) => x.path === "/proof/verify")!.body.expectedGesture).toBe("open palm facing the camera");
+    expect(calls.map((x) => x.path)).toEqual(["/api/proof/challenge", "/proof/verify", "/api/proof"]);
+    // Still inside the wait: the end photo isn't offered, and the start gesture is only carried for the wait screen.
+    const waiting = backend({ phase: "wait", photo: 2, waitSeconds: 300, startedAt: new Date().toISOString(), endAllowedAt: new Date(Date.now() + 300_000).toISOString(), startGesture: "Victory" });
+    const w = await waiting.proof.challenge(oath, 2, 0);
+    expect(w.waitUntil).toEqual(expect.any(Number));
   });
 });
 

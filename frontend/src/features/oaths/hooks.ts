@@ -13,9 +13,9 @@ import { useDraft } from "@/state/drafts";
 import type { OathDraft } from "@/state/drafts";
 import { useNow } from "../time";
 import { useDeviceOaths } from "./device";
+import { habitsReady, savedHabits, sharedProofObject } from "./habits";
 import { oathView } from "./model";
 import type { OathFacts, OathSource } from "./model";
-import { oathName } from "./names";
 import { mockOaths } from "./mockStore";
 
 const oathKeys = {
@@ -73,7 +73,14 @@ const tzOffset = () => -new Date().getTimezoneOffset();
 export const oathActions = {
   async create(d: OathDraft): Promise<{ id: string; code: string | null }> {
     const source = createSource();
-    const goal = d.goal.trim();
+    // Only saved habits (a name and a valid proof object) are created, and they share the Oath's one proof object.
+    if (!habitsReady(d)) throw new Error("Every habit needs a name and the same proof object");
+    const habits = savedHabits(d).map((h) => h.name);
+    const proofObject = sharedProofObject(savedHabits(d))!;
+    const name = d.name.trim();
+    if (!name) throw new Error("An Oath name is required");
+    const goal = habits.join(" · ");
+    if (goal.length > 501) throw new Error("Combined habits must be 501 characters or fewer");
     let oathId: bigint | undefined;
     if (source === "chain") {
       const stableId = d.chainOathId ?? `${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
@@ -81,17 +88,18 @@ export const oathActions = {
       if (!d.chainOathId) useDraft.getState().set({ chainOathId: stableId });
     }
     const { oath, started } = await getTx(source).createOath({
-      objectId: d.objectId, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal, tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
+      objectId: proofObject, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal,
+      ...(source === "mock" ? { name, habits } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
     });
     // flows.md: a solo Oath goes C7·ok → D2, with no Start step. On chain it already started in the create
     // transaction; the mock starts it here.
     if (d.isSolo && !started) await getTx(source).startOath(oath);
-    useDeviceOaths.getState().remember(oath, { name: oathName(d.objectId, d.numDays), reviewMode: d.reviewMode, goal });
+    useDeviceOaths.getState().remember(oath, { name, reviewMode: d.reviewMode, goal, habits });
     const api = getApi();
     let code: string | null = null;
     try {
       const facts = await api.oaths.get(oath);
-      code = await api.oaths.register(facts, goal);
+      code = await api.oaths.register(facts, goal, habits);
     } catch {
       // The chain create is already confirmed. Keep the success path; C8 can recover the invite and
       // retry the backend follow-ups without asking the wallet to create another Oath.
@@ -124,4 +132,3 @@ export const oathActions = {
     return amount;
   },
 };
-

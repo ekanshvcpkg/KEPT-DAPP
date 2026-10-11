@@ -109,7 +109,7 @@ export interface OathsApi {
    * After a confirmed create: store the goal text, make an invite (group), and register the Oath
    * with the settlement scheduler (docs/ARCHITECTURE.md §7, BACKEND_GAPS P0-9). Returns the code.
    */
-  register(oath: OathFacts, goal: string): Promise<string | null>;
+  register(oath: OathFacts, goal: string, habits: string[]): Promise<string | null>;
   /** After a confirmed join: register for settlement and reminders. */
   watch(oath: OathFacts): Promise<void>;
 }
@@ -119,7 +119,7 @@ export type GestureLabel = "thumbs_up" | "victory" | "open_palm" | "closed_fist"
 export interface Challenge { photo: 1 | 2; dayIndex: number; objectId: number; gesture: GestureLabel; expiresAt: number; waitUntil?: number }
 export type ProofOutcome =
   | { status: "pass"; endAllowedAt?: number }
-  | { status: "fail"; attempts: number }
+  | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean }
   | { status: "unavailable" }
   | { status: "expired" };
 

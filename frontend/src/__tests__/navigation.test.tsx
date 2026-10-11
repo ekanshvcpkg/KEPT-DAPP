@@ -3,6 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import copy from "../../../design/copy.json";
 import { t } from "@/copy";
+import type { CopyKey } from "@/copy";
 import { ToastHost } from "@/components/chrome";
 import { queryClient } from "@/api/queries";
 import { SLICES } from "@/api/types";
@@ -20,6 +21,7 @@ import { mockBounties } from "@/features/bounties/mockStore";
 import type { Scenario } from "@/api/mock/scenarios";
 import { useDraft } from "@/state/drafts";
 import { storeChallenge } from "@/screens/proof/Proof";
+import { gestureText } from "@/features/oaths/present";
 import amend from "@/app/routes.amend.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAppMode } from "@/features/mode";
@@ -95,7 +97,8 @@ describe("onboarding on mocks", () => {
     await setAppMode(null);
     await AsyncStorage.clear();
     useDev.setState({ overrides: Object.fromEntries(SLICES.map((s) => [s, "mock"])), mockWallet: true, scenario: "fresh" });
-    useDeviceOaths.setState({ shownResults: [], recapShownOn: null });
+    // The whole device record, not just what a test reads: an Oath created by one test leaves its name under an id the next test's seeded Oath reuses.
+    useDeviceOaths.setState(useDeviceOaths.getInitialState(), true);
     mockOaths.reset();
     useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
     queryClient.clear();
@@ -180,32 +183,138 @@ describe("onboarding on mocks", () => {
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
   }, 30000);
 
-  it("creates a group Oath end to end on the mock: C1 → C6 → sign → C7·ok → C8", async () => {
+  /** Demo, signed in, on C2 with a named Oath and an empty habit list. */
+  async function startC2(name = "Stronger every day") {
     useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
     useDraft.getState().reset();
     await render(<App />);
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.B3.b3.btn.0") }, slow));
-    await fireEvent.press(await screen.findByLabelText(t("screens.C1.b1.sug.1")));
-    const next = () => screen.findByRole("button", { name: t("screens.C1.pin.0") });
-    await fireEvent.press(await next()); // C1 → C2
-    await fireEvent.press(await next()); // C2 → C3
-    await fireEvent.press(await next()); // C3 → C4 (group, 1,000 SKR by default)
-    expect(await screen.findByText(t("screens.C4.b4.title", { cost: "100" }))).toBeTruthy();
-    await fireEvent.press(await next()); // C4 → C5
-    await fireEvent.press(await next()); // C5 → C6
-    expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "read 20 pages" }))).toBeTruthy();
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.nameLabel")), name);
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.C1.pin.0") })); // C1 → C2
+    expect(await screen.findByText(t("additions.oathCreate.habitsTitle"))).toBeTruthy();
+  }
+  const nextBtn = (disabled = false) => screen.findByRole("button", { name: t("screens.C1.pin.0"), disabled });
+  const saveBtn = (disabled = false) => screen.findByRole("button", { name: t("additions.oathCreate.saveHabit"), disabled });
+  const card = (name: string, object: string) => new RegExp(`^${name}\\. ${t("additions.oathCreate.proofForHabit", { object })}\\.`);
+
+  it("C2: a blank editor is not a habit; Save commits the name and proof together; Cancel leaves a saved habit untouched", async () => {
+    await startC2();
+    // Nothing saved yet: an empty state, and Next is blocked.
+    expect(screen.getByText(t("additions.oathCreate.emptyTitle"))).toBeTruthy();
+    await nextBtn(true);
+
+    // Add a habit: the editor opens blank. A name alone, or a proof alone, can't be saved.
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    const field = await screen.findByLabelText(t("additions.oathCreate.habitName"));
+    expect(field.props.value).toBe("");
+    await saveBtn(true);
+    await fireEvent.changeText(field, "read 10 pages");
+    await saveBtn(true);
+    // Six quick picks. Yoga mat and Skipping rope are supported too, but found by search.
+    for (const o of ["Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant"]) expect(screen.getByLabelText(o)).toBeTruthy();
+    expect(screen.queryByLabelText("Yoga mat")).toBeNull();
+    expect(screen.queryByLabelText("Skipping rope")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Book"));
+    expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();
+    // Nothing is committed until Save.
+    expect(useDraft.getState().draft.habits).toEqual([""]);
+    await fireEvent.press(await saveBtn());
+    expect(await screen.findByLabelText(card("read 10 pages", "Book"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habits: ["read 10 pages"], habitObjectIds: [1], objectId: 1 });
+    await nextBtn();
+
+    // Edit it: prefilled. Change both, then Cancel: nothing changed.
+    await fireEvent.press(screen.getByLabelText(card("read 10 pages", "Book")));
+    const edit = await screen.findByLabelText(t("additions.oathCreate.habitName"));
+    expect(edit.props.value).toBe("read 10 pages");
+    await fireEvent.changeText(edit, "something else");
+    await fireEvent.press(screen.getByLabelText("Plant"));
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.cancelHabit") }));
+    expect(await screen.findByLabelText(card("read 10 pages", "Book"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habits: ["read 10 pages"], habitObjectIds: [1], objectId: 1 });
+
+    // Edit and Save: both change together.
+    await fireEvent.press(screen.getByLabelText(card("read 10 pages", "Book")));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "read 20 pages");
+    await fireEvent.press(await saveBtn());
+    expect(await screen.findByLabelText(card("read 20 pages", "Book"))).toBeTruthy();
+    expect(useDraft.getState().draft.habits).toEqual(["read 20 pages"]);
+
+    // Even the only habit can be removed: back to the empty state, and Next is blocked again.
+    await fireEvent.press(screen.getByLabelText(card("read 20 pages", "Book")));
+    await fireEvent.press(await screen.findByRole("button", { name: t("additions.oathCreate.removeHabit", { n: 1 }) }));
+    expect(await screen.findByText(t("additions.oathCreate.emptyTitle"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habits: [""], habitObjectIds: [] });
+    await nextBtn(true);
+  }, 60000);
+
+  it("C2: one Oath checks one proof object, so a habit can't name another one without switching them all", async () => {
+    await startC2();
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "read");
+    await fireEvent.press(screen.getByLabelText("Book"));
+    await fireEvent.press(await saveBtn());
+    // A second habit starts on the Oath's object.
+    await fireEvent.press(await screen.findByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "water");
+    expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();
+    await saveBtn();
+    // Another object is a visible conflict with a way out; Save stays off.
+    await fireEvent.press(screen.getByLabelText("Plant"));
+    expect(await screen.findByText(t("additions.oathCreate.conflictTitle", { object: "Book" }))).toBeTruthy();
+    await saveBtn(true);
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.switchAll", { object: "Plant" }) }));
+    expect(await screen.findByLabelText(card("read", "Plant"))).toBeTruthy();
+    expect(screen.getByLabelText(card("water", "Plant"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habits: ["read", "water"], habitObjectIds: [5, 5], objectId: 5 });
+    await nextBtn();
+  }, 60000);
+
+  it("C2 search: aliases select their object, unsupported things stay locked, no match has a state, and the pick reaches the created Oath", async () => {
+    await startC2();
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "stretch");
+    const search = screen.getByLabelText(t("additions.objects.searchLabel"));
+    const row = (key: string) => new RegExp(`^${t(`additions.objects.entry.${key}` as CopyKey)}\\.`);
+    await fireEvent(search, "focus");
+
+    // Unsupported: listed, locked, and picking it changes nothing.
+    await fireEvent.changeText(search, "kettlebell");
+    const kettlebell = await screen.findByLabelText(row("kettlebell"));
+    expect(kettlebell.props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(kettlebell);
+    expect(await screen.findByText(t("additions.objects.unavailableToast"))).toBeTruthy();
+    // No match: a designed empty state.
+    await fireEvent.changeText(search, "zzzqx");
+    expect(await screen.findByText(t("additions.objects.noResults", { query: "zzzqx" }))).toBeTruthy();
+
+    // An alias selects the object it is: "pilates" is a yoga mat (not one of the six quick picks).
+    await fireEvent.changeText(search, "pilates");
+    await fireEvent.press(await screen.findByLabelText(row("yoga_mat")));
+    expect(await screen.findByText(t("additions.oathCreate.proofSummary", { object: "Yoga mat" }))).toBeTruthy();
+    expect(useDraft.getState().draft.habits).toEqual([""]); // still only in the editor
+    await fireEvent.press(await saveBtn());
+    expect(await screen.findByLabelText(card("stretch", "Yoga mat"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habitObjectIds: [7], habitObjectEntries: ["yoga_mat"], objectId: 7 });
+
+    // On through C3-C6: the Oath is created with the program's object_id and the saved habits.
+    for (let i = 0; i < 4; i++) await fireEvent.press(await nextBtn());
+    expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "stretch" }))).toBeTruthy();
+    expect(screen.getByText("Yoga mat")).toBeTruthy();
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C6.pin.0") }));
     expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "1,000" }), {}, slow)).toBeTruthy();
     expect(useUi.getState().fx?.feel).toBe("payout");
+    const created = mockOaths.list("7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q").filter((o) => o.name === "Stronger every day");
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ objectId: 7, habits: ["stretch"], goal: "stretch" });
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C7·ok.pin.0") }));
     expect(await screen.findByText(t("screens.C8.b0.title"))).toBeTruthy();
-    // The moment's coins stay with it: leaving C7·ok clears the FX layer.
     expect(useUi.getState().fx).toBeNull();
     // D-86: the wizard, the signature and the moment are gone; back from the invite is Today.
     expect(rootStack()).toEqual(["Tabs", "C8"]);
     await act(async () => { navigationRef.goBack(); });
     expect(rootStack()).toEqual(["Tabs"]);
-  }, 30000);
+  }, 90000);
 
   it("shows a settled Oath's result once, then the claim screen", async () => {
     useDev.setState({ scenario: "settledKept" });
@@ -257,6 +366,18 @@ describe("onboarding on mocks", () => {
     await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
     expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 3 }), {}, slow)).length).toBeGreaterThan(0); // title + FX pill
     expect(screen.queryByText(t("screens.F2c.b0.title"))).toBeNull();
+  }, 30000);
+
+  it("the camera screen shows the gesture the server issued for this photo, with the Oath's object", async () => {
+    useDev.setState({ scenario: "activeGroup" });
+    useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
+    useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
+    storeChallenge("mock-oath-1", 2, { photo: 2, dayIndex: 2, objectId: 0, gesture: "open_palm", expiresAt: Math.floor(Date.now() / 1000) + 100 });
+    await render(<App />);
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    await act(async () => { navigateTo("D2", { id: "mock-oath-1" }); });
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.D2.pin.0") }));
+    expect(await screen.findByText(t("screens.F1.b0.label", { object: "Dumbbell", gesture: gestureText("open_palm") }))).toBeTruthy();
   }, 30000);
 
   it("F2b's close button leaves even when it is the only screen (a link opened it)", async () => {

@@ -109,7 +109,7 @@ get("/api/invites/:code", async (req, res) => {
   const oath = await readOath(row.oath);
   if (!oath) return res.status(404).json({ error: "Oath not found" });
   const details = await prisma.oathDetails.findUnique({ where: { oath: row.oath } });
-  return res.json({ oath, goalText: details?.goalText ?? null, alreadyStarted: oath.status !== 0 });
+  return res.json({ oath, goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], alreadyStarted: oath.status !== 0 });
 });
 
 get("/api/oaths/:oath/invite", async (req: AuthedRequest, res) => {
@@ -119,22 +119,28 @@ get("/api/oaths/:oath/invite", async (req: AuthedRequest, res) => {
     prisma.oathInvite.findFirst({ where: { oath: req.params.oath, createdBy: req.wallet }, orderBy: { createdAt: "desc" } }),
     prisma.oathDetails.findUnique({ where: { oath: req.params.oath } }),
   ]);
-  return res.json({ goalText: details?.goalText ?? null, invite: savedInvite ? { code: savedInvite.code, deepLink: `kept://join/${savedInvite.code}` } : null });
+  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], invite: savedInvite ? { code: savedInvite.code, deepLink: `kept://join/${savedInvite.code}` } : null });
 });
 
 post("/api/oaths/details", async (req: AuthedRequest, res) => {
-  const { oath, goalText, minMinutes } = req.body ?? {};
-  if (typeof oath !== "string" || typeof goalText !== "string" || !goalText.trim() || goalText !== goalText.trim() || goalText.length > 120) {
-    return res.status(400).json({ error: "Oath and a goal of 1–120 characters are required" });
+  const { oath, goalText, habits: rawHabits, minMinutes } = req.body ?? {};
+  if (typeof oath !== "string" || typeof goalText !== "string" || !goalText.trim() || goalText !== goalText.trim()) {
+    return res.status(400).json({ error: "Oath and goal text are required" });
+  }
+  const habits = rawHabits === undefined ? [goalText] : rawHabits;
+  if (!Array.isArray(habits) || habits.length < 1 || habits.length > 8 || habits.some((habit) => typeof habit !== "string" || !habit.trim() || habit !== habit.trim() || habit.length > (rawHabits === undefined ? 120 : 60))) {
+    return res.status(400).json({ error: rawHabits === undefined ? "Provide one trimmed goal of 1–120 characters" : "Provide 1–8 habits, each 1–60 characters with no surrounding whitespace" });
+  }
+  if (habits.join(" · ") !== goalText || goalText.length > (rawHabits === undefined ? 120 : 501)) {
+    return res.status(400).json({ error: "goalText must be the habits joined with · and be at most 501 characters" });
   }
   if (minMinutes !== undefined && !validMinMinutes(minMinutes)) return res.status(400).json({ error: "minMinutes must be a whole number from 1 to 720" });
   const info = await readOath(oath);
   if (!info) return res.status(404).json({ error: "Oath not found" });
   if (info.creator !== req.wallet || info.status !== 0) return res.status(403).json({ error: "Only the creator can save goal details while the Oath is Open" });
-  const normalized = goalText.trim();
-  if (createHash("sha256").update(normalized, "utf8").digest("hex") !== info.goalHash) return res.status(422).json({ error: "Goal text does not match the on-chain goal hash" });
-  const row = await prisma.oathDetails.upsert({ where: { oath }, create: { oath, creator: req.wallet, goalText: normalized, minMinutes: minMinutes ?? null }, update: { goalText: normalized, ...(minMinutes !== undefined ? { minMinutes } : {}) } });
-  return res.status(201).json({ oath, goalText: normalized, minMinutes: row.minMinutes ?? config.sessionMinMinutes });
+  if (createHash("sha256").update(goalText, "utf8").digest("hex") !== info.goalHash) return res.status(422).json({ error: "Goal text does not match the on-chain goal hash" });
+  const row = await prisma.oathDetails.upsert({ where: { oath }, create: { oath, creator: req.wallet, goalText, habits, minMinutes: minMinutes ?? null }, update: { goalText, habits, ...(minMinutes !== undefined ? { minMinutes } : {}) } });
+  return res.status(201).json({ oath, goalText, habits, minMinutes: row.minMinutes ?? config.sessionMinMinutes });
 });
 
 get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
@@ -152,7 +158,7 @@ get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
   }));
   const configEconomics = await readConfigEconomics();
   const economics = oathEconomics(info, req.wallet, Math.floor(Date.now() / 1000), configEconomics?.legacyFeeBps ?? 0);
-  return res.json({ goalText: details?.goalText ?? null, minMinutes: details?.minMinutes ?? config.sessionMinMinutes, dayIndex: currentDay, members, economics });
+  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], minMinutes: details?.minMinutes ?? config.sessionMinMinutes, dayIndex: currentDay, members, economics });
 });
 
 /** Terms a new Oath gets if created now. Existing Oaths keep the terms in their own account (see details). */

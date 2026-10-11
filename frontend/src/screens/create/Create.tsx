@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Share } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useQuery } from "@tanstack/react-query";
-import { GOAL_MAX, LENGTHS, MAX_MEMBERS, OBJECTS, SKR_UNIT, STAKES_SKR } from "@kept/config";
+import { LENGTHS, MAX_MEMBERS, OATH_NAME_MAX, SKR_UNIT, STAKES_SKR } from "@kept/config";
 import { missCost, nextMidnight } from "@kept/engine";
 import { keeperLines, t } from "@/copy";
 import type { CopyKey } from "@/copy";
 import { Button, ButtonRow } from "@/components/actions";
 import { NavBar, useToast } from "@/components/chrome";
-import { Banner, BodyText, Breakdown, Note, Title } from "@/components/content/Basics";
+import { Banner, BodyText, Breakdown, Title } from "@/components/content/Basics";
 import { OptionGrid, QRCard, SeatSlots, SentenceInput } from "@/components/content/Inputs";
 import type { Seat } from "@/components/content/Inputs";
 import { RowList } from "@/components/content/Rows";
@@ -32,6 +32,7 @@ import { inviteUrl } from "@/config/env";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
+import { savedHabits, sharedProofObject } from "@/features/oaths/habits";
 import { SigningScreen } from "../shared/Signing";
 
 const STEPS = 6;
@@ -48,34 +49,23 @@ function Step({ n, children, next, nextLabel, disabled, close }: { n: number; ch
   );
 }
 
-// ── C1 Goal ──
+// ── C1 Oath name ──
 export function C1() {
   const { go } = useGo();
   const { draft, set } = useDraft();
   const k = keeperLines("C1");
   return (
-    <Step n={1} close next={() => go("C2")} disabled={!draft.goal.trim()}>
-      <Title heading={t("screens.C1.b0.title")} sub={t("screens.C1.b0.sub")} />
-      <SentenceInput label={t("screens.C1.b1.label")} prefix={t("screens.C1.b1.prefix")} value={draft.goal} onChange={(goal) => set({ goal })} max={GOAL_MAX}
-        suggestions={[0, 1, 2, 3].map((i) => t(`screens.C1.b1.sug.${i}` as CopyKey))} />
+    <Step n={1} close next={() => go("C2")} disabled={!draft.name.trim()}>
+      <Title heading={t("additions.oathCreate.nameTitle")} sub={t("additions.oathCreate.nameSub")} />
+      <SentenceInput label={t("additions.oathCreate.nameLabel")} value={draft.name} onChange={(name) => set({ name })} max={OATH_NAME_MAX}
+        placeholder={t("additions.oathCreate.namePlaceholder")} />
       <ScreenKeeper id="C1" lines={k} />
     </Step>
   );
 }
 
-// ── C2 Object ──
-export function C2() {
-  const { go } = useGo();
-  const { draft, set } = useDraft();
-  return (
-    <Step n={2} next={() => go("C3")}>
-      <Title heading={t("screens.C2.b0.title")} sub={t("screens.C2.b0.sub")} />
-      <OptionGrid mode="tile" cols={4} value={draft.objectId} onChange={(objectId) => set({ objectId })}
-        items={OBJECTS.map((o, i) => ({ title: t(`screens.C2.b1.o${i}.t` as CopyKey), icon: o.icon }))} />
-      <Note text={t("screens.C2.b2.text")} icon="shield-check-outline" />
-    </Step>
-  );
-}
+// ── C2 Habits ── cards and the habit editor (HabitBuilder): each habit's name and proof object are saved together.
+export { C2 } from "./HabitBuilder";
 
 // ── C3 Length ── the end date assumes Start today, so day 1 is tonight's midnight (D-6).
 export function C3() {
@@ -141,8 +131,9 @@ export function C6() {
   const stake = units(draft.stakeSkr);
   const cost = skrWhole(missCost(stake));
   const rows = [
-    { label: t("screens.C6.b1.row0.l"), value: t("screens.C6.b1.row0.v", { goal: draft.goal.trim() }) },
-    { label: t("screens.C6.b1.row1.l"), value: objectName(draft.objectId) },
+    { label: t("screens.C6.b1.row0.l"), value: t("screens.C6.b1.row0.v", { goal: savedHabits(draft).map((h) => h.name).join(" · ") }) },
+    // One proof object for the whole Oath (the program's `object_id`): every habit shares it.
+    { label: t("screens.C6.b1.row1.l"), value: objectName(sharedProofObject(savedHabits(draft)) ?? draft.objectId) },
     { label: t("screens.C6.b1.row2.l"), value: t(`common.lengths.${LENGTHS.indexOf(draft.numDays)}` as CopyKey) },
     { label: t("screens.C6.b1.row3.l"), value: t("screens.C6.b1.row3.v", { amount: skrWhole(stake) }), color: color.lime.base },
     ...(draft.isSolo ? [] : [{ label: t("screens.C6.b1.row4.l"), value: reviewText(draft.reviewMode) }]),
@@ -167,7 +158,7 @@ export function C7() {
   const task = useCallback(() => oathActions.create(draft), [draft]);
   const onDone = useCallback((r: { id: string; code: string | null }) => ({ to: "C7·ok" as const, params: { id: r.id, ...(r.code ? { code: r.code } : {}) } }), []);
   const fail = useMemo(() => ({ retry: "C7" as const, edit: "C6" as const, params: { need: skrWhole(units(draft.stakeSkr)) } }), [draft.stakeSkr]);
-  return <SigningScreen title={t("screens.C7.b2.title")} sub={t("screens.C7.b2.sub", { amount: skrWhole(units(draft.stakeSkr)), name: oathName(draft.objectId, draft.numDays) })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.C7.b2.title")} sub={t("screens.C7.b2.sub", { amount: skrWhole(units(draft.stakeSkr)), name: draft.name.trim() || oathName(draft.objectId, draft.numDays) })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── C7·ok Signed · success ──
@@ -216,7 +207,7 @@ export function C8() {
       try {
         const api = getApi();
         const next = current.goal
-          ? await api.oaths.register(current, current.goal)
+          ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal])
           : (await api.invites.create(current.id)).code;
         if (next && active) {
           useDeviceOaths.getState().remember(current.id, { code: next });

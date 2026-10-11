@@ -1,5 +1,6 @@
 package expo.modules.keptgesture
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
@@ -11,6 +12,7 @@ import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.mediapipe.tasks.components.processors.ClassifierOptions
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -43,6 +45,9 @@ private const val STORAGE_MARGIN = 250_000_000L
 private const val PROGRESS_EVERY_MS = 250L
 private const val MAX_REDIRECTS = 6
 private const val LOG_TAG = "KeptProof"
+private const val GESTURE_SCORE_FLOOR = 0.15f
+private const val HAND_CONFIDENCE_FLOOR = 0.25f
+private const val VISION_IMAGE_MAX_EDGE = 768
 private const val UNSUPPORTED_DEVICE = "On-device proof recognition requires a physical Android device"
 
 /** A model the app needs: where it comes from, and the exact size and digest it must have. */
@@ -54,6 +59,7 @@ class KeptGestureModule : Module() {
   private var engine: Engine? = null
   private var engineBackend = "CPU"
   private var conversationPrepared = false
+  private var gestureRecognizer: GestureRecognizer? = null
   private val downloading = AtomicBoolean(false)
   @Volatile private var cancelRequested = false
   private val context get() = requireNotNull(appContext.reactContext)
@@ -90,6 +96,7 @@ class KeptGestureModule : Module() {
       check(models.all { isVerified(it) }) { "Download the on-device proof models first" }
       val started = SystemClock.elapsedRealtime()
       ensureScannerReady()
+      ensureGestureRecognizer()
       Log.i(LOG_TAG, "scanner ready backend=$engineBackend load=${SystemClock.elapsedRealtime() - started}ms")
       true
     }
@@ -306,7 +313,7 @@ class KeptGestureModule : Module() {
     val cacheDir = File(context.cacheDir, "litert-lm").apply { mkdirs() }.absolutePath
     if (shouldUseCpuBackend()) {
       Log.i(LOG_TAG, "Using CPU backend fingerprint=${Build.FINGERPRINT} hardware=${Build.HARDWARE}")
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), cacheDir = cacheDir))
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = 64, cacheDir = cacheDir))
       loaded.initialize()
       engineBackend = "CPU"
       engine = loaded
@@ -314,15 +321,15 @@ class KeptGestureModule : Module() {
     }
 
     try {
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.GPU(), visionBackend = Backend.GPU(), cacheDir = cacheDir))
-      try { loaded.initialize() } catch (e: Exception) { loaded.close(); throw e }
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.GPU(), visionBackend = Backend.GPU(), maxNumTokens = 64, cacheDir = cacheDir))
+      try { loaded.initialize() } catch (e: Exception) { runCatching { loaded.close() }; throw e }
       engineBackend = "GPU"
       engine = loaded
       return loaded
     } catch (e: Exception) {
       Log.w(LOG_TAG, "GPU initialization failed; using CPU", e)
       engineBackend = "CPU"
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), cacheDir = cacheDir))
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = 64, cacheDir = cacheDir))
       loaded.initialize()
       engine = loaded
       return loaded
@@ -356,6 +363,21 @@ class KeptGestureModule : Module() {
     return loaded
   }
 
+  @Synchronized
+  private fun ensureGestureRecognizer(): GestureRecognizer {
+    gestureRecognizer?.let { return it }
+    val options = GestureRecognizer.GestureRecognizerOptions.builder()
+      .setBaseOptions(BaseOptions.builder().setModelAssetPath(fileOf(gesture).absolutePath).setDelegate(Delegate.CPU).build())
+      .setRunningMode(RunningMode.IMAGE)
+      .setNumHands(1)
+      .setMinHandDetectionConfidence(HAND_CONFIDENCE_FLOOR)
+      .setMinHandPresenceConfidence(HAND_CONFIDENCE_FLOOR)
+      .setMinTrackingConfidence(HAND_CONFIDENCE_FLOOR)
+      .setCannedGesturesClassifierOptions(ClassifierOptions.builder().setScoreThreshold(GESTURE_SCORE_FLOOR).build())
+      .build()
+    return GestureRecognizer.createFromOptions(context, options).also { gestureRecognizer = it }
+  }
+
   private fun analyze(uri: String, expectedObject: String, expectedGesture: String): Map<String, Any> {
     check(models.all { isVerified(it) }) { "Download the on-device proof models first" }
     val started = SystemClock.elapsedRealtime()
@@ -369,26 +391,43 @@ class KeptGestureModule : Module() {
 
     val bitmap = BitmapFactory.decodeFile(photoFile.absolutePath) ?: error("Could not decode captured photo")
     val mpImage = BitmapImageBuilder(bitmap).build()
-    val recognizer = GestureRecognizer.createFromOptions(
-      context,
-      GestureRecognizer.GestureRecognizerOptions.builder()
-        .setBaseOptions(BaseOptions.builder().setModelAssetPath(fileOf(gesture).absolutePath).setDelegate(Delegate.CPU).build())
-        .setRunningMode(RunningMode.IMAGE)
-        .setNumHands(2)
-        .build()
-    )
-    val gestureName = try {
-      recognizer.recognize(mpImage).gestures().flatten().maxByOrNull { it.score() }?.categoryName() ?: "None"
-    } finally { recognizer.close(); bitmap.recycle() }
+    val categories = ensureGestureRecognizer().recognize(mpImage).gestures().flatten()
+    val expectedCategory = when (expectedGesture.lowercase().replace(" ", "_")) {
+      "open_palm" -> "Open_Palm"
+      "thumbs_up" -> "Thumb_Up"
+      "victory" -> "Victory"
+      "closed_fist" -> "Closed_Fist"
+      "pointing_up" -> "Pointing_Up"
+      else -> ""
+    }
+    // Use the challenge gesture's own score. MediaPipe's default classifier cutoff can hide a valid but
+    // low-confidence palm even when the hand detector found the hand clearly.
+    val expected = categories.firstOrNull { it.categoryName() == expectedCategory && it.score() >= GESTURE_SCORE_FLOOR }
+    val best = categories.maxByOrNull { it.score() }
+    val gestureName = (expected ?: best)?.categoryName() ?: "None"
     val gestureAt = SystemClock.elapsedRealtime()
 
-    val prompt = """Check this camera photo for a real $expectedObject. Is it shown on a screen or printout? Reply only as compact JSON: {"objectPresent":boolean,"objectConfidence":number,"looksLikeScreenOrPrintout":boolean,"reason":"at most 8 words"}. Confidence is 0 to 1. A screen or printout is not live."""
-    val conversation = ensureScannerReady().createConversation()
+    val maxEdge = maxOf(bitmap.width, bitmap.height)
+    val scaled = if (maxEdge > VISION_IMAGE_MAX_EDGE) {
+      val ratio = VISION_IMAGE_MAX_EDGE.toFloat() / maxEdge
+      Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt(), (bitmap.height * ratio).toInt(), true)
+    } else bitmap
+    val visionImage = File.createTempFile("kept-proof-", ".jpg", context.cacheDir)
+    try {
+      visionImage.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 86, it) }
+    } finally {
+      if (scaled !== bitmap) scaled.recycle()
+      bitmap.recycle()
+    }
+    val prompt = """Is a real $expectedObject visible, not on a screen or printout? Return JSON only: {"objectPresent":true/false,"objectConfidence":0.0,"looksLikeScreenOrPrintout":true/false}."""
     val engineAt = SystemClock.elapsedRealtime()
     val response = try {
-      conversation.sendMessage(Contents.of(Content.ImageFile(photoFile.absolutePath), Content.Text(prompt)))
-        .contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
-    } finally { conversation.close() }
+      val conversation = ensureScannerReady().createConversation()
+      try {
+        conversation.sendMessage(Contents.of(Content.ImageFile(visionImage.absolutePath), Content.Text(prompt)))
+          .contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
+      } finally { conversation.close() }
+    } finally { visionImage.delete() }
     val inferenceAt = SystemClock.elapsedRealtime()
     Log.i(LOG_TAG, "backend=$engineBackend hash=${hashedAt - started}ms gesture=${gestureAt - hashedAt}ms engine=${engineAt - gestureAt}ms inference=${inferenceAt - engineAt}ms answerChars=${response.length}")
     // The model's text and MediaPipe's label go back as they are. Reading the answer and comparing the gesture

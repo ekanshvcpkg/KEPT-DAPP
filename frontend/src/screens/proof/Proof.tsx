@@ -33,8 +33,9 @@ import { haptic } from "@/lib/haptics";
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
 
 /** The proof in progress: today's challenge per photo and the last shot (kept for a retry on F2b). */
-const useProof = create<{ challenges: Record<string, Challenge>; image: string | null; imageUri: string | null; photo2At: Record<string, number>; set(p: Partial<{ challenges: Record<string, Challenge>; image: string | null; imageUri: string | null; photo2At: Record<string, number> }>): void }>()((set) => ({
-  challenges: {}, image: null, imageUri: null, photo2At: {}, set: (p) => set(p),
+type ProofFeedback = { objectPresent?: boolean; gestureMatches?: boolean };
+const useProof = create<{ challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null; photo2At: Record<string, number>; set(p: Partial<{ challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null; photo2At: Record<string, number> }>): void }>()((set) => ({
+  challenges: {}, feedback: {}, image: null, imageUri: null, photo2At: {}, set: (p) => set(p),
 }));
 const key = (id: string, photo: 1 | 2) => `${id}:${photo}`;
 /** Tests: seed a challenge as if it was issued earlier. */
@@ -198,6 +199,7 @@ function Check({ photo }: { photo: 1 | 2 }) {
     const { image, imageUri } = useProof.getState();
     void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined).then(
       (r) => {
+        if (r.status === "fail") useProof.getState().set({ feedback: { ...useProof.getState().feedback, [key(id, photo)]: { objectPresent: r.objectPresent, gestureMatches: r.gestureMatches } } });
         if (r.status === "pass" && photo === 1 && r.endAllowedAt) useProof.getState().set({ photo2At: { ...useProof.getState().photo2At, [id]: r.endAllowedAt } });
         void refreshOaths(); if (r.status === "pass" && photo === 1) haptic.success(); replace(next(r, view, photo), { id, photo });
       },
@@ -229,12 +231,14 @@ export function F2a() {
   const { replace, close } = useGo();
   const { id, photo, view } = useProofScreen();
   const c = useProof((s) => s.challenges[key(id, photo)]);
+  const feedback = useProof((s) => s.feedback[key(id, photo)]);
   const k = keeperLines("F2a")[0]!;
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, photo)} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="camera-retake-outline" label={t("screens.F2a.pin.0")} onPress={() => replace(photo === 2 ? "F4" : "F1", { id, photo })} />}>
       <ProofCamera photo={photo} state="fail" object={view ? objectIcon(view.facts.objectId) : "camera"} label={c ? t("screens.F2a.b0.label", { gesture: gestureText(c.gesture) }) : ""} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
       <ScreenKeeper id="F2a" lines={[k]} />
+      {feedback?.objectPresent && feedback.gestureMatches === false && c && <Note text={t("additions.core.proofFeedback.objectOnly", { object: objectName(c.objectId), gesture: gestureText(c.gesture) })} />}
     </Screen>
   );
 }

@@ -45,7 +45,7 @@ export function createMockTx(scenario: () => Scenario, wallet: () => string | nu
   }
   const w = () => wallet() ?? MOCK_WALLET;
   return {
-    createOath: (i) => sign(() => ({ oath: mockOaths.create({ wallet: w(), goal: i.goalText, objectId: i.objectId, numDays: i.numDays, stake: i.stake, isSolo: i.isSolo, reviewMode: i.reviewMode }).id, started: false })),
+    createOath: (i) => sign(() => ({ oath: mockOaths.create({ wallet: w(), goal: i.habits?.join(" · ") ?? i.goalText, name: i.name, habits: i.habits, objectId: i.objectId, numDays: i.numDays, stake: i.stake, isSolo: i.isSolo, reviewMode: i.reviewMode }).id, started: false })),
     joinOath: (id) => sign(() => { mockOaths.join(id, w()); return {}; }),
     startOath: (id) => sign(() => { mockOaths.start(id); return {}; }),
     cancelOath: (id) => sign(() => { mockOaths.cancel(id); return {}; }),

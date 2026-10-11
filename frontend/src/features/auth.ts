@@ -15,6 +15,8 @@ import { useSession } from "@/state/session";
 export type SignInResult = { wallet: string; genesis: boolean };
 
 export async function signIn(api: KeptApi, wallet: WalletSession): Promise<SignInResult> {
+  // Finish the first wallet handoff before fetching the nonce. Phantom and some Android wallet
+  // adapters are unreliable if the app makes a network request while an MWA association is open.
   const address = await wallet.connect();
   const message = await api.auth.nonce(address);
   const signed = await wallet.signMessage(message);

@@ -19,12 +19,26 @@ function files(path) {
   return readdirSync(path).flatMap((f) => (f === "__tests__" || f === "icons.gen.json" ? [] : files(join(path, f))));
 }
 
+/**
+ * What counts as source for icon names. The object picker's search data is words, not icon references: its aliases and
+ * labels ("scale", "bed", "tent") would pull dozens of glyphs into the font that nothing draws.
+ */
+function text(f) {
+  const raw = readFileSync(f, "utf8");
+  if (f.endsWith(join("features", "objects", "catalog.ts"))) return "";
+  if (f.endsWith(join("copy", "additions.json"))) {
+    const { objects: _search, ...rest } = JSON.parse(raw);
+    return JSON.stringify(rest);
+  }
+  return raw;
+}
+
 /** Every MDI name quoted in the sources, sorted, with its codepoint. */
 function usedIcons() {
   const all = JSON.parse(readFileSync(join(vendor, "glyphmaps", "MaterialCommunityIcons.json"), "utf8"));
   const names = new Set();
   for (const f of SOURCES.flatMap(files).filter((f) => /\.(tsx?|json)$/.test(f))) {
-    for (const m of readFileSync(f, "utf8").matchAll(/["'`]([a-z0-9]+(?:-[a-z0-9]+)*)["'`]/g)) if (Object.hasOwn(all, m[1])) names.add(m[1]);
+    for (const m of text(f).matchAll(/["'`]([a-z0-9]+(?:-[a-z0-9]+)*)["'`]/g)) if (Object.hasOwn(all, m[1])) names.add(m[1]);
   }
   return Object.fromEntries([...names].sort().map((n) => [n, all[n]]));
 }

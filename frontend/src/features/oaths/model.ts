@@ -40,6 +40,8 @@ export interface OathFacts {
   creator: string;
   name: string;
   goal: string | null;
+  /** Structured habits stored in OathDetails; legacy Oaths expose their goal as one habit. */
+  habits?: string[];
   objectId: number;
   numDays: number;
   stake: bigint;

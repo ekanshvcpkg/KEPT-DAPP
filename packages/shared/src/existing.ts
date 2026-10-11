@@ -39,20 +39,22 @@ export type OathRead = z.infer<typeof OathRead>;
 // POST /api/oaths/watch → 204 (no body)
 export const WatchRequest = z.object({ oath: Address });
 // POST /api/oaths/details
-export const DetailsRequest = z.object({ oath: Address, goalText: z.string().min(1).max(120) });
-export const DetailsResponse = z.object({ oath: Address, goalText: z.string() });
+export const HabitList = z.array(z.string().min(1).max(60)).min(1).max(8);
+export const DetailsRequest = z.object({ oath: Address, goalText: z.string().min(1).max(501), habits: HabitList.optional() });
+export const DetailsResponse = z.object({ oath: Address, goalText: z.string(), habits: z.array(z.string()).optional() });
 // GET /api/oaths/:oath/details
-export const GoalResponse = z.object({ goalText: z.string().nullable() });
+export const GoalResponse = z.object({ goalText: z.string().nullable(), habits: z.array(z.string()).optional() });
 // POST /api/invites
 export const InviteCreateRequest = z.object({ oath: Address });
 export const InviteCreateResponse = z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/"), oath: OathRead });
 // GET /api/oaths/:oath/invite; lets the app recover a creator's current link after a reload.
 export const OathInviteResponse = z.object({
   goalText: z.string().nullable(),
+  habits: z.array(z.string()).optional(),
   invite: z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/") }).nullable(),
 });
 // GET /api/invites/:code
-export const InviteResolveResponse = z.object({ oath: OathRead, goalText: z.string().nullable(), alreadyStarted: z.boolean() });
+export const InviteResolveResponse = z.object({ oath: OathRead, goalText: z.string().nullable(), habits: z.array(z.string()).optional(), alreadyStarted: z.boolean() });
 export type InviteResolve = z.infer<typeof InviteResolveResponse>;
 // POST /api/push-token → 204
 export const PushTokenRequest = z.object({ token: z.string().min(1).max(4096) });

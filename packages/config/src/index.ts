@@ -1,16 +1,21 @@
 // Product constants shared by the app and the engine. Every number here comes from
 // design/rules.md or docs/DECISIONS.md; the comment says which.
 
-/** Proof objects, in on-chain `object_id` order (must match OBJECT_IDS in backend/src/routes/v4.ts:22). */
+/**
+ * Proof objects, in on-chain `object_id` order (must match OBJECT_IDS in backend/src/v4/rules.ts). The program accepts
+ * exactly these eight (`object_id < 8`): never reorder them, never add one here without the program and backend.
+ * `text` is what the phone's vision model is asked to find in each photo, and what `/proof/verify` must be sent
+ * (backend OBJECT_TEXT); a drift test in the app reads the backend file and compares.
+ */
 export const OBJECTS = [
-  { id: "dumbbell", icon: "dumbbell", asset: "object-dumbbell", nameWord: "iron" },
-  { id: "book", icon: "book-open-variant", asset: "object-book", nameWord: "page" },
-  { id: "water_bottle", icon: "bottle-soda-outline", asset: "object-water-bottle", nameWord: "hydrate" },
-  { id: "guitar", icon: "guitar-acoustic", asset: "object-guitar", nameWord: "riff" },
-  { id: "running_shoe", icon: "shoe-sneaker", asset: "object-running-shoe", nameWord: "stride" },
-  { id: "plant", icon: "sprout", asset: "object-plant", nameWord: "green" },
-  { id: "skipping_rope", icon: "jump-rope", asset: "object-skipping-rope", nameWord: "skip" },
-  { id: "yoga_mat", icon: "yoga", asset: "object-yoga-mat", nameWord: "flow" },
+  { id: "dumbbell", text: "dumbbell", icon: "dumbbell", asset: "object-dumbbell", nameWord: "iron" },
+  { id: "book", text: "book", icon: "book-open-variant", asset: "object-book", nameWord: "page" },
+  { id: "water_bottle", text: "water bottle", icon: "bottle-soda-outline", asset: "object-water-bottle", nameWord: "hydrate" },
+  { id: "guitar", text: "guitar", icon: "guitar-acoustic", asset: "object-guitar", nameWord: "riff" },
+  { id: "running_shoe", text: "running shoes", icon: "shoe-sneaker", asset: "object-running-shoe", nameWord: "stride" },
+  { id: "plant", text: "plant", icon: "sprout", asset: "object-plant", nameWord: "green" },
+  { id: "skipping_rope", text: "skipping rope", icon: "jump-rope", asset: "object-skipping-rope", nameWord: "skip" },
+  { id: "yoga_mat", text: "yoga mat", icon: "yoga", asset: "object-yoga-mat", nameWord: "flow" },
 ] as const;
 export type ObjectId = (typeof OBJECTS)[number]["id"];
 export type ObjectIcon = (typeof OBJECTS)[number]["icon"];
@@ -44,6 +49,8 @@ export type StakeSkr = (typeof STAKES_SKR)[number];
 export const stakeUnits = (skr: number): bigint => BigInt(skr) * SKR_UNIT;
 
 export const GOAL_MAX = 60;
+export const OATH_NAME_MAX = 24;
+export const HABIT_COUNT_MAX = 8;
 export const GOAL_MIN = 1;
 /** Program limit (state.rs:3); DECISIONS D-11. */
 export const MAX_MEMBERS = 4;

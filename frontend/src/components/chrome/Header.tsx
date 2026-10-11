@@ -5,6 +5,7 @@ import { Pressable, View } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { t } from "@/copy";
 import { color, duration, metrics, space } from "@/theme";
+import { useIsDemo } from "@/state/mode";
 import { Icon, Pop, PressScale, Text, useAnimationLifecycle, Bump, CountText } from "../primitives";
 import type { IconName } from "../primitives";
 import { KeeperMark } from "../keeper/KeeperUI";
@@ -15,7 +16,7 @@ import { useScreenKeeper } from "../keeper/ScreenKeeper";
 export function DevnetBadge({ onLongPress }: { onLongPress?: () => void }) {
   const s = metrics.statusBar;
   return (
-    <Pressable onLongPress={onLongPress} disabled={!onLongPress} accessibilityRole="text" accessibilityLabel={t("common.devnet")} hitSlop={12} style={{ alignSelf: "flex-start" }}>
+    <Pressable onLongPress={onLongPress} disabled={!onLongPress} accessibilityRole="text" accessibilityLabel={t("common.devnet")} hitSlop={12} style={{ alignSelf: "center" }}>
       <View style={{ height: s.badgeH, paddingHorizontal: s.badgePadX, borderRadius: s.badgeRadius, backgroundColor: color.devnetBadge.bg, justifyContent: "center" }}>
         <Text variant="devnet" color={color.devnetBadge.fg}>{t("common.devnet")}</Text>
       </View>
@@ -101,7 +102,8 @@ interface AppHeaderProps {
 export function AppHeader({ title, balance, unreadCount, keeper, onBalance, onBell, extra }: AppHeaderProps) {
   const h = metrics.header;
   const host = useScreenKeeper();
-  const mark = keeper ?? (host ? { hasNew: host.fresh, onPress: host.toggle } : { hasNew: false, onPress: () => {} });
+  const isDemo = useIsDemo();
+  const mark = keeper ?? (host ? { hasNew: host.fresh && !isDemo, onPress: host.toggle } : { hasNew: false, onPress: () => {} });
   return (
     <View style={{ height: h.height, flexDirection: "row", alignItems: "center", gap: h.gap }}>
       <KeeperMark hasNew={mark.hasNew} onPress={mark.onPress} open={!!host?.open} />
@@ -155,7 +157,8 @@ export function NavBar({ onBack, title, steps, right, close, keeper }: NavBarPro
   const n = metrics.nav;
   const label = right ?? (steps ? `${steps[0]}/${steps[1]}` : undefined);
   const host = useScreenKeeper();
-  const mark = keeper ?? (host?.lines ? { hasNew: host.fresh, onPress: host.toggle } : null);
+  const isDemo = useIsDemo();
+  const mark = keeper ?? (host?.lines ? { hasNew: host.fresh && !isDemo, onPress: host.toggle } : null);
   return (
     <View style={{ height: n.height, flexDirection: "row", alignItems: "center", gap: n.gap }}>
       <RoundButton icon={close ? "close" : "chevron-left"} size={n.back} iconSize={n.backIcon} label={t(close ? "additions.a11y.close" : "additions.a11y.back")} onPress={onBack} />
