@@ -9,7 +9,8 @@ Frontend only. Nothing here is on `main`; merge when you're happy (bottom of thi
   pushed new props into ~40 react-native-svg nodes. Now the still parts (body, head, each mood's face,
   props, each hand pose) are recorded once as pictures, and a frame only moves about 30 nodes. The 30 fps
   cap from D-84 is gone: he animates at the display's rate.
-- **The old SVG Keeper is still there**, behind a flag, so you can compare and switch back (below).
+- **The old SVG Keeper is gone.** It stayed behind a flag until the Skia one was approved (2026-10-11),
+  then it, the flag and the side-by-side dev screen were removed (see "Cleanup" below).
 - **The splash Check-K** draws in with Skia (a trimmed stroke) instead of animating SVG dash offsets.
 - **No animation moves layout or colours any more**, except the tab bar (see "Skipped"): the settings
   toggle's knob and the camera's scan line now slide with transforms; the flow step bar cross-fades
@@ -84,8 +85,7 @@ top of the Keeper, but A1 is a one-time screen, so there was nothing worth chang
 |---|---|---|
 | Skia **2.6.2**, the version `npx expo install` picks for SDK 57 (released April 2026). Its docs at that tag require RN ≥ 0.79 and React ≥ 19, and take Reanimated (≥ 3.19) shared values as props; the New Architecture build and run were proved on the emulator. | Your instruction | — |
 | pnpm is allowed to run Skia's postinstall (`allowBuilds` in `pnpm-workspace.yaml`) | It copies the prebuilt binaries; without it the build has no Skia | Remove the line (and Skia) |
-| The SVG Keeper's switch: Dev menu row "Keeper: Skia" (saved in dev builds), `EXPO_PUBLIC_KEEPER=SVG` for release builds | "behind a dev flag"; a release build can't show the Dev menu | Set the env var; or delete `KeeperSkia.tsx` and the switch in `Keeper.tsx` |
-| A dev-only comparison screen, `kept://dev/keeper/<moods\|props\|hands\|busts\|anim/<name>>` | To compare every mood, prop and pose and record the videos | Delete `src/dev/KeeperCompare.tsx` and its route |
+| The SVG Keeper behind a switch (Dev menu, `EXPO_PUBLIC_KEEPER`) and a side-by-side dev screen, while you compared | "behind a dev flag" | Removed after approval; revert commit b1f4c3a to bring both back |
 | Still parts drawn live for the first few ms until their picture is recorded | So nothing pops in on first use | — |
 | The tab bar's widening tab still animates `flex` | Doing it with transforms needs the pill drawn in pieces; it changes how it's built and risks how it looks | — (listed under Skipped) |
 | Embers, orbs and beam left as views | No measurable gain from Skia | — |
@@ -99,10 +99,6 @@ top of the Keeper, but A1 is a one-time screen, so there was nothing worth chang
 - **Count-ups (`CountText`)** re-render text from JS each frame for ~0.9 s. Not a transform/opacity
   animation, but moving numbers to the UI thread would mean an animated text input, which changes how the
   text is laid out. Left; worth a look if the money moments feel heavy on the phone.
-- **Skia's log line on Android.** A transparent Skia canvas renders through a TextureView, and Skia 2.6.2
-  (and still 2.15.1) catches an exception and logs "updateAndRelease() failed. The exception above can
-  safely be ignored" every frame. It's harmless but noisy and costs a little; the only alternative is an
-  opaque canvas, which can't sit on our gradients. Revisit when Expo moves to a Skia that fixes it.
 - **Oaths tab and Bounties › Joined lists** live in tab screens (`TabScreen`), not `Screen`; they weren't
   converted. Live users rarely have many running Oaths; history (D5) is virtualised.
 - **Touch response was checked in code, not timed on a device.** Every `PressScale` starts its press scale
@@ -110,7 +106,33 @@ top of the Keeper, but A1 is a one-time screen, so there was nothing worth chang
   without feedback were fixed. Toggles, sheet scrims and the Keeper (which changes its line) respond with
   their own state change. A frame-by-frame timing needs the phone and a high-speed recording.
 
+## Skia's per-frame log line (D-90)
+
+A transparent Skia canvas on Android renders through a TextureView, and Skia 2.6.2 (still in 2.15.1) calls
+`SurfaceTexture.updateTexImage()` before every frame. The texture belongs to the TextureView, so the call
+always fails: Java throws `IllegalStateException` on the UI thread, Android logs "updateTexImage:
+LegacySurfaceTexture is not attached!", and Skia catches it and logs "updateAndRelease() failed. The
+exception above can safely be ignored".
+
+Measured on the release build, A1 with the Keeper at rest, 8 s windows, three alternating rounds:
+
+| Build | Log lines from the app | Exceptions | Frames (8 s) | Janky | p50 / p90 ms |
+|---|---|---|---|---|---|
+| As shipped | 607 / 570 / 542 (two per Skia frame, 35–75 / s) | one per Skia frame (303 / 285 / 271) | 202 / 166 / 166 | 70 / 76 / 75 % | 61–81 / 109–150 |
+| Patched | 4 / 0 / 0 | 0 | 193 / 169 / 366 | 71 / 76 / 7 % | 57–69 / 113–117 (round 3: 16 / 17) |
+| Keeper frozen | 0 | 0 | 114 / 130 / 60 | 56 / 61 / 0 % | 57–61 / 105–109 |
+
+Every call failed (exceptions = Skia frames), and the line was essentially the app's entire log output.
+The frame-time difference is inside the emulator's noise (round 3 drifted for every build). Full
+perf.mts runs agree: A1 at rest 21.5 fps / 67 % janky as shipped, 17.5 fps / 77 % patched; Today, tabs,
+push/back and embers within a point. So the cost per frame isn't measurable here, but the log flood is
+real, so the call and its log are removed by a pnpm patch at that one site
+(`patches/@shopify__react-native-skia@2.6.2.patch`, D-90). Drawing is unchanged. `perf.mts` now counts
+the line and fails above `--max-skia-lines` (0): 1,537 lines on the shipped build, 0 patched.
+
 ## Comparisons recorded for you (`artifacts/motion/`, local, not in git)
+
+Made with the side-by-side dev screen, since removed:
 
 - `compare-moods|props|hands|busts-svg-vs-skia.png`: every mood, prop and hand pose, SVG left, Skia right.
 - `keeper-<anim>-svg-vs-skia.mp4` for idle, peek, popin, flip, wave, point, tap, thumbs, jump, shrug.
@@ -139,15 +161,13 @@ on the phone (it names the device in its output):
 cd frontend && node scripts/perf.mts android/app/build/outputs/apk/release/app-release.apk --out ../artifacts/perf/phone-after.json
 ```
 
-**Switching the Keeper:** in a development build, Dev menu (long-press DEVNET) › "Keeper: Skia" off = the
-old SVG Keeper. In a release build, put `EXPO_PUBLIC_KEEPER=SVG` in `frontend/.env` and rebuild
-(`./gradlew assembleRelease --rerun-tasks`, so the JS bundle is rebuilt). The side-by-side screen:
-`adb shell am start -d "kept://dev/keeper/moods" app.kept.mobile` in a development build.
+**Measuring with the Keeper frozen:** `EXPO_PUBLIC_KEEPER_STILL=1` when building (with
+`./gradlew assembleRelease --rerun-tasks`, so the JS bundle is rebuilt) holds every Keeper still.
 
 ## What to look at first
 
 1. A1 (the welcome screen) and any result screen with the big Keeper: is he smooth, and does he look
-   exactly as before? Compare with the flag off.
+   exactly as before?
 2. The splash on a cold start (the Check-K drawing in).
 3. Scroll the inbox, your activity and Oath history.
 4. Bounties scroll, the one number that moved the wrong way on the emulator.
