@@ -6,7 +6,9 @@
 // Uses `am start -W` (TotalTime) and `dumpsys gfxinfo` (janky frames, frame-time percentiles).
 // Also watches logcat for the whole run (audit P-6): Reanimated's "synchronouslyUpdateUIProps failed"
 // lines (an animated-props update for a view that isn't mounted, logged with a stack trace on the UI
-// thread) and ANRs. The run fails when there's an ANR or more failures than --max-sync-failures (50).
+// thread), Skia's per-frame "updateAndRelease() failed" line (removed by D-90's patch; it comes back if
+// the patch stops applying) and ANRs. The run fails when there's an ANR, more sync failures than
+// --max-sync-failures (50) or more Skia lines than --max-skia-lines (0).
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -23,12 +25,14 @@ const outArg = process.argv.indexOf("--out");
 const out = outArg > 0 ? path.resolve(process.argv[outArg + 1]!) : path.join(root, "artifacts/perf/run.json");
 const maxArg = process.argv.indexOf("--max-sync-failures");
 const MAX_SYNC_FAILURES = maxArg > 0 ? Number(process.argv[maxArg + 1]) : 50;
+const skiaArg = process.argv.indexOf("--max-skia-lines");
+const MAX_SKIA_LINES = skiaArg > 0 ? Number(process.argv[skiaArg + 1]) : 0;
 
-/** Streams logcat (the ring buffer overflows at these volumes) and counts P-6 failures and ANRs. */
+/** Streams logcat (the ring buffer overflows at these volumes) and counts P-6 failures, Skia's line and ANRs. */
 function watchLogcat() {
   spawnSync(ADB, ["logcat", "-c"]);
-  const counts = { syncFailures: 0, anrs: 0 };
-  const proc = spawn(ADB, ["logcat", "-v", "brief", "Reanimated:W", "ActivityManager:E", "*:S"]);
+  const counts = { syncFailures: 0, skiaLines: 0, anrs: 0 };
+  const proc = spawn(ADB, ["logcat", "-v", "brief", "Reanimated:W", "RNSkia:I", "ActivityManager:E", "*:S"]);
   let rest = "";
   proc.stdout.setEncoding("utf8");
   proc.stdout.on("data", (chunk: string) => {
@@ -36,6 +40,7 @@ function watchLogcat() {
     rest = lines.pop() ?? "";
     for (const l of lines) {
       if (l.includes("synchronouslyUpdateUIProps failed")) counts.syncFailures++;
+      else if (l.includes("updateAndRelease() failed")) counts.skiaLines++;
       else if (l.includes(`ANR in ${PKG}`)) counts.anrs++;
     }
   });
@@ -62,8 +67,11 @@ function input(...a: string[]) {
   adb("shell", "input", ...a);
 }
 
-/** Where a control is on screen, by its text or label (top-anchored controls move with the status bar height). */
-async function locate(q: string, timeoutMs = 15000): Promise<[number, number]> {
+/**
+ * Where a control is on screen, by its text or label (top-anchored controls move with the status bar height).
+ * One uiautomator dump waits ~10 s for an idle that never comes while loops play, so allow several.
+ */
+async function locate(q: string, timeoutMs = 45000): Promise<[number, number]> {
   const end = Date.now() + timeoutMs;
   for (;;) {
     const n = dump().find((d) => d.text === q || d.desc === q || d.desc.startsWith(`${q},`));
@@ -210,16 +218,16 @@ async function main() {
   input("keyevent", "KEYCODE_BACK");
   await sleep(1500);
   log.stop();
-  const { syncFailures, anrs } = log.counts;
-  console.log("sync-props failures", syncFailures, "ANRs", anrs);
+  const { syncFailures, skiaLines, anrs } = log.counts;
+  console.log("sync-props failures", syncFailures, "Skia log lines", skiaLines, "ANRs", anrs);
   const refreshHz = Number(adb("shell", "dumpsys", "display").match(/renderFrameRate ([\d.]+)/)?.[1] ?? NaN);
   const device = adb("shell", "getprop", "ro.product.model").trim();
-  const res = { apk, device, refreshHz, date: new Date().toISOString(), coldStartMs: cold, splash, a1Entering, a1Idle, todayEntering, todayIdle, tabs, scroll, push, embers, syncFailures, anrs };
+  const res = { apk, device, refreshHz, date: new Date().toISOString(), coldStartMs: cold, splash, a1Entering, a1Idle, todayEntering, todayIdle, tabs, scroll, push, embers, syncFailures, skiaLines, anrs };
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(res, null, 1));
   console.log(`wrote ${out}`);
-  if (anrs > 0 || syncFailures > MAX_SYNC_FAILURES) {
-    console.error(`FAIL: ${anrs} ANR(s), ${syncFailures} sync-props failures (max ${MAX_SYNC_FAILURES}); see docs/notes/FIDELITY_AUDIT.md › P-6`);
+  if (anrs > 0 || syncFailures > MAX_SYNC_FAILURES || skiaLines > MAX_SKIA_LINES) {
+    console.error(`FAIL: ${anrs} ANR(s), ${syncFailures} sync-props failures (max ${MAX_SYNC_FAILURES}; FIDELITY_AUDIT.md › P-6), ${skiaLines} Skia log lines (max ${MAX_SKIA_LINES}; D-90)`);
     process.exitCode = 1;
   }
 }
