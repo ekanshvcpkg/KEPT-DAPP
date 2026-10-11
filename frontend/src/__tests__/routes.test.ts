@@ -64,6 +64,17 @@ describe("flows.md route table", () => {
     expect([...byId.get("A1·m")!.goesTo].sort()).toEqual(["A2", "A4"]);
   });
 
+  it("E1 is a choice (D-91): its steps E1·scan and E1·code reach E2 and every E3 state, and E3's ways back reach them", () => {
+    expect(byId.get("E1")!.goesTo).toEqual(expect.arrayContaining(["E1·scan", "E1·code"]));
+    const outcomes = ["E2", "E3·code", "E3·late", "E3·in", "E3·elig", "E3·skr"];
+    for (const step of ["E1·scan", "E1·code"]) {
+      expect(presentation(step)).toBe("flow");
+      expect(byId.get(step)!.goesTo).toEqual(expect.arrayContaining(outcomes));
+    }
+    expect(byId.get("E1·scan")!.goesTo).toContain("E1·code");
+    for (const e3 of ["E3·code", "E3·late", "E3·in", "E3·elig"]) expect(byId.get(e3)!.goesTo).toEqual(expect.arrayContaining(["E1·scan", "E1·code"]));
+  });
+
   it("signing screens are transient: none lists itself or another signing screen as a way back", () => {
     for (const r of table.filter((x) => presentation(x.id) === "signing")) {
       expect(r.goesTo.filter((to) => presentation(to) === "signing" && to !== r.id)).toEqual([]);

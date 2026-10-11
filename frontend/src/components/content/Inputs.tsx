@@ -85,8 +85,10 @@ export function OptionGrid({ items, value, onChange, mode, cols, small }: { item
 }
 
 // ── SentenceInput (`input`) ── prefix + value + lime caret, counter, suggestion chips, error ring.
-export function SentenceInput({ label, prefix, value, onChange, max, suggestions = [], mono, error, placeholder }: {
+export function SentenceInput({ label, prefix, value, onChange, max, suggestions = [], mono, error, placeholder, autoFocus }: {
   label: string; prefix?: string; value: string; onChange: (v: string) => void; max?: number; suggestions?: string[]; mono?: boolean; error?: string; placeholder?: string;
+  /** Opens with the keyboard up (E1·code: the user chose to type). */
+  autoFocus?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const fs = prefix ? 22 : 20;
@@ -107,6 +109,7 @@ export function SentenceInput({ label, prefix, value, onChange, max, suggestions
             // Codes and links (mono) are typed exactly: no autocorrect, capitals or suggestions.
             {...(mono ? { autoCorrect: false, autoCapitalize: "none" as const, spellCheck: false, autoComplete: "off" as const } : {})}
             {...(placeholder ? { placeholder } : {})}
+            {...(autoFocus ? { autoFocus } : {})}
             placeholderTextColor={color.text.ghost}
             selectionColor={color.lime.base}
             cursorColor={color.lime.base}

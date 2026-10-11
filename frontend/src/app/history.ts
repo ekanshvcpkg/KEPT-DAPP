@@ -15,7 +15,7 @@ export interface StackRoute { name: string; key?: string; params?: object | unde
 
 /** Wizard and flow steps: dropped once their flow reaches an outcome. */
 const STEPS = new Set<string>([
-  "C1", "C2", "C3", "C4", "C5", "C6", "E1", "E2", "F1·perm", "F1", "F4", "R1", "J1",
+  "C1", "C2", "C3", "C4", "C5", "C6", "E1", "E1·scan", "E1·code", "E2", "F1·perm", "F1", "F4", "R1", "J1",
   "K1", "K2", "K3", "K4", "K5", "W3", "D1", "D1·m", "R3", "H2", "G1",
 ]);
 /** Never kept behind the next screen (besides signing, sheets and moments, see routes.ts). */

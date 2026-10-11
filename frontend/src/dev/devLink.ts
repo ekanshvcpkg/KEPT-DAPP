@@ -74,7 +74,7 @@ const SHOTS: Partial<Record<DesignId, Shot>> = {
   C7: { params: fail("C7", "C6") }, "C7·ok": { params: ironOpen }, "C7·no": { params: fail("C7", "C6") }, "C7·fail": { params: fail("C7", "C6") }, C8: { params: ironOpen },
   D1: { params: ironOpen }, "D1·m": { setup: joined, params: dawn }, "D1·x": { under: ["D1", ironOpen], params: ironOpen }, "D1·xs": { params: ironOpen }, "D1·go": { params: ironOpen },
   D2: { params: iron }, "D2·low": { scenario: "lowHp", params: iron }, D3: { scenario: "broken", params: () => ({ id: oath("Guitar Days") }) }, D4: { params: () => ({ id: oath("Hydra 14") }) },
-  E1: { scenario: "fresh" }, E2: { scenario: "fresh", setup: invite, params: ironOpen }, "E2·s": { scenario: "fresh", setup: invite, params: ironOpen },
+  E1: { scenario: "fresh" }, "E1·scan": { scenario: "fresh", under: ["E1"] }, "E1·code": { scenario: "fresh", under: ["E1"] }, E2: { scenario: "fresh", setup: invite, params: ironOpen }, "E2·s": { scenario: "fresh", setup: invite, params: ironOpen },
   "E3·late": { params: iron }, "E3·in": { params: ironOpen }, "E3·skr": { scenario: "noSkr", setup: invite, params: ironOpen },
   R1: { scenario: "broken", params: () => ({ id: oath("Guitar Days") }) }, R2: { scenario: "broken", params: () => ({ id: oath("Guitar Days") }) },
   R3: { scenario: "broken", params: () => ({ id: rematch() }) }, "R·act": { scenario: "rematchActive", params: () => ({ id: rematch() }) },

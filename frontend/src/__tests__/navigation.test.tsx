@@ -229,20 +229,135 @@ describe("onboarding on mocks", () => {
     expect(screen.queryByText(t("screens.F2c.b0.title"))).toBeNull();
   }, 30000);
 
-  it("joins by code: E1 → E2 → sign → D1·m; a bad code shows E3·code", async () => {
+  it("joins by code: E1 → E1·code → E2 → sign → D1·m; a bad code shows E3·code, and Try again keeps it", async () => {
     useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
     await render(<App />);
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
     await act(async () => { navigateTo("E1"); });
-    await fireEvent.changeText(await screen.findByLabelText(t("screens.E1.b2.label")), "nope");
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.code")));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.join.codeLabel")), "nope");
     await fireEvent.press(screen.getByRole("button", { name: t("screens.E1.pin.0") }));
     expect(await screen.findByText(t("screens.E3·code.b2.title"))).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: t("screens.E3·code.pin.0") }));
-    await fireEvent.changeText(await screen.findByLabelText(t("screens.E1.b2.label")), "dawn-4q2z");
+    // Back on the step it came from, the typed code still there to correct (D-91).
+    expect(rootStack().slice(-2)).toEqual(["E1", "E1_code"]);
+    expect(screen.getByLabelText(t("additions.join.codeLabel")).props.value).toBe("nope");
+    await fireEvent.changeText(screen.getByLabelText(t("additions.join.codeLabel")), "dawn-4q2z");
     await fireEvent.press(screen.getByRole("button", { name: t("screens.E1.pin.0") }));
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) }));
     expect(await screen.findByText(t("screens.D1·m.b2.title", { name: "Riya" }), {}, slow)).toBeTruthy();
   }, 30000);
+});
+
+describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
+  const camera = (require("expo-camera") as { __camera: { granted: boolean; asked: number } }).__camera;
+  const choice = () => screen.queryByLabelText(t("additions.join.scan"));
+  const preview = () => screen.queryByTestId("camera-preview");
+  beforeAll(() => queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, gcTime: Infinity } }));
+  beforeEach(async () => {
+    await setAppMode(null);
+    await AsyncStorage.clear();
+    useDev.setState({ overrides: Object.fromEntries(SLICES.map((s) => [s, "mock"])), mockWallet: true, scenario: "fresh" });
+    useDeviceOaths.setState({ shownResults: [], recapShownOn: null });
+    mockOaths.reset();
+    useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true, avatar: null, invite: null });
+    queryClient.clear();
+    camera.granted = true;
+    camera.asked = 0;
+  });
+  const openE1 = async (params?: Record<string, string>) => {
+    await render(<App />);
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    await act(async () => { navigateTo("E1", params); });
+  };
+
+  it("opens on the choice: no camera, no permission request, no code field", async () => {
+    await openE1();
+    expect(await screen.findByLabelText(t("additions.join.scan"))).toBeTruthy();
+    expect(screen.getByLabelText(t("additions.join.code"))).toBeTruthy();
+    expect(preview()).toBeNull();
+    expect(screen.queryByLabelText(t("additions.join.codeLabel"))).toBeNull();
+    expect(camera.asked).toBe(0);
+  });
+
+  it("Scan asks for the camera and turns it on; back returns to the choice and releases it; back again leaves E1", async () => {
+    await openE1();
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.scan")));
+    expect(await screen.findByTestId("camera-preview")).toBeTruthy();
+    expect(camera.asked).toBe(1);
+    expect(rootStack().slice(-2)).toEqual(["E1", "E1_scan"]);
+    await act(async () => { navigationRef.goBack(); });
+    await waitFor(() => expect(preview()).toBeNull());
+    expect(rootStack().slice(-1)).toEqual(["E1"]);
+    expect(choice()).toBeTruthy();
+    await act(async () => { navigationRef.goBack(); });
+    expect(rootStack()).toEqual(["Tabs"]);
+  });
+
+  it("a QR that isn't a KEPT invite says so and keeps scanning; an invite link opens E2 and the camera goes off", async () => {
+    await openE1();
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.scan")));
+    const cam = await screen.findByTestId("camera-preview");
+    await fireEvent(cam, "barcodeScanned", { data: "https://example.com/menu" });
+    expect(await screen.findByText(t("additions.join.notInvite"))).toBeTruthy();
+    expect(preview()).toBeTruthy();
+    await fireEvent(screen.getByTestId("camera-preview"), "barcodeScanned", { data: "kept://join/dawn-4q2z" });
+    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) })).toBeTruthy();
+    expect(preview()).toBeNull();
+  });
+
+  it("an unknown code scanned: Try again goes back to scanning", async () => {
+    await openE1();
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.scan")));
+    await fireEvent(await screen.findByTestId("camera-preview"), "barcodeScanned", { data: "kept://join/nope" });
+    expect(await screen.findByText(t("screens.E3·code.b2.title"))).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: t("screens.E3·code.pin.0") }));
+    expect(await screen.findByTestId("camera-preview")).toBeTruthy();
+    expect(rootStack().slice(-2)).toEqual(["E1", "E1_scan"]);
+  });
+
+  it("camera access denied: says why, offers Settings and a code instead", async () => {
+    camera.granted = false;
+    await openE1();
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.scan")));
+    expect(await screen.findByText(t("additions.join.permTitle"))).toBeTruthy();
+    expect(screen.getByRole("button", { name: t("additions.join.openSettings") })).toBeTruthy();
+    expect(preview()).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.join.codeInstead") }));
+    expect(await screen.findByLabelText(t("additions.join.codeLabel"))).toBeTruthy();
+    expect(rootStack().slice(-2)).toEqual(["E1", "E1_code"]);
+  });
+
+  it("Enter a code: the field and Paste, no camera; back returns to the choice", async () => {
+    await openE1();
+    await fireEvent.press(await screen.findByLabelText(t("additions.join.code")));
+    const field = await screen.findByLabelText(t("additions.join.codeLabel"));
+    expect(field.props.autoFocus).toBe(true);
+    expect(screen.getByRole("button", { name: t("screens.E1.b3.btn.0") })).toBeTruthy();
+    expect(preview()).toBeNull();
+    expect(camera.asked).toBe(0);
+    await act(async () => { navigationRef.goBack(); });
+    expect(rootStack().slice(-1)).toEqual(["E1"]);
+    expect(choice()).toBeTruthy();
+  });
+
+  it("a known code skips the choice and is looked up at once", async () => {
+    await openE1({ code: "dawn-4q2z" });
+    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) })).toBeTruthy();
+    expect(rootStack().slice(-2)).toEqual(["E1", "E2"]);
+    expect(camera.asked).toBe(0);
+    expect(preview()).toBeNull();
+  });
+
+  it("a known code that doesn't exist: Try again opens the code step with it, and back from there is the choice", async () => {
+    await openE1({ code: "nope" });
+    expect(await screen.findByText(t("screens.E3·code.b2.title"))).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: t("screens.E3·code.pin.0") }));
+    expect((await screen.findByLabelText(t("additions.join.codeLabel"))).props.value).toBe("nope");
+    await act(async () => { navigationRef.goBack(); });
+    expect(rootStack().slice(-1)).toEqual(["E1"]);
+    expect(await screen.findByLabelText(t("additions.join.scan"))).toBeTruthy();
+  });
 });
 
 describe("onboarding on Live", () => {

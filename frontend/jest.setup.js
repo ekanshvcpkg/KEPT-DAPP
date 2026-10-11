@@ -43,16 +43,25 @@ jest.mock("expo", () => {
   const actual = jest.requireActual("expo");
   return { ...actual, requireOptionalNativeModule: (name) => (name === "ExpoSecureStore" ? {} : actual.requireOptionalNativeModule(name)) };
 });
-// expo-camera: a preview that "takes" a fixed picture, and permission already granted.
+// expo-camera: a preview that "takes" a fixed picture (and hands a scanned QR to onBarcodeScanned), and
+// permission already granted. `__camera` lets a test deny it and count the hooks that asked (D-91).
 jest.mock("expo-camera", () => {
   const React = require("react");
   const { View } = require("react-native");
   const CameraView = React.forwardRef(function CameraView(props, ref) {
     React.useImperativeHandle(ref, () => ({ takePictureAsync: async () => ({ base64: "aW1hZ2U=", uri: "file://photo.jpg" }) }));
-    return React.createElement(View, { testID: "camera-preview" });
+    return React.createElement(View, { testID: "camera-preview", onBarcodeScanned: props.onBarcodeScanned });
   });
-  const granted = { granted: true, status: "granted", canAskAgain: true, expires: "never" };
-  return { CameraView, useCameraPermissions: () => [granted, async () => granted, async () => granted] };
+  const state = { granted: true, asked: 0 };
+  const status = () => (state.granted
+    ? { granted: true, status: "granted", canAskAgain: true, expires: "never" }
+    : { granted: false, status: "denied", canAskAgain: false, expires: "never" });
+  function useCameraPermissions(options) {
+    const asked = React.useRef(false);
+    if (options && options.request && !asked.current) { asked.current = true; state.asked++; }
+    return [status(), async () => { state.asked++; return status(); }, async () => status()];
+  }
+  return { __camera: state, CameraView, useCameraPermissions };
 });
 
 // Screens mount their content at once: there are no native transitions to wait for (lib/screenReady).

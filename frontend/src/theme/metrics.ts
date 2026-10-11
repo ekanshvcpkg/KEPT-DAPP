@@ -70,6 +70,8 @@ export const metrics = {
   decor: [{ x: -26, y: 120, s: 130, r: -14 }, { x: 290, y: 420, s: 96, r: 12 }, { x: 30, y: 660, s: 70, r: 8 }] as const,
   fx: { embers: 22, emberSizes: [4, 6, 8] as const },
   hitSlop: 44,
+  /** E1·scan (D-91): the camera frame when access is off (as F1·perm), and how long the same QR is ignored after it was read. */
+  join: { permCamera: 260, rescanMs: 3000 },
   minTouch: 48,
   press: { inMs: 90, outMs: 140 },
   /** Loading skeleton (D-83): a light band (this share of the screen width) sweeps left → right. */

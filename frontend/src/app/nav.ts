@@ -103,6 +103,29 @@ export function resetStack(ids: DesignId[], params?: Params) {
   navigationRef.dispatch(CommonActions.reset({ index: routes.length - 1, routes }));
 }
 
+/**
+ * Back to `step` of the flow that starts at `parent` (E3 → the E1 step the user came from, D-91). A `step`
+ * still in the stack is gone back to as it was (a typed code kept); otherwise it opens over `parent`, so
+ * back from it still reaches `parent`. False when the app's container isn't mounted.
+ */
+export function backToStep(parent: DesignId, step: DesignId, params?: Params): boolean {
+  if (!navigationRef.isReady()) return false;
+  const state = navigationRef.getRootState();
+  if (!state || state.type !== "stack") return false;
+  const routes = state.routes as unknown as StackRoute[];
+  const at = (id: DesignId) => routes.map((r) => r.name).lastIndexOf(routeName(id));
+  const s = at(step);
+  if (s >= 0) {
+    navigationRef.dispatch(CommonActions.reset({ index: s, routes: routes.slice(0, s + 1) as never }));
+    return true;
+  }
+  const p = at(parent);
+  const base = p >= 0 ? routes.slice(0, p + 1) : [...routes.slice(0, -1), { name: routeName(parent) }];
+  const next = [...base, { name: routeName(step), params }];
+  navigationRef.dispatch(CommonActions.reset({ index: next.length - 1, routes: next as never }));
+  return true;
+}
+
 /** Route params as strings/numbers (every screen reads them through this). */
 export function useParams<P extends Params>(): Partial<P> {
   return (useRoute().params ?? {}) as Partial<P>;
