@@ -12,10 +12,10 @@ import { Banner, BodyText, Breakdown, Chip, ChipRow, Note, OddsChip, SearchBar, 
 import { SeatSlots } from "@/components/content/Inputs";
 import type { Seat } from "@/components/content/Inputs";
 import { DayMemberGrid, gridToday, HPPanel, OathCard } from "@/components/content/Oath";
-import { RowList } from "@/components/content/Rows";
+import { RowList, rowListItems } from "@/components/content/Rows";
 import type { RowProps } from "@/components/content/Rows";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import { shortDuration } from "@/lib/format";
 import { color, metrics } from "@/theme";
 import { useGo, useParams, useSheetRoute } from "@/app/nav";
@@ -410,12 +410,11 @@ export function D5() {
       <Segmented items={[0, 1, 2, 3].map((i) => t(`screens.D5.b1.seg.${i}` as never))} value={seg} onChange={setSeg} />
       <Banner tone="grey" icon="chart-box-outline" title={t("screens.D5.b2.title", { n: totals.n, kept: totals.kept, broken: totals.broken })}
         sub={t("screens.D5.b2.sub", { won: skrWhole(totals.won), lost: skrWhole(totals.lost) })} />
-      {months.map((m) => (
-        <RowList key={m} label={m.split(" ")[0]!.toUpperCase()} rows={shown.filter((r) => month(r) === m).map((r) => ({
-          title: r.name, sub: r.sub, value: net(r.net), valueColor: r.net < 0n ? color.red.base : r.net > 0n ? color.lime.base : color.text.secondary,
-          leading: { kind: "icon" as const, icon: r.rematch ? "sword-cross" as const : objectIcon(r.objectId) },
-        }))} />
-      ))}
+      {/* Virtualised: history only grows (Live). Each month is a labelled section, as RowLists were. */}
+      <ScreenList items={months.flatMap((m, k) => rowListItems(m, shown.filter((r) => month(r) === m).map((r) => ({
+        title: r.name, sub: r.sub, value: net(r.net), valueColor: r.net < 0n ? color.red.base : r.net > 0n ? color.lime.base : color.text.secondary,
+        leading: { kind: "icon" as const, icon: r.rematch ? "sword-cross" as const : objectIcon(r.objectId) },
+      })), { label: m.split(" ")[0]!.toUpperCase(), gapBefore: k ? metrics.screen.gap : 0 }))} />
     </Screen>
   );
 }

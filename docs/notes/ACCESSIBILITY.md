@@ -13,10 +13,10 @@ Emulator (Pixel-class, 1080 × 2400, 420 dpi), Demo, all 117 design screens.
 
 ## Not fixed (needs a design decision)
 
-1. **Tertiary text contrast.** `text.tertiary` `#6A6A6A` is 3.4:1 on the app background `#131313` and
-   2.9–3.2:1 on surfaces `#1C1C1C` / `#222222`, under WCAG AA's 4.5:1 for small text. It's used for notes,
-   captions and hints such as "Swipe for your next one". `text.secondary` `#8A8A8A`
-   passes (4.6–5.4:1). Suggestion: lift tertiary to about `#808080` (4.6:1 on `#131313`), a design token change.
+1. **Tertiary text contrast.** `text.tertiary` was `#6A6A6A` (3.4:1 on `#131313`, 2.9–3.2:1 on surfaces).
+   **Changed to `#808080`** (owner, 2026-10-11, DECISIONS › Token amendments): 4.7:1 on the app background,
+   which passes AA, but 4.3:1 on `#1C1C1C` and 4.0:1 on `#222222`, still under 4.5:1 where tertiary text sits
+   on a card. Reaching 4.5:1 on `#222222` needs about `#8A8A8A`, the same as `text.secondary`.
 2. **Visual size under 48 dp.** Back / Close (40 dp), the bell and Keeper mark (36 dp), chips (36–38 dp) and
    the text links draw smaller than 48 dp; their touch areas are 48 dp through hit slop. Android doesn't let
    a hit slop reach past its parent's bounds, so a control at the very edge of a tight row can lose part of

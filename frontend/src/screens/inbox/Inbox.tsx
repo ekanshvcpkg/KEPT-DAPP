@@ -9,12 +9,13 @@ import { usePeople } from "@/features/queries";
 import { NavBar, useToast } from "@/components/chrome";
 import { Note, Skeleton, Title } from "@/components/content/Basics";
 import { RowList } from "@/components/content/Rows";
-import { InboxList } from "@/components/content/Social";
+import { inboxListItems } from "@/components/content/Social";
 import type { InboxItemView, InboxLead } from "@/components/content/Social";
 import type { IconName } from "@/components/primitives";
+import { metrics } from "@/theme";
 import type { PaletteName } from "@/theme";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import { ago } from "@/lib/format";
 import { useApi } from "@/api";
 import { qk, useInbox } from "@/api/queries";
@@ -120,12 +121,15 @@ export function N1() {
     <Screen bar={<NavBar onBack={back} title={t("screens.N1.nav.title")} />}>
       {keeper ? <ScreenKeeper id="N1" lines={[keeper]} /> : null}
       {inbox.isLoading ? <><Skeleton height={96} /><Skeleton height={96} /><Skeleton height={96} /></> : null}
-      {needs.length ? <InboxList label={t("screens.N1.b1.label", { n: needs.length })} items={needs.map(view)} /> : null}
-      {fresh.length ? (
-        <InboxList label={t("screens.N1.b2.label")} items={fresh.map(view)}
-          {...(fresh.some((i) => !i.done) ? { action: { label: t("screens.N1.b2.action"), onPress: () => { void markDone(fresh.map((i) => i.id)); } } } : {})} />
-      ) : null}
-      <Note text={t("screens.N1.b3.text")} />
+      {/* Virtualised: the inbox keeps every item (Live). Its two sections are spaced as two InboxLists were. */}
+      <ScreenList items={[
+        ...(needs.length ? inboxListItems("needs", { label: t("screens.N1.b1.label", { n: needs.length }), items: needs.map(view) }) : []),
+        ...(fresh.length ? inboxListItems("fresh", {
+          label: t("screens.N1.b2.label"), items: fresh.map(view),
+          ...(fresh.some((i) => !i.done) ? { action: { label: t("screens.N1.b2.action"), onPress: () => { void markDone(fresh.map((i) => i.id)); } } } : {}),
+        }, needs.length ? metrics.screen.gap : 0) : []),
+        { key: "note", gapBefore: needs.length || fresh.length ? metrics.screen.gap : 0, render: () => <Note text={t("screens.N1.b3.text")} /> },
+      ]} />
     </Screen>
   );
 }

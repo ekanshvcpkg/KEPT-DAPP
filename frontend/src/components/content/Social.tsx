@@ -1,3 +1,4 @@
+import type { ListItem } from "../layout/list";
 import { ScrollView, View } from "react-native";
 import { t } from "@/copy";
 import { banner, cheapShadow, color, fontFamily, heroCard, linear, metrics, space } from "@/theme";
@@ -109,51 +110,65 @@ export interface InboxItemView {
   actions?: { label: string; kind?: ButtonKind; onPress: () => void }[]; onPress?: () => void;
 }
 export function InboxList({ label, action, items }: { label?: string; action?: { label: string; onPress: () => void }; items: InboxItemView[] }) {
-  const m = metrics.inbox;
   return (
     <View style={{ gap: space[8] }}>
-      {label ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginVertical: space[2] }}>
-          <Text variant="monoLabel">{label}</Text>
-          {action ? <PressScale onPress={action.onPress} accessibilityLabel={action.label}><Text variant="chipMd" color={color.lime.base}>{action.label}</Text></PressScale> : null}
-        </View>
-      ) : null}
-      {items.map((it) => {
-        const tile = it.lead.kind === "icon" ? tileFor(it.lead.palette) : null;
-        return (
-          <PressScale key={it.id} onPress={it.onPress} accessibilityLabel={`${it.title}. ${it.sub ?? ""}`}>
-            <View style={{ padding: m.pad, borderRadius: m.radius, backgroundColor: color.surface[1], boxShadow: `inset 0 0 0 1px ${it.needsAction && !it.done ? color.lime.glow22 : color.line.hairline}`, opacity: it.done ? metrics.card.dimOpacity : 1, flexDirection: "row", gap: m.gap }}>
-              <View style={{ width: m.tile, height: m.tile }}>
-                <View style={{ width: m.tile, height: m.tile, borderRadius: m.tileRadius, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: it.lead.kind === "keeper" ? color.surface[4] : color.extra.transparent, boxShadow: `inset 0 1.5px 0 ${color.extra.tileHi35}, inset 0 -2px 0 ${color.extra.tileShade20}` }}>
-                  {tile ? <Gradient g={tile.gradient} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
-                  {it.lead.kind === "avatar" ? <Avatar config={it.lead.config} size={m.tile} /> : null}
-                  {it.lead.kind === "keeper" ? <Keeper mood={it.lead.mood} bust size={m.tile} /> : null}
-                  {it.lead.kind === "icon" && tile ? <Icon name={it.lead.icon} size={22} color={tile.ink} /> : null}
-                </View>
-                {it.badge ? (
-                  <View style={{ position: "absolute", right: -5, bottom: -5, width: m.badge, height: m.badge, borderRadius: m.badge / 2, backgroundColor: color.tilePalette[it.badge.palette][1], boxShadow: `0 0 0 ${m.badgeRing}px ${color.surface[1]}`, alignItems: "center", justifyContent: "center" }}>
-                    <Icon name={it.badge.icon} size={13} color={color.text.onLime} />
-                  </View>
-                ) : null}
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={{ flexDirection: "row", gap: space[8], alignItems: "center" }}>
-                  <Text variant="rowTitle" style={{ flex: 1 }}>{it.title}</Text>
-                  {it.unread ? <View style={{ width: m.dot, height: m.dot, borderRadius: m.dot / 2, backgroundColor: color.lime.base }} /> : null}
-                  <Text variant="micro">{it.time}</Text>
-                </View>
-                {it.sub ? <Text variant="label" color={color.text.secondary} style={{ fontSize: 13, lineHeight: 18, marginTop: space[2] }}>{it.sub}</Text> : null}
-                {it.actions?.length ? (
-                  <View style={{ flexDirection: "row", gap: space[6], marginTop: space[10] }}>
-                    {it.actions.map((a) => <RowButton key={a.label} label={a.label} {...(a.kind ? { kind: a.kind } : {})} onPress={a.onPress} />)}
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          </PressScale>
-        );
-      })}
+      {label ? <InboxLabel label={label} {...(action ? { action } : {})} /> : null}
+      {items.map((it) => <InboxCard key={it.id} it={it} />)}
     </View>
+  );
+}
+
+/** InboxList as ScreenList rows (layout/Screen): the same label and cards, spaced as InboxList spaces them. */
+export function inboxListItems(key: string, { label, action, items }: { label?: string; action?: { label: string; onPress: () => void }; items: InboxItemView[] }, gapBefore = 0): ListItem[] {
+  const out: ListItem[] = [];
+  if (label) out.push({ key: `${key}:label`, gapBefore, render: () => <InboxLabel label={label} {...(action ? { action } : {})} /> });
+  items.forEach((it, i) => out.push({ key: `${key}:${it.id}`, gapBefore: i === 0 && !label ? gapBefore : space[8], render: () => <InboxCard it={it} /> }));
+  return out;
+}
+
+function InboxLabel({ label, action }: { label: string; action?: { label: string; onPress: () => void } }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginVertical: space[2] }}>
+      <Text variant="monoLabel">{label}</Text>
+      {action ? <PressScale onPress={action.onPress} accessibilityLabel={action.label}><Text variant="chipMd" color={color.lime.base}>{action.label}</Text></PressScale> : null}
+    </View>
+  );
+}
+
+function InboxCard({ it }: { it: InboxItemView }) {
+  const m = metrics.inbox;
+  const tile = it.lead.kind === "icon" ? tileFor(it.lead.palette) : null;
+  return (
+    <PressScale onPress={it.onPress} accessibilityLabel={`${it.title}. ${it.sub ?? ""}`}>
+      <View style={{ padding: m.pad, borderRadius: m.radius, backgroundColor: color.surface[1], boxShadow: `inset 0 0 0 1px ${it.needsAction && !it.done ? color.lime.glow22 : color.line.hairline}`, opacity: it.done ? metrics.card.dimOpacity : 1, flexDirection: "row", gap: m.gap }}>
+        <View style={{ width: m.tile, height: m.tile }}>
+          <View style={{ width: m.tile, height: m.tile, borderRadius: m.tileRadius, overflow: "hidden", alignItems: "center", justifyContent: "center", backgroundColor: it.lead.kind === "keeper" ? color.surface[4] : color.extra.transparent, boxShadow: `inset 0 1.5px 0 ${color.extra.tileHi35}, inset 0 -2px 0 ${color.extra.tileShade20}` }}>
+            {tile ? <Gradient g={tile.gradient} style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }} /> : null}
+            {it.lead.kind === "avatar" ? <Avatar config={it.lead.config} size={m.tile} /> : null}
+            {it.lead.kind === "keeper" ? <Keeper mood={it.lead.mood} bust size={m.tile} /> : null}
+            {it.lead.kind === "icon" && tile ? <Icon name={it.lead.icon} size={22} color={tile.ink} /> : null}
+          </View>
+          {it.badge ? (
+            <View style={{ position: "absolute", right: -5, bottom: -5, width: m.badge, height: m.badge, borderRadius: m.badge / 2, backgroundColor: color.tilePalette[it.badge.palette][1], boxShadow: `0 0 0 ${m.badgeRing}px ${color.surface[1]}`, alignItems: "center", justifyContent: "center" }}>
+              <Icon name={it.badge.icon} size={13} color={color.text.onLime} />
+            </View>
+          ) : null}
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flexDirection: "row", gap: space[8], alignItems: "center" }}>
+            <Text variant="rowTitle" style={{ flex: 1 }}>{it.title}</Text>
+            {it.unread ? <View style={{ width: m.dot, height: m.dot, borderRadius: m.dot / 2, backgroundColor: color.lime.base }} /> : null}
+            <Text variant="micro">{it.time}</Text>
+          </View>
+          {it.sub ? <Text variant="label" color={color.text.secondary} style={{ fontSize: 13, lineHeight: 18, marginTop: space[2] }}>{it.sub}</Text> : null}
+          {it.actions?.length ? (
+            <View style={{ flexDirection: "row", gap: space[6], marginTop: space[10] }}>
+              {it.actions.map((a) => <RowButton key={a.label} label={a.label} {...(a.kind ? { kind: a.kind } : {})} onPress={a.onPress} />)}
+            </View>
+          ) : null}
+        </View>
+      </View>
+    </PressScale>
   );
 }
 

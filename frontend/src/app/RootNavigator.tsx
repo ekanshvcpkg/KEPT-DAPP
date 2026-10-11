@@ -19,7 +19,7 @@ import { RecapSheet, TodayTab } from "@/screens/today/Today";
 import { C1, C2, C3, C4, C5, C6, C7, C7ok, C8 } from "@/screens/create/Create";
 import { C7fail, C7no, M3, M4 } from "@/screens/shared/Signing";
 import { D1, D1go, D1m, D1x, D1xs, D2, D4, D5, OathsTab } from "@/screens/oaths/Oaths";
-import { E1, E2, E2s, E3code, E3elig, E3in, E3late, E3skr } from "@/screens/join/Join";
+import { E1, E1code, E1scan, E2, E2s, E3code, E3elig, E3in, E3late, E3skr } from "@/screens/join/Join";
 import { F1, F1perm, F2, F2a, F2b, F2c, F3, F4, F4a, F4ag, F4chk, F5 } from "@/screens/proof/Proof";
 import { J1, J1f, J1ok, J1p, L1, L2, L3, L4, L4b, L4m } from "@/screens/results/Results";
 import { L6, R1, R2, R3, R4, R4lost } from "@/screens/rematch/Rematch";
@@ -48,7 +48,7 @@ const BUILT: Record<StackId, ComponentType> = {
   B5: RecapSheet,
   C1, C2, C3, C4, C5, C6, C7, "C7·ok": C7ok, "C7·no": C7no, "C7·fail": C7fail, C8,
   D1, "D1·m": D1m, "D1·x": D1x, "D1·xs": D1xs, "D1·go": D1go, D2, "D2·low": D2, D3: D2, D4, D5,
-  E1, E2, "E2·s": E2s, "E3·code": E3code, "E3·late": E3late, "E3·in": E3in, "E3·elig": E3elig, "E3·skr": E3skr,
+  E1, "E1·scan": E1scan, "E1·code": E1code, E2, "E2·s": E2s, "E3·code": E3code, "E3·late": E3late, "E3·in": E3in, "E3·elig": E3elig, "E3·skr": E3skr,
   "F1·perm": F1perm, F1, F2, F2a, F2b, F2c, F3, F4, "F4·chk": F4chk, F4a, "F4a·g": F4ag, F5,
   J1, "J1·p": J1p, "J1·ok": J1ok, "J1·f": J1f,
   L1, L2, L3, L4, "L4·m": L4m, "L4·b": L4b,

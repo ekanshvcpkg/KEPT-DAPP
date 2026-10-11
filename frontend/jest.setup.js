@@ -13,6 +13,21 @@ jest.mock("react-native-reanimated", () => {
 // Native modules the Phase 2 shell touches.
 jest.mock("@react-native-async-storage/async-storage", () => require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
 jest.mock("@solana-mobile/mobile-wallet-adapter-protocol-web3js", () => ({ transact: jest.fn(() => Promise.reject(new Error("MWA is not available in tests"))) }));
+// Skia: the canvas is a plain View and drawing nodes render nothing (no test reads Keeper pixels).
+jest.mock("@shopify/react-native-skia", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const Noop = () => null;
+  const api = {
+    __esModule: true,
+    Canvas: (p) => React.createElement(View, { style: p.style, testID: p.testID }),
+    useFont: () => null,
+    rect: (x, y, width, height) => ({ x, y, width, height }),
+    vec: (x, y) => ({ x, y }),
+    drawAsPicture: async () => ({}),
+  };
+  return new Proxy(api, { get: (t, k) => (k in t ? t[k] : Noop) });
+});
 // expo-secure-store: an in-memory Keystore (tests read it back through `__store`).
 jest.mock("expo-secure-store", () => {
   const store = new Map();
@@ -28,16 +43,25 @@ jest.mock("expo", () => {
   const actual = jest.requireActual("expo");
   return { ...actual, requireOptionalNativeModule: (name) => (name === "ExpoSecureStore" ? {} : actual.requireOptionalNativeModule(name)) };
 });
-// expo-camera: a preview that "takes" a fixed picture, and permission already granted.
+// expo-camera: a preview that "takes" a fixed picture (and hands a scanned QR to onBarcodeScanned), and
+// permission already granted. `__camera` lets a test deny it and count the hooks that asked (D-91).
 jest.mock("expo-camera", () => {
   const React = require("react");
   const { View } = require("react-native");
   const CameraView = React.forwardRef(function CameraView(props, ref) {
     React.useImperativeHandle(ref, () => ({ takePictureAsync: async () => ({ base64: "aW1hZ2U=", uri: "file://photo.jpg" }) }));
-    return React.createElement(View, { testID: "camera-preview" });
+    return React.createElement(View, { testID: "camera-preview", onBarcodeScanned: props.onBarcodeScanned });
   });
-  const granted = { granted: true, status: "granted", canAskAgain: true, expires: "never" };
-  return { CameraView, useCameraPermissions: () => [granted, async () => granted, async () => granted] };
+  const state = { granted: true, asked: 0 };
+  const status = () => (state.granted
+    ? { granted: true, status: "granted", canAskAgain: true, expires: "never" }
+    : { granted: false, status: "denied", canAskAgain: false, expires: "never" });
+  function useCameraPermissions(options) {
+    const asked = React.useRef(false);
+    if (options && options.request && !asked.current) { asked.current = true; state.asked++; }
+    return [status(), async () => { state.asked++; return status(); }, async () => status()];
+  }
+  return { __camera: state, CameraView, useCameraPermissions };
 });
 
 // kept-gesture: the native on-device models don't exist in Jest. The pure parts (reading the model's answer, matching

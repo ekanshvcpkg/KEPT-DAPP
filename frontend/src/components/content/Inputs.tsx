@@ -34,8 +34,8 @@ export function MoneyMoment({ value, caption, fs = metrics.money.fs, tone = "whi
 }
 
 // ── OptionGrid (`opts`) ── tile | big | chip | row (2 cols) | row (1 col).
-export type OptionMode = "tile" | "big" | "chip" | "row2" | "row";
-export interface OptionItem { title: string; sub?: string; icon?: IconName }
+type OptionMode = "tile" | "big" | "chip" | "row2" | "row";
+interface OptionItem { title: string; sub?: string; icon?: IconName }
 const MODE = {
   tile: { cols: 4, minH: 84, minHSmall: 66, icon: 28, iconSmall: 22, fs: 11, ls: 0, dir: "column", align: "center", justify: "center", padV: 10, padH: 4, gap: 6 },
   big: { cols: 3, minH: 124, minHSmall: 66, icon: 0, iconSmall: 0, fs: 46, fsSmall: 26, ls: -2, dir: "column", align: "flex-start", justify: "flex-end", padV: 14, padH: 14, gap: 0 },
@@ -85,8 +85,10 @@ export function OptionGrid({ items, value, onChange, mode, cols, small }: { item
 }
 
 // ── SentenceInput (`input`) ── prefix + value + lime caret, counter, suggestion chips, error ring.
-export function SentenceInput({ label, prefix, value, onChange, max, suggestions = [], mono, error, placeholder }: {
+export function SentenceInput({ label, prefix, value, onChange, max, suggestions = [], mono, error, placeholder, autoFocus }: {
   label: string; prefix?: string; value: string; onChange: (v: string) => void; max?: number; suggestions?: string[]; mono?: boolean; error?: string; placeholder?: string;
+  /** Opens with the keyboard up (E1·code: the user chose to type). */
+  autoFocus?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const fs = prefix ? 22 : 20;
@@ -107,6 +109,7 @@ export function SentenceInput({ label, prefix, value, onChange, max, suggestions
             // Codes and links (mono) are typed exactly: no autocorrect, capitals or suggestions.
             {...(mono ? { autoCorrect: false, autoCapitalize: "none" as const, spellCheck: false, autoComplete: "off" as const } : {})}
             {...(placeholder ? { placeholder } : {})}
+            {...(autoFocus ? { autoFocus } : {})}
             placeholderTextColor={color.text.ghost}
             selectionColor={color.lime.base}
             cursorColor={color.lime.base}

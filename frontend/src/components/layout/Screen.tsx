@@ -5,7 +5,8 @@
 // onto another screen.
 import { Fragment, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { FlatList, Pressable, ScrollView, View } from "react-native";
+import type { ListItem } from "./list";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { useScreenReady } from "@/lib/screenReady";
@@ -27,7 +28,7 @@ import { PinnedActions } from "../actions";
 import { momentSettleMs, pinnedDelay, useBackBlockedFor } from "./moment";
 import { ScreenSkeleton } from "./ScreenSkeleton";
 
-export interface ScreenProps {
+interface ScreenProps {
   /** NavBar or AppHeader element; omitted for Plain layouts (A0, A1). */
   bar?: ReactNode;
   children?: ReactNode;
@@ -47,6 +48,17 @@ export interface ScreenProps {
   keeperIdle?: KeeperLine;
 }
 
+
+/**
+ * A long list (inbox, activity, history, Bounties) that Live data can grow without bound. As a Screen's
+ * last block it's virtualised: the screen scrolls through a FlatList whose header is the blocks above it, so
+ * rows mount as they scroll in. Anywhere else it simply renders every row.
+ */
+export function ScreenList({ items }: { items: ListItem[] }) {
+  return <View>{items.map((it, i) => <View key={it.key} style={{ marginTop: i ? it.gapBefore ?? 0 : 0 }}>{it.render()}</View>)}</View>;
+}
+/** Rows drawn (and entering with the screen) before the list starts mounting the rest as they scroll in. */
+const LIST_FIRST_BATCH = 12;
 
 /** A counter that bumps each time the screen regains focus (after the first), when `on`. */
 function useFocusReplay(on: boolean): number {
@@ -102,6 +114,8 @@ export function Screen({ bar, children, pinned, bottomInset = 0, scroll = true, 
   // A block can be a component that returns several elements (Bounties' Discover, D1's header): the
   // wrapper spaces them like the column does.
   const entered = blocks.map((c, i) => <Enter key={c.key ?? `b${i}`} index={i} replay={replay} style={{ gap: m.gap }}>{c}</Enter>);
+  const lastBlock = blocks[blocks.length - 1];
+  const list = scroll && lastBlock?.type === ScreenList ? (lastBlock.props as { items: ListItem[] }) : null;
   const pinnedAll = pinned ? flattenBlocks(pinned) : [];
   const pinnedBlocks = pinned ? pinnedAll.map((c, i) => <Enter key={c.key ?? `p${i}`} delay={pinnedDelay(i)} replay={replay}>{c}</Enter>) : null;
   useBackBlockedFor(momentSettleMs(blocks.length, pinnedAll.length), ready && !!routeId && presentation(routeId) === "moment");
@@ -124,11 +138,30 @@ export function Screen({ bar, children, pinned, bottomInset = 0, scroll = true, 
           // skeleton made Fabric re-parent native children and crash on the camera (F1: "addViewAt: ... already
           // has a parent"). With pinned actions the column ends 14 above them, like the prototype, so content is
           // clipped there instead of scrolling behind (and showing between) the buttons.
+          list ? (
+            <FlatList
+              data={list.items}
+              keyExtractor={(it) => it.key}
+              style={pinned ? { marginBottom: bottom + bottomInset + m.gap } : undefined}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: m.padX, paddingTop: column.paddingTop, paddingBottom: pinned ? m.contentBottom : insets.bottom + bottomInset + m.gap }}
+              ListHeaderComponent={entered.length > 1 || top ? <View style={{ gap: m.gap, marginBottom: list.items.length ? m.gap : 0 }}>{top}{entered.slice(0, -1)}</View> : null}
+              initialNumToRender={LIST_FIRST_BATCH}
+              windowSize={7}
+              removeClippedSubviews
+              renderItem={({ item, index }) => {
+                const row = <View style={{ marginTop: index ? item.gapBefore ?? 0 : 0 }}>{item.render()}</View>;
+                // The first rows enter with the screen like the block they replace; later ones just appear as they scroll in.
+                return index < LIST_FIRST_BATCH ? <Enter index={blocks.length - 1} replay={replay}>{row}</Enter> : row;
+              }}
+            />
+          ) : (
           <ScrollView scrollEnabled={scroll} style={pinned ? { marginBottom: bottom + bottomInset + m.gap } : undefined} keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ ...column, flexGrow: scroll ? undefined : 1, paddingBottom: pinned ? m.contentBottom : insets.bottom + bottomInset + m.gap }}>
             {top}
             {scroll ? entered : blocks.map((c, i) => <Fragment key={c.key ?? `b${i}`}>{c}</Fragment>)}
           </ScrollView>
+          )
         )}
         {/* The skeleton until the content mounts, then fading out over it as the blocks enter (no blank frame). */}
         {veil && !bare ? (

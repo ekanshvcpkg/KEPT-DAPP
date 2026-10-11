@@ -4,7 +4,7 @@ import type { Slice } from "@/api/types";
 import { flags, useDev } from "@/state/dev";
 import { useMode } from "@/state/mode";
 
-export type Feature = "rematch" | "createBounty" | "swap" | "creatorPages";
+type Feature = "rematch" | "createBounty" | "swap" | "creatorPages";
 const SLICE: Record<Feature, Slice> = { rematch: "rematch", createBounty: "bounties", swap: "wallet", creatorPages: "profile" };
 
 /** True while the feature's slice is the mock; the http slices don't have these yet. */

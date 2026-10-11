@@ -8,12 +8,12 @@ import { Button } from "@/components/actions";
 import { NavBar, useToast } from "@/components/chrome";
 import { Banner, BodyText, Breakdown, Chip, ChipRow, Note, Segmented, Skeleton } from "@/components/content/Basics";
 import { SentenceInput } from "@/components/content/Inputs";
-import { RowList } from "@/components/content/Rows";
+import { RowList, rowListItems } from "@/components/content/Rows";
 import type { RowProps } from "@/components/content/Rows";
 import { AvatarBuilder, BountyCover, ProfileCard } from "@/components/content/Social";
 import { KeptRateRing } from "@/components/content/Status";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import type { IconName } from "@/components/primitives";
 import { coverColors } from "../bounties/Bounties";
 import { color, metrics, tokens } from "@/theme";
@@ -250,13 +250,14 @@ export function I5() {
     <Screen bar={<NavBar onBack={back} title={t("screens.I5.nav.title")} />}>
       <Segmented items={[0, 1, 2, 3].map((i) => t(`screens.I5.b0.seg.${i}` as CopyKey))} value={seg} onChange={setSeg} />
       {activity.isLoading ? <Skeleton height={200} /> : null}
-      {days.map((d) => (
-        <RowList key={d} label={d} rows={items.filter((a) => a.day === d).map((a) => ({
+      {/* Virtualised: activity grows with every Oath (Live). Each day is a labelled section, as RowLists were. */}
+      <ScreenList items={[
+        ...days.flatMap((d, k) => rowListItems(d, items.filter((a) => a.day === d).map((a) => ({
           title: a.title, sub: a.sub, ...(a.amount ? { value: a.amount, valueColor: a.amount.startsWith("−") ? color.red.base : color.lime.base } : {}),
           leading: { kind: "icon" as const, icon: a.type ? ACTIVITY_ICON[a.type] : a.kind === "money" ? ("sack" as const) : a.kind === "proof" ? ("camera-outline" as const) : ("cards-outline" as const) },
-        }))} />
-      ))}
-      <Note text={t("screens.I5.b5.text")} />
+        })), { label: d, gapBefore: k ? metrics.screen.gap : 0 })),
+        { key: "note", gapBefore: days.length ? metrics.screen.gap : 0, render: () => <Note text={t("screens.I5.b5.text")} /> },
+      ]} />
     </Screen>
   );
 }

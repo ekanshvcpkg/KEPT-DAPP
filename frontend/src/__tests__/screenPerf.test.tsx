@@ -6,7 +6,7 @@ import type { ParamListBase } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { t } from "@/copy";
-import { Screen } from "@/components/layout/Screen";
+import { Screen, ScreenList } from "@/components/layout/Screen";
 import { LOOP_BUDGET_MS, loopCycles } from "@/components/primitives";
 import { setScreenDeferral } from "@/lib/screenReady";
 import { cheapShadow, metrics } from "@/theme";
@@ -58,5 +58,20 @@ describe("cheap frames (D-84)", () => {
   it("ambient loops play for about LOOP_BUDGET_MS, in whole cycles", () => {
     expect(loopCycles(2600) * 2600).toBeLessThanOrEqual(LOOP_BUDGET_MS + 2600 / 2);
     expect(loopCycles(60_000)).toBe(1);
+  });
+});
+
+describe("long lists (motion rework)", () => {
+  it("a ScreenList as a screen's last block mounts only the rows near the screen, under the blocks above it", async () => {
+    const items = Array.from({ length: 200 }, (_, i) => ({ key: `r${i}`, gapBefore: 8, render: () => <Text>{`row ${i}`}</Text> }));
+    await render(
+      <SafeAreaProvider initialMetrics={safe}>
+        <Screen><Text>header block</Text><ScreenList items={items} /></Screen>
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByText("header block")).toBeTruthy();
+    expect(screen.getByText("row 0")).toBeTruthy();
+    expect(screen.queryAllByText(/^row \d+$/).length).toBeLessThan(60);
+    expect(screen.queryByText("row 199")).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { memo, useMemo } from "react";
 import Svg, { Circle, Ellipse, G, Path, Rect, Text as SvgText } from "react-native-svg";
 import { avatarValues } from "./palette";
 
-export interface AvatarProps {
+interface AvatarProps {
   /** 8 digits, e.g. "13050010". Non-digits are dropped; short configs are padded with 0. */
   config: string;
   size: number;

@@ -10,7 +10,7 @@ import { color, duration, easing, metrics, shadow, space, z } from "@/theme";
 import { Icon, Pop, Text, useAnimationLifecycle } from "../primitives";
 
 // ── BottomSheet ──
-export interface BottomSheetProps {
+interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
   children: ReactNode;

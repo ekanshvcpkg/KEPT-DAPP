@@ -5,7 +5,7 @@ import { splitShadow } from "@/theme";
 import type { GradientProps } from "@/theme";
 import { Gradient } from "./Gradient";
 
-export interface SurfaceProps {
+interface SurfaceProps {
   radius: number;
   /** Solid fill, or a gradient. */
   bg?: string;

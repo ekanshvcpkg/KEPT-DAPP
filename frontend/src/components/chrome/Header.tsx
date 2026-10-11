@@ -2,7 +2,7 @@
 // for flow screens. The real Android status bar is kept; the badge sits in a row under it.
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import Animated, { interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from "react-native-reanimated";
 import { t } from "@/copy";
 import { color, duration, metrics, space } from "@/theme";
 import { Icon, Pop, PressScale, Text, useAnimationLifecycle, Bump, CountText } from "../primitives";
@@ -86,7 +86,7 @@ export function Bell({ count, onPress }: { count: number; onPress?: () => void }
 }
 
 // ── AppHeader (tab screens) ── KeeperMark · title · BalanceChip · Bell · optional extra.
-export interface AppHeaderProps {
+interface AppHeaderProps {
   title: string;
   /** Pre-formatted SKR amount (formatSkr at the edge). */
   balance: string;
@@ -123,18 +123,24 @@ export function StepBar({ current, total }: { current: number; total: number }) 
 }
 const STEP_LEVEL = { next: 0, current: 1, done: 2 } as const;
 function Step({ state }: { state: "done" | "current" | "next" }) {
-  // Colour eases between next → current → done; starts at its state (no tween on mount).
+  // Colour eases between next → current → done; starts at its state (no tween on mount). The three colours
+  // are stacked layers and only their opacities animate (motion rework: no colour animation per frame).
   const reduce = useReducedMotion();
   const q = useSharedValue<number>(STEP_LEVEL[state]);
   const onLayout = useAnimationLifecycle([q], () => { q.set(reduce ? STEP_LEVEL[state] : withTiming(STEP_LEVEL[state], { duration: duration.note - 20 })); }, [state, reduce]);
-  const a = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(q.value, [0, 1, 2], [color.line.empty, color.lime.base, color.text.primary]) }));
+  const lime = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, q.value)) }));
+  const white = useAnimatedStyle(() => ({ opacity: Math.min(1, Math.max(0, q.value - 1)) }));
+  const shape = { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderRadius: metrics.nav.step.radius } as const;
   return (
-    <Animated.View onLayout={onLayout} style={[{ flex: 1, height: metrics.nav.step.h, borderRadius: metrics.nav.step.radius }, state === "current" ? { boxShadow: `0 0 12px ${color.lime.ring45}` } : null, a]} />
+    <View onLayout={onLayout} style={[{ flex: 1, height: metrics.nav.step.h, borderRadius: metrics.nav.step.radius, backgroundColor: color.line.empty }, state === "current" ? { boxShadow: `0 0 12px ${color.lime.ring45}` } : null]}>
+      <Animated.View style={[shape, { backgroundColor: color.lime.base }, lime]} />
+      <Animated.View style={[shape, { backgroundColor: color.text.primary }, white]} />
+    </View>
   );
 }
 
 // ── NavBar (flow screens) ── back/close · title or StepBar · mono right label · optional KeeperMark.
-export interface NavBarProps {
+interface NavBarProps {
   onBack: () => void;
   title?: string;
   steps?: [current: number, total: number];

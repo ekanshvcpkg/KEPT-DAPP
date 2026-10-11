@@ -210,11 +210,12 @@ export function KeeperNote({ mood, line, anim = "idle", onClose, action, origin 
               <Text variant="keeperNote" color={color.text.onLime} style={{ marginTop: 3 }}>{line}</Text>
             </View>
             {action ? (
-              <Pressable onPress={action.onPress} accessibilityRole="button" accessibilityLabel={action.label} hitSlop={7}>
+              // Press feedback at touch-down, before the action navigates.
+              <PressScale onPress={action.onPress} accessibilityLabel={action.label}>
                 <View style={{ height: k.actionH, paddingHorizontal: k.actionPadX, borderRadius: k.actionH / 2, backgroundColor: color.bg.app, justifyContent: "center" }}>
                   <Text variant="chip" color={color.lime.base}>{`${action.label} ›`}</Text>
                 </View>
-              </Pressable>
+              </PressScale>
             ) : null}
           </View>
         </Pressable>

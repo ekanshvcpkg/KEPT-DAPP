@@ -48,7 +48,7 @@ describe("theme", () => {
   });
   it("maps type tokens to loaded fonts", () => {
     expect(typeStyles.title).toMatchObject({ fontFamily: "Geist_600SemiBold", fontSize: 30, lineHeight: 33, letterSpacing: -1.1 });
-    expect(typeStyles.monoLabel).toMatchObject({ fontFamily: "GeistMono_600SemiBold", textTransform: "uppercase", color: "#6A6A6A" });
+    expect(typeStyles.monoLabel).toMatchObject({ fontFamily: "GeistMono_600SemiBold", textTransform: "uppercase", color: "#808080" });
     expect(typeStyles.display.fontVariant).toEqual(["tabular-nums"]);
   });
   it("converts CSS gradient angles", () => {

@@ -2,6 +2,11 @@
 // from (components.md or the renderer in reference/KEPT Play.dc.html). Keep this list short; anything
 // added here should also be proposed for tokens.json.
 export const supplement = {
+  /** Token amendments (DECISIONS › Token amendments): values that replace tokens.json's. */
+  amend: {
+    /** Tertiary text #6A6A6A → #808080: 3.4:1 → 4.7:1 on bg.app (docs/notes/ACCESSIBILITY.md). */
+    text: { tertiary: "#808080" },
+  },
   color: {
     /** Button disabled label (components.md › Button › States). */
     disabledFg: "#5A5A5A",
