@@ -142,6 +142,8 @@ function openDevLink(url: string): boolean {
   }
   mockOaths.ensureSeeded(scenario, W);
   shot.setup?.();
+  // `cards=N` (B1 screenshots, D-85): N more Oaths due today, so Today's stack can be shot at any size.
+  if (Number(q.cards) > 0) mockOaths.addDueForDev(W, Math.min(20, Number(q.cards)));
   // Results and the recap are moments shown once: mark them seen so they don't open over the target.
   const ids = mockOaths.list(W).map((o) => o.id);
   useDeviceOaths.setState({ shownResults: ids.flatMap((o) => RESULT_SCREENS.map((k) => `${o}:${k}`)), recapShownOn: new Date(clock.now()).toDateString(), photo1: {}, fails: {}, seenHp: {} });
