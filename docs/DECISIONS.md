@@ -18,7 +18,6 @@ These strings aren't in `design/copy.json`. They go in `frontend/src/copy/additi
 - `"Starts tonight at midnight"`: D1 / D2 / B1 state between Start and day 1 (amendment 1).
 - `"Win back half of what you had left."`: R1 Rematch offer (amendment 3).
 - `additions.core.*`: Phase 3 strings for cases the design only shows one sample of (D-52). **Please review.**
-- `additions.placeholder.*`: dev-only note on screens not built yet (D-36). Every screen is built now, so only unknown ids would show it.
 - `additions.bounty.*`, `additions.wallet.*`, `additions.profile.privateOaths`: Phase 4 strings (D-60). **Please review.**
 - `additions.deck.*`: Today's card stack pager and hint (D-85): "Swipe for your next one", "2 / 5", Next / Previous card. **Please review.**
 - Rename: creator action on D1 (sheet title, field label, save button), plus the generated-name word table (D-16). Exact wording to be proposed in Phase 3 for your review.
@@ -85,7 +84,7 @@ New assumptions made while building Phase 2. None touches money logic; all are e
 | # | Question | Build with | Status |
 |---|---|---|---|
 | D-35 | Where the DEVNET badge sits on a real phone (components.md: "keep the badge as an overlay row under" the real status bar) | A 24 dp row under the system status bar on every screen, badge on the left. Long-press opens the Dev menu in development builds. | ASSUMED |
-| D-36 | Unbuilt screens | Every one of the 116 ids is registered. Unbuilt ones show their id, name and a row per screen they lead to (from flows.md), so the full map can be walked on a phone. Copy for that note is in `additions.placeholder` (dev-only). | ASSUMED |
+| D-36 | Unbuilt screens | Every one of the 116 ids is registered. Unbuilt ones show their id, name and a row per screen they lead to (from flows.md), so the full map can be walked on a phone. Copy for that note was in `additions.placeholder` (dev-only). **Superseded:** every screen is built; the placeholder and its copy were removed (2026-10-11). | ASSUMED |
 | D-37 | A `kept://join/<code>` link while signed in | Opens E1 with the code directly on top of the current stack. While signed out the code is kept and the `cont:` rule opens E1 after A4 (flows.md). | ASSUMED |
 | D-38 | Sign-in round trips | Two wallet hand-offs like the harness: connect (to learn the address the nonce is for), then sign. Silent re-authorization makes the second one a single approval. Folding both into one session would need the nonce fetched while the wallet is in front, which the harness found unreliable on Android. | ASSUMED |
 | D-39 | Errors on A2·s other than a declined signature or no network | Back to A2 with a toast carrying the backend's message (there's no designed screen for e.g. a 500 during sign-in). | ASSUMED |

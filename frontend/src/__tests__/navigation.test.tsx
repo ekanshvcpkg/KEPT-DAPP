@@ -379,7 +379,6 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
     const errors = jest.spyOn(console, "error");
     for (const id of ["H1·j", "H1·c", "H7", "K1", "K2", "K3", "K4", "K5", "I2·me", "I4", "I5", "I7", "I8", "I9", "W1", "W4", "N1", "M1"] as const) {
       await act(async () => { navigateTo(id); });
-      expect(screen.queryByText(t("additions.placeholder.note"))).toBeNull();
     }
     expect(errors).not.toHaveBeenCalled();
     errors.mockRestore();
@@ -396,7 +395,6 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
     ];
     for (const [id, params] of visits) {
       await act(async () => { navigateTo(id, params); });
-      expect(screen.queryByText(t("additions.placeholder.note"))).toBeNull();
     }
     expect(errors).not.toHaveBeenCalled();
     errors.mockRestore();
