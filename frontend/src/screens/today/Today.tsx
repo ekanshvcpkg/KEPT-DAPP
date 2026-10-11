@@ -21,7 +21,7 @@ import { useGo, useSheetRoute } from "@/app/nav";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { listNames, memberColor, memberInitial, memberName, objectIcon, skrWhole, weekday } from "@/features/oaths/present";
+import { listNames, memberColor, memberInitial, memberName, objectIcon, oathIcon, skrWhole, weekday } from "@/features/oaths/present";
 import { TabScreen } from "../tabs/TabScreen";
 import { useResultMoments } from "../results/Results";
 import { useBounties, useStats } from "@/features/queries";
@@ -93,17 +93,17 @@ function Active({ items, pending, claim }: { items: OathView[]; pending: OathVie
 /** A pending Bounty on Today: small card tilted −1°, "31 of 40 in" · "Not started" · Prove. */
 function BountyCard({ v, bounty }: { v: OathView; bounty: Bounty | undefined }) {
   const { go } = useGo();
-  const photo1 = myToday(v)?.facts.proofToday === "photo1";
+  const next = v.habits.find((h) => !h.done);
   return (
     <OathCard
-      variant="sm" tilt={-1} icon={objectIcon(v.facts.objectId)} name={v.facts.name}
+      variant="sm" tilt={-1} icon={oathIcon(v.facts)} name={v.facts.name}
       meta={t("screens.B1.b4.meta", { brand: bounty?.brand.name ?? "", day: v.dayNumber, length: v.facts.numDays })}
       onPress={() => go("H3", { id: v.facts.bountyId! })}
       tags={[
         ...(bounty ? [{ text: t("screens.B1.b4.tag.0", { remaining: bounty.remaining, joined: bounty.entrants }), icon: "account-group" as const, tone: "grey" as const }] : []),
-        photo1 ? { text: t("screens.B1.b3.tag.2"), icon: "camera" as const, tone: "vio" as const } : { text: t("screens.B1.b4.tag.1"), icon: "circle-outline" as const, tone: "grey" as const },
+        { text: t("screens.B1.b4.tag.1"), icon: "circle-outline" as const, tone: "grey" as const },
       ]}
-      button={{ label: t("screens.B1.b4.btn"), kind: "s", icon: "camera", onPress: () => go(photo1 ? "F4" : "F1", { id: v.facts.id }) }}
+      button={{ label: t("screens.B1.b4.btn"), kind: "s", icon: "camera", onPress: () => go("F1", { id: v.facts.id, habit: next?.index ?? 0 }) }}
     />
   );
 }
@@ -111,7 +111,9 @@ function BountyCard({ v, bounty }: { v: OathView; bounty: Bounty | undefined }) 
 function TodayCard({ v, urgent }: { v: OathView; urgent?: boolean }) {
   const { go } = useGo();
   const mine = myToday(v)!;
-  const photo1 = mine.facts.proofToday === "photo1";
+  const partial = mine.facts.proofToday === "partial";
+  const done = v.habits.filter((h) => h.done).length;
+  const next = v.habits.find((h) => !h.done);
   const others = v.members.filter((m) => !m.isMe);
   const keptOther = others.find((m) => !m.pendingToday);
   const goal = v.facts.goal ?? v.facts.name;
@@ -120,20 +122,20 @@ function TodayCard({ v, urgent }: { v: OathView; urgent?: boolean }) {
     : t("screens.B1.b3.meta", { names: listNames(others.map(memberName)), day: v.dayNumber, length: v.facts.numDays });
   return (
     <OathCard
-      icon={objectIcon(v.facts.objectId)} name={v.facts.name} meta={meta} hp={v.hp}
-      line={t(photo1 ? "screens.B1.b3.line" : "screens.B4.b1.line", { goal: capitalise(goal) })}
+      icon={oathIcon(v.facts)} name={v.facts.name} meta={meta} hp={v.hp}
+      line={partial && next ? t("additions.proof.linePartial", { done, total: v.habits.length, next: next.name }) : t("additions.proof.lineNone", { goal: capitalise(goal) })}
       onPress={() => go("D2", { id: v.facts.id })}
       tags={[
         { text: t("screens.B1.b3.tag.0", { amount: skrWhole(mine.inPlay) }), icon: "sack", tone: "lime" },
         // reference/kept-screens-1.js › B1 / B4: the clock is always red, photo 1 violet.
         { text: t("screens.B1.b3.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" },
-        ...(photo1 ? [{ text: t("screens.B1.b3.tag.2"), icon: "camera" as const, tone: "vio" as const }] : []),
+        ...(partial ? [{ text: t("screens.B1.b3.tag.2", { done, total: v.habits.length }), icon: "camera" as const, tone: "vio" as const }] : []),
       ]}
       {...(urgent ? { warn: t("screens.B4.b1.warn", { cost: skrWhole(v.myMissCost), hp: v.facts.isSolo ? 35 : 20 }) } : {})}
       {...(keptOther && !urgent ? { float: { text: t("screens.B1.b3.float", { name: memberName(keptOther), time: "" }).trim(), initial: memberInitial(keptOther), bg: memberColor(keptOther) } } : {})}
-      button={photo1
-        ? { label: t("screens.B1.b3.btn"), kind: "p", icon: "camera", onPress: () => go("F4", { id: v.facts.id }) }
-        : { label: t(urgent ? "screens.B4.b1.btn" : "screens.B1.b4.btn"), kind: urgent ? "l" : "p", icon: "camera", onPress: () => go("F1", { id: v.facts.id }) }}
+      button={partial
+        ? { label: t("screens.B1.b3.btn"), kind: "p", icon: "camera", onPress: () => go("F1", { id: v.facts.id, habit: next?.index ?? 0 }) }
+        : { label: t(urgent ? "screens.B4.b1.btn" : "screens.B1.b4.btn"), kind: urgent ? "l" : "p", icon: "camera", onPress: () => go("F1", { id: v.facts.id, habit: next?.index ?? 0 }) }}
     />
   );
 }
@@ -142,7 +144,7 @@ const rowOf = (go: ReturnType<typeof useGo>["go"], brands: Map<string, Bounty>) 
   title: v.facts.name,
   sub: v.facts.bountyId ? t("screens.B1.b4.meta", { brand: brands.get(v.facts.bountyId)?.brand.name ?? "", day: v.dayNumber, length: v.facts.numDays })
     : v.facts.isSolo ? t("screens.B1.b5.r0.s", { day: v.dayNumber, length: v.facts.numDays, hp: v.hp }) : t("screens.B2.b3.r0.s", { day: v.dayNumber, length: v.facts.numDays, hp: v.hp }),
-  leading: { kind: "icon", icon: objectIcon(v.facts.objectId) },
+  leading: { kind: "icon", icon: oathIcon(v.facts) },
   value: keptToday(v) ? t("screens.B2.b3.r0.rs") : shortDuration(v.secondsToReset ?? 0),
   valueColor: keptToday(v) ? color.lime.base : color.text.secondary,
   chevron: true,
@@ -239,7 +241,7 @@ export function RecapSheet() {
               : t("screens.B5.b3.r1.s", { name: t("screens.D2.b6.r0.t"), hp: d.hpAfter }),
             value: won > 0n ? t("screens.B5.b3.r0.r", { amount: skrWhole(won) }) : t("screens.B5.b3.r1.r"),
             valueColor: won > 0n ? color.lime.base : color.text.secondary,
-            leading: { kind: "icon" as const, icon: objectIcon(v.facts.objectId) },
+            leading: { kind: "icon" as const, icon: oathIcon(v.facts) },
             onPress: () => replace("D2", { id: v.facts.id }),
           };
         })} />

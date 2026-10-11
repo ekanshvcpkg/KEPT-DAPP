@@ -194,7 +194,7 @@ export function Gallery() {
           {CAMERA_STATES.map((s) => (
             <View key={s} style={{ gap: space[6] }}>
               <Label text={s} />
-              <ProofCamera state={s} photo={s === "idle" ? 1 : 2} object="dumbbell" gesture="palm" label={t("common.photoOf", { n: s === "idle" ? 1 : 2 })} height={260} />
+              <ProofCamera state={s} pill={t("additions.proof.pill", { n: s === "idle" ? 1 : 2, total: 2 })} object="dumbbell" gesture="palm" label={t("additions.proof.pill", { n: s === "idle" ? 1 : 2, total: 2 })} height={260} />
             </View>
           ))}
           <Shutter onShutter={() => toast(t("toasts.0"))} onFlip={noop} />

@@ -179,17 +179,20 @@ Errors: `404` Oath not found or the caller is not a member.
 
 Genesis. Only the creator can call it, and only while the Oath is Open. Saves 1–8 habits (each 1–60
 characters) plus their canonical joined `goalText`, which must hash (SHA-256) to the on-chain goal hash.
-It can also set `minMinutes` (1–720), the wait between the two photos. By default the wait is
-`SESSION_MIN_MINUTES` (30). Older requests that omit `habits` are read as one habit.
+It can also set `habitObjects`: one plain short text per habit (letters, digits, spaces and `, . ' ( ) -`, at most 80; stored trimmed and
+lower case), what that habit's photo is checked for ("dumbbell", "kettlebell", "sheet music"). It is not limited to the program's eight
+objects. Without it every habit uses the Oath's own object (`object_id`). `minMinutes` (1–720) is the wait of the legacy two-photo flow.
+Older requests that omit `habits` are read as one habit. `GET /api/oaths/:oath/details`, `GET /api/oaths/:oath/invite` and
+`GET /api/invites/:code` return `habitObjects` too (empty for Oaths made before this).
 
 ```bash
 curl -s -X POST $API/api/oaths/details -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-  -d '{"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"minMinutes":45}'
-# → {"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"minMinutes":45}
+  -d '{"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"habitObjects":["running shoes","book"]}'
+# → {"oath":"<OATH>","goalText":"Run every morning · Read 10 pages","habits":["Run every morning","Read 10 pages"],"habitObjects":["running shoes","book"],"minMinutes":30}
 ```
 
 Errors:
-- `400`: habits are not 1–8 trimmed strings of at most 60 characters, `goalText` is not their ` · `-joined value, or `minMinutes` is invalid.
+- `400`: habits are not 1–8 trimmed strings of at most 60 characters, `goalText` is not their ` · `-joined value, `habitObjects` is not one plain short text per habit, or `minMinutes` is invalid.
 - `403`: the caller is not the creator, or the Oath is not Open.
 - `404`: Oath not found.
 - `422`: the text doesn't match the on-chain hash.
@@ -277,7 +280,15 @@ Before activation: `{"rulesVersion":1,"feeBps":0,"freezePrice":null,"slashBps":n
 
 ## Proof
 
-Each day needs **two photos**. Both are checked by `POST /proof/verify`.
+**One photo proves one habit (D-98).** Each habit of an Oath is proven every day with a single photo of that habit's own object
+and a gesture the server picks; every photo is checked by `POST /proof/verify`. The day is kept (recorded on chain) once every
+habit has its photo, in any order, any time before the day ends. Use `POST /api/proof/challenge` with a `habit`, then
+`POST /api/proof/habit` (below).
+
+The two-photo flow below (`start`, wait, `end`) is **legacy**: it is still served for Bounties and for clients that don't send a
+`habit`, and the app no longer uses it for Oaths.
+
+Legacy: each day needs **two photos**.
 
 1. **Start photo**: pass the start challenge, then call `POST /api/proof/start`.
 2. **Wait** `minMinutes`, measured on the server clock. The wait is capped at half the day length.
@@ -324,6 +335,21 @@ Errors:
 - `400`: required fields missing or verdict/hash invalid; or only one of `oath`/`dayIndex` supplied.
 - `429`: `{"error":"daily_limit"}`.
 
+### POST /api/proof/habit
+
+Genesis, and the caller must be an Oath member. Records one habit's photo after it passed `POST /proof/verify` (send `habit` there
+too, so failed tries are counted per habit). Body: `{"oath","dayIndex","habit","verificationId"}`. The check must have been made for the habit's
+own object (`habitObjects[habit]`, or the Oath's `object_id` text when none is stored) and the gesture issued for that habit.
+
+- `201 {"habit":0,"done":[0],"dayKept":false}`: this habit is in, others are still to do.
+- `201 {"habit":1,"done":[0,1],"dayKept":true,"signature":"…","proofHash":"…"}`: the last habit. The program gets `record_checkin` with
+  `sha256(hash₀ ‖ hash₁ ‖ …)` in habit order; the photos themselves never reach the server.
+- `409` the habit is already proven today, the challenge expired (`challengeExpired`), or no proof is possible now.
+- `422` the check was for another object, gesture, Oath, day or habit, was used, or did not pass.
+- `502 {"retryable":true}` the on-chain record failed: the last habit is not counted and the same check can be retried.
+
+Group review of a habit's photo is **not** available in this flow (BACKEND_GAPS P1-27).
+
 ### POST /api/proof/challenge
 
 Genesis, and the caller must be an Oath member. Returns today's step. Each challenge lasts 2 minutes.
@@ -332,7 +358,9 @@ Genesis, and the caller must be an Oath member. Returns today's step. Each chall
 curl -s -X POST $API/api/proof/challenge -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' -d '{"oath":"<OATH>","dayIndex":0}'
 ```
 
-- Start: `{"phase":"start","photo":1,"gesture":"Victory","issuedAt":"…","expiresAt":"…"}`
+- With `"habit": 0` in the body (one photo per habit): `{"phase":"habit","habit":0,"object":"dumbbell","gesture":"Victory","issuedAt":"…","expiresAt":"…","done":[1],"habits":2}`.
+  `object` is what the phone's model is asked for; `done` the habits already proven today; `400` for a habit the Oath doesn't have, `409` (with `done`) for one already proven.
+- Start (legacy): `{"phase":"start","photo":1,"gesture":"Victory","issuedAt":"…","expiresAt":"…"}`
 - Waiting: `{"phase":"wait","photo":2,"startedAt":"…","endAllowedAt":"…","startGesture":"Victory","waitSeconds":1312}`
 - End: `{"phase":"end","photo":2,"gesture":"Thumb_Up","issuedAt":"…","expiresAt":"…","startedAt":"…","endAllowedAt":"…","startGesture":"Victory"}`
 

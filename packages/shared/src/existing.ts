@@ -40,10 +40,12 @@ export type OathRead = z.infer<typeof OathRead>;
 export const WatchRequest = z.object({ oath: Address });
 // POST /api/oaths/details
 export const HabitList = z.array(z.string().min(1).max(60)).min(1).max(8);
-export const DetailsRequest = z.object({ oath: Address, goalText: z.string().min(1).max(501), habits: HabitList.optional() });
-export const DetailsResponse = z.object({ oath: Address, goalText: z.string(), habits: z.array(z.string()).optional() });
+/** What each habit is proven with, as the text the on-device model is asked for ("dumbbell", "running shoes"), same order as the habits. */
+export const HabitObjectList = z.array(z.string().regex(/^[\p{L}\p{N} ,.'()-]{1,80}$/u)).min(1).max(8);
+export const DetailsRequest = z.object({ oath: Address, goalText: z.string().min(1).max(501), habits: HabitList.optional(), habitObjects: HabitObjectList.optional() });
+export const DetailsResponse = z.object({ oath: Address, goalText: z.string(), habits: z.array(z.string()).optional(), habitObjects: z.array(z.string()).optional() });
 // GET /api/oaths/:oath/details
-export const GoalResponse = z.object({ goalText: z.string().nullable(), habits: z.array(z.string()).optional() });
+export const GoalResponse = z.object({ goalText: z.string().nullable(), habits: z.array(z.string()).optional(), habitObjects: z.array(z.string()).optional() });
 // POST /api/invites
 export const InviteCreateRequest = z.object({ oath: Address });
 export const InviteCreateResponse = z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/"), oath: OathRead });
@@ -51,10 +53,11 @@ export const InviteCreateResponse = z.object({ code: z.string().min(1), deepLink
 export const OathInviteResponse = z.object({
   goalText: z.string().nullable(),
   habits: z.array(z.string()).optional(),
+  habitObjects: z.array(z.string()).optional(),
   invite: z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/") }).nullable(),
 });
 // GET /api/invites/:code
-export const InviteResolveResponse = z.object({ oath: OathRead, goalText: z.string().nullable(), habits: z.array(z.string()).optional(), alreadyStarted: z.boolean() });
+export const InviteResolveResponse = z.object({ oath: OathRead, goalText: z.string().nullable(), habits: z.array(z.string()).optional(), habitObjects: z.array(z.string()).optional(), alreadyStarted: z.boolean() });
 export type InviteResolve = z.infer<typeof InviteResolveResponse>;
 // POST /api/push-token → 204
 export const PushTokenRequest = z.object({ token: z.string().min(1).max(4096) });
@@ -75,6 +78,15 @@ export const ProofChallengeResponse = z.discriminatedUnion("phase", [
   z.object({ phase: z.literal("wait"), photo: z.literal(2), waitSeconds: z.number().int(), ...SessionStart }),
 ]);
 export type ProofChallenge = z.infer<typeof ProofChallengeResponse>;
+// POST /api/proof/challenge with a habit (one photo per habit): the object that habit is proven with, and what is already proven today.
+export const HabitChallengeResponse = z.object({
+  phase: z.literal("habit"), habit: z.number().int().min(0), object: z.string(), gesture: ChallengeGesture,
+  issuedAt: IsoTime, expiresAt: IsoTime, done: z.array(z.number().int()), habits: z.number().int().min(1),
+});
+export type HabitChallenge = z.infer<typeof HabitChallengeResponse>;
+// POST /api/proof/habit: the day is kept once every habit has its photo.
+export const HabitProofResponse = z.object({ habit: z.number().int(), done: z.array(z.number().int()), dayKept: z.boolean(), signature: z.string().nullable().optional(), pending: z.boolean().optional() });
+export type HabitProofResult = z.infer<typeof HabitProofResponse>;
 
 // GET /reputation/:wallet (kept rate in percent with one decimal; null with no closed days yet)
 export const ReputationResponse = z.object({

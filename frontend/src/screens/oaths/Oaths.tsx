@@ -22,7 +22,7 @@ import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOath, useOathList, oathActions } from "@/features/oaths/hooks";
 import type { MemberView, OathView } from "@/features/oaths/model";
 import { isLowHp } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, objectIcon, objectName, reviewText, shortDate, skrText, skrWhole, weekday, startsTitle } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathIcon, oathObjects, objectIcon, reviewText, shortDate, skrText, skrWhole, weekday, startsTitle } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { TabScreen } from "../tabs/TabScreen";
@@ -67,7 +67,7 @@ export function OathsTab() {
         const me = v.me >= 0 ? v.members[v.me]! : null;
         const pending = v.members.filter((m) => !m.isMe && m.pendingToday);
         return (
-          <OathCard key={v.facts.id} variant="sm" tilt={i % 2 ? 1 : 0} icon={objectIcon(v.facts.objectId)} name={v.facts.name} onPress={() => open1(v)}
+          <OathCard key={v.facts.id} variant="sm" tilt={i % 2 ? 1 : 0} icon={oathIcon(v.facts)} name={v.facts.name} onPress={() => open1(v)}
             meta={v.facts.isSolo ? t("screens.D0.b3.meta", { day: v.dayNumber, length: v.facts.numDays }) : t("screens.D0.b2.meta", { day: v.dayNumber, length: v.facts.numDays })}
             hp={v.hp}
             tags={[
@@ -131,7 +131,7 @@ function OpenHeader({ v, member }: { v: OathView; member?: boolean }) {
         <Chip text={member ? t("screens.D1·m.b0.chip.2", { amount: skrWhole(f.stake) }) : t("screens.D1.b0.chip.2", { amount: skrWhole(f.stake) })} icon="sack" tone="lime" tilt={-1} />
         {!f.isSolo && !member ? <Chip text={reviewText(f.reviewMode)} icon="account-group-outline" tilt={2} /> : null}
       </ChipRow>
-      <Title heading={t("screens.D1.b1.title", { goal: f.goal ?? f.name })} {...(!member ? { sub: t("screens.D1.b1.sub", { object: objectName(f.objectId) }) } : {})} fs={28} />
+      <Title heading={t("screens.D1.b1.title", { goal: f.goal ?? f.name })} {...(!member ? { sub: t("additions.proof.objectsSub", { objects: oathObjects(f) }) } : {})} fs={28} />
     </>
   );
 }
@@ -254,8 +254,9 @@ function Active({ v }: { v: OathView }) {
     await oathActions.nudge(f, pending.map((m) => m.facts.wallet), v.dayIndex).catch(() => undefined);
     toast(pending.length === 1 ? t("toasts.3", { name: memberName(pending[0]!) }) : t("toasts.4", { n: pending.length }));
   };
-  const myPhoto1 = me?.facts.proofToday === "photo1";
-  const proveLabel = myPhoto1 ? t("screens.D2.pin.0") : f.rematchOf ? t("screens.R·act.pin.0") : t("screens.B1.b4.btn");
+  const myPartial = me?.facts.proofToday === "partial";
+  const nextHabit = v.habits.find((h) => !h.done)?.index ?? 0;
+  const proveLabel = myPartial ? t("screens.D2.pin.0") : f.rematchOf ? t("screens.R·act.pin.0") : t("screens.B1.b4.btn");
   const canProve = v.life === "active" && me?.pendingToday && me.facts.proofToday !== "review";
   const lostNote = noteFor(v);
   const reviewer = v.members.find((m) => !m.isMe && m.facts.proofToday === "review");
@@ -264,7 +265,7 @@ function Active({ v }: { v: OathView }) {
     <Screen layout={f.rematchOf ? "R·act" : low ? "D2·low" : "D2"} bar={<NavBar onBack={back} title={f.name} right={v.life === "active" ? t("screens.D2.nav.right", { day: v.dayNumber, length: f.numDays }) : undefined} />}
       bottomInset={nPins ? pinned(nPins) : 0}
       pinned={nPins ? <>
-        {canProve ? <Button kind={low ? "l" : "p"} icon="camera" label={proveLabel} onPress={() => go(myPhoto1 ? "F4" : "F1", { id: f.id })} /> : null}
+        {canProve ? <Button kind={low ? "l" : "p"} icon="camera" label={proveLabel} onPress={() => go("F1", { id: f.id, habit: nextHabit })} /> : null}
         {pending.length && !f.isSolo ? <Button kind="s" icon="bell-ring-outline" label={pending.length === 1 ? t("screens.D2.pin.1", { name: memberName(pending[0]!) }) : t("screens.D2·low.pin.1", { names: listNames(pending.map(memberName)) })} onPress={() => { void nudge(); }} /> : null}
       </> : undefined}>
       {f.rematchOf ? (

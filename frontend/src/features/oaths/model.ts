@@ -1,7 +1,7 @@
 // The app's Oath model. `OathFacts` is what the data layer knows (chain account, backend details,
 // device-only fields, or the mock); `oathView` derives everything a screen shows with packages/engine.
 // Screens never do money or HP math themselves (CLAUDE.md › Mobile code rules).
-import { HP } from "@kept/config";
+import { HP, OBJECTS } from "@kept/config";
 import {
   dayPhase, marksFromBitmasks, nextMissBreaks, nextMissCost, odds, previewMiss, settlement, simulate,
 } from "@kept/engine";
@@ -9,7 +9,8 @@ import type { DayResult, MemberSettlement, Odds, OathState } from "@kept/engine"
 
 /** Where the facts come from: the real program (+ backend), or the mock store. */
 export type OathSource = "chain" | "mock";
-export type ProofToday = "none" | "photo1" | "kept" | "review";
+/** `partial`: some of today's habits are proven and some are not. `kept`: all of them. */
+export type ProofToday = "none" | "partial" | "kept" | "review";
 export type ReviewMode = "ai" | "ai_group";
 export type ChainStatus = "open" | "active" | "settled" | "cancelled";
 
@@ -25,8 +26,10 @@ export interface MemberFacts {
   rateDays: number;
   /** Bit d set = day d kept (the program's `days_kept`). */
   daysKept: number;
-  /** Today's proof progress (photo 1 and review are off-chain). */
+  /** Today's proof progress (partial progress and review are off-chain). */
   proofToday: ProofToday;
+  /** Which of the Oath's habits (by position) are proven today, when known (the mock, and the viewer on chain). */
+  habitsDone?: number[];
   claimed: boolean;
   /** On-chain payout once settled or cancelled (D-14); null until then. */
   payout: bigint | null;
@@ -42,6 +45,8 @@ export interface OathFacts {
   goal: string | null;
   /** Structured habits stored in OathDetails; legacy Oaths expose their goal as one habit. */
   habits?: string[];
+  /** What each habit is proven with, as text (same order as `habits`); absent on Oaths from before per-habit objects. */
+  habitObjects?: string[];
   objectId: number;
   numDays: number;
   stake: bigint;
@@ -61,6 +66,16 @@ export interface OathFacts {
   recovery?: Record<string, bigint>;
   /** The Bounty this is my participation in (BACKEND_GAPS P1-10; mock only). Miss a day and you're out. */
   bountyId?: string;
+}
+
+/** One of an Oath's habits as proof shows it: its name, what it is proven with (text) and whether today's photo is in. */
+export interface HabitView { index: number; name: string; object: string; done: boolean }
+
+/** The Oath's habits in order. An Oath from before habit lists has its goal as the one habit, proven with its program object. */
+export function habitsOf(f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): { name: string; object: string }[] {
+  const names = f.habits?.length ? f.habits : [f.goal?.trim() || f.name];
+  const fallback = OBJECTS[f.objectId]?.text ?? OBJECTS[0].text;
+  return names.map((name, i) => ({ name, object: f.habitObjects?.[i] ?? f.habitObjects?.[0] ?? fallback }));
 }
 
 /** Where the Oath is, from the member's point of view. */
@@ -110,6 +125,8 @@ export interface OathView {
   hpLostLastDay: number;
   lastDay: DayResult | null;
   members: MemberView[];
+  /** Every habit with whether my photo for it is in today. */
+  habits: HabitView[];
   /** What my next miss costs, and whether one more miss breaks it. */
   myMissCost: bigint;
   nextMissBreaks: boolean;
@@ -149,7 +166,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
     const cells = Array.from({ length: f.numDays }, (_, d): Cell => {
       if (state.brokeOnDay !== null && d > state.brokeOnDay) return "f";
       if (d < finished) return bit(m.daysKept, d) ? "k" : state.brokeOnDay === d ? "x" : "m";
-      if (d === dayIndex) return bit(m.daysKept, d) || m.proofToday === "kept" ? "k" : m.proofToday === "photo1" ? "h" : m.proofToday === "review" ? "r" : "p";
+      if (d === dayIndex) return bit(m.daysKept, d) || m.proofToday === "kept" ? "k" : m.proofToday === "partial" ? "h" : m.proofToday === "review" ? "r" : "p";
       return "f";
     }).join("");
     const keptToday = dayIndex !== null && (bit(m.daysKept, dayIndex) || m.proofToday === "kept");
@@ -163,7 +180,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
       missed,
       keptDays: state.keptDays[i] ?? 0,
       cells,
-      odds: dayIndex === null ? { kind: "none" } : odds(m.keptRate, today, phase?.phase === "day" && phase.deadlineClose),
+      odds: dayIndex === null ? { kind: "none" } : odds(m.keptRate, today === "partial" ? "photo1" : today, phase?.phase === "day" && phase.deadlineClose),
       pendingToday: dayIndex !== null && !keptToday,
     };
   });
@@ -173,6 +190,9 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
   const canPreview = life === "active" && !state.broken && state.dayResults.length < f.numDays && f.members.length > 0;
   const results = resultsOf(f, state);
   const mine = me >= 0 ? f.members[me]! : null;
+  const dayDone = mine !== null && dayIndex !== null && (bit(mine.daysKept, dayIndex) || mine.proofToday === "kept");
+  const doneToday = new Set(mine?.habitsDone ?? []);
+  const habits = habitsOf(f).map((h, index): HabitView => ({ index, ...h, done: dayDone || doneToday.has(index) }));
   const claimable = mine && !mine.claimed && (f.status === "settled" || f.status === "cancelled") ? results[me]!.final : 0n;
 
   return {
@@ -191,6 +211,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
     hpLostLastDay: lastDay ? Math.max(0, lastDay.hpBefore - lastDay.hpAfter) : 0,
     lastDay,
     members,
+    habits,
     myMissCost: me >= 0 && canPreview ? nextMissCost(state, me) : 0n,
     nextMissBreaks: canPreview && nextMissBreaks(state),
     preview: canPreview && pending && !f.isSolo ? { member: pending.index, result: previewMiss(state, pending.index) } : null,

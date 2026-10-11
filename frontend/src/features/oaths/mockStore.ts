@@ -118,9 +118,9 @@ function seed(scenario: Scenario, wallet: string) {
       { creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes", day1StartsAt: startFor(4, secondsLeft) });
   } else {
     group("Iron Week", 0, 7, 1000, wallet, [
-      me(wallet, { daysKept: mask("kk"), proofToday: allDone ? "kept" : deadline ? "none" : "photo1", proofDay: today }),
+      me(wallet, { daysKept: mask("kk"), proofToday: allDone ? "kept" : deadline ? "none" : "partial", habitsDone: allDone ? [0, 1] : deadline ? [] : [0], proofDay: today }),
       person("riya", mask("kk"), "kept", today), person("arjun", mask("km"), allDone ? "kept" : "none", today), person("dev", mask("kk"), allDone ? "kept" : "review", today),
-    ], { creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes", day1StartsAt: startFor(today, secondsLeft) });
+    ], { creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes · read 10 pages", habits: ["lift for 20 minutes", "read 10 pages"], habitObjects: ["dumbbell", "book"], day1StartsAt: startFor(today, secondsLeft) });
   }
   if (!deadline) {
     add({ name: "Read 20 pages", goal: "read 20 pages", objectId: 1, numDays: 14, stake: skr(500), isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
@@ -173,6 +173,9 @@ function bountyOath(b: BountyFacts, wallet: string, m: Partial<MockMember>, seed
     day1StartsAt: b.startsAt, members: [me(wallet, m)], seeded, bountyId: b.id, inviteCode: null });
 }
 
+/** How many habits the Oath has (an Oath from before habit lists has its goal as the one). */
+const habitCount = (o: Pick<MockOath, "habits">) => Math.max(1, o.habits?.length ?? 1);
+
 /** Rolls every Oath forward to "now": other members prove, finished Oaths settle (engine numbers). */
 function roll(o: MockOath) {
   if (o.status !== "active" || o.day1StartsAt === null) return;
@@ -206,6 +209,7 @@ function roll(o: MockOath) {
       // A new day: reliable people keep straight away, everyone else starts from nothing.
       m.proofDay = day;
       m.proofToday = m.reliable ? "kept" : "none";
+      m.habitsDone = m.reliable ? Array.from({ length: habitCount(o) }, (_, i) => i) : [];
       if (m.reliable) m.daysKept |= 1 << day;
     }
   }
@@ -215,7 +219,7 @@ function facts(o: MockOath): OathFacts {
   roll(o);
   const t = now();
   const day = o.day1StartsAt === null ? -1 : Math.floor((t - o.day1StartsAt) / o.daySeconds);
-  return { ...o, members: o.members.map(({ reliable: _r, proofDay, ...m }) => ({ ...m, proofToday: proofDay === day ? m.proofToday : "none" })) };
+  return { ...o, members: o.members.map(({ reliable: _r, proofDay, ...m }) => (proofDay === day ? m : { ...m, proofToday: "none" as ProofToday, habitsDone: [] })) };
 }
 
 export const mockOaths = {
@@ -245,8 +249,8 @@ export const mockOaths = {
   /** What this session's stakes, refunds and claims did to a wallet's SKR (the mock wallet adds it to its balance). */
   walletDelta(wallet: string): bigint { return deltas.get(wallet) ?? 0n; },
 
-  create(d: { wallet: string; goal: string; name?: string; habits?: string[]; objectId: number; numDays: number; stake: bigint; isSolo: boolean; reviewMode: ReviewMode }): OathFacts {
-    const o = add({ name: d.name || oathName(d.objectId, d.numDays), goal: d.goal, ...(d.habits ? { habits: d.habits.slice() } : {}), objectId: d.objectId, numDays: d.numDays, stake: d.stake, isSolo: d.isSolo, reviewMode: d.reviewMode,
+  create(d: { wallet: string; goal: string; name?: string; habits?: string[]; habitObjects?: string[]; objectId: number; numDays: number; stake: bigint; isSolo: boolean; reviewMode: ReviewMode }): OathFacts {
+    const o = add({ name: d.name || oathName(d.objectId, d.numDays), goal: d.goal, ...(d.habits ? { habits: d.habits.slice() } : {}), ...(d.habitObjects ? { habitObjects: d.habitObjects.slice() } : {}), objectId: d.objectId, numDays: d.numDays, stake: d.stake, isSolo: d.isSolo, reviewMode: d.reviewMode,
       status: "open", creator: d.wallet, day1StartsAt: null, members: [me(d.wallet)], seeded: false });
     move(d.wallet, -d.stake);
     return facts(o);
@@ -276,7 +280,27 @@ export const mockOaths = {
     const day = Math.floor((now() - o.day1StartsAt) / o.daySeconds);
     m.proofDay = day;
     m.proofToday = status;
+    m.habitsDone = status === "kept" ? Array.from({ length: habitCount(o) }, (_, i) => i) : [];
     if (status === "kept") m.daysKept |= 1 << day;
+  },
+  /**
+   * One habit's photo passed. The day is kept once every habit has one; until then the day is partly proven. Returns whether
+   * the day is kept now.
+   */
+  proveHabit(id: string, wallet: string, habit: number): boolean {
+    const o = need(id);
+    roll(o);
+    const m = o.members.find((x) => x.wallet === wallet);
+    if (!m || o.day1StartsAt === null) return false;
+    const day = Math.floor((now() - o.day1StartsAt) / o.daySeconds);
+    if (m.proofDay !== day) { m.proofDay = day; m.proofToday = "none"; m.habitsDone = []; }
+    const done = new Set(m.habitsDone ?? []);
+    done.add(habit);
+    m.habitsDone = [...done].sort((a, b) => a - b);
+    const kept = m.habitsDone.length >= habitCount(o);
+    m.proofToday = kept ? "kept" : "partial";
+    if (kept) m.daysKept |= 1 << day;
+    return kept;
   },
   /** The Rematch of a broken Oath, if anyone started one. */
   rematchFor(sourceId: string): OathFacts | null {

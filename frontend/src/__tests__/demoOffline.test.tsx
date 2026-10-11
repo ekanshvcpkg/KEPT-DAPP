@@ -55,6 +55,8 @@ function App() {
 
 it("onboards in Demo and opens the core screens without touching the network", async () => {
   await render(<App />);
+  // A first launch: the intro (no network either), skipped to its last page.
+  await fireEvent.press(await screen.findByRole("button", { name: t("additions.intro.skip") }, slow));
   await fireEvent.press(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow));
   await fireEvent.press(await screen.findByText(t("additions.mode.demo")));
   await fireEvent.press(await screen.findByRole("button", { name: t("screens.A4.pin.0") }, slow));
@@ -79,9 +81,10 @@ it("the judges' account has every core idea one tap from Today", () => {
   const now = Math.floor(Date.now() / 1000);
   const views = mockOaths.list(MOCK_WALLET).map((f) => oathView(f, now, MOCK_WALLET));
   const iron = views.find((v) => v.facts.name === "Iron Week" && v.life === "active")!;
-  // A group Oath mid-run: photo 1 done, photo 2 due, HP below 100 after Arjun's day-2 miss.
+  // A group Oath mid-run with two habits (a dumbbell, a book): one proven, one still due, HP below 100 after Arjun's day-2 miss.
   expect(iron.facts.isSolo).toBe(false);
-  expect(iron.facts.members.find((m) => m.wallet === MOCK_WALLET)!.proofToday).toBe("photo1");
+  expect(iron.facts.members.find((m) => m.wallet === MOCK_WALLET)!.proofToday).toBe("partial");
+  expect(iron.habits.map((h) => [h.object, h.done])).toEqual([["dumbbell", true], ["book", false]]);
   expect(iron.hp).toBeLessThan(100);
   expect(iron.members.some((m) => m.missed.length > 0)).toBe(true);
   // A finished Oath to claim, a broken one with a Rematch offer, a joined Bounty.

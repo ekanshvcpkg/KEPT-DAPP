@@ -11,7 +11,8 @@ import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHel
 import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
 import { BREAK_HOLD_BPS, HELD_WINDOW_DAYS, MISS_BPS, replayV3, RULES_V2, RULES_V3 } from "../shared/payout.js";
 import { CHALLENGE_UPLOAD_GRACE_MS, GESTURE_TEXT, OBJECT_IDS, OBJECT_TEXT, nudgeRejection, nudgeTargets, proofRequestKind, REVIEW_PHOTO_TTL_MS, reviewPhotoExpired, reviewRequestRejection, type ChallengeGesture, proofRejection, reviewOutcome } from "../v4/rules.js";
-import { currentChallenge, dayChallenge, findSession, startSession } from "../v4/challenges.js";
+import { challengeJson, currentChallenge, dayChallenge, findSession, issueChallenge, startSession } from "../v4/challenges.js";
+import { combinedHabitsHash, habitChallengeKey, habitObjectTexts, habitRejection, parseHabitObjects } from "../v4/habits.js";
 import { combinedProofHash, sessionPhase, validMinMinutes } from "../v4/session.js";
 import { checkGenesis, requireGenesis } from "../genesis.js";
 import { connection, keypairFromEnv, programId, tokenProgramForMint } from "../solana.js";
@@ -109,7 +110,7 @@ get("/api/invites/:code", async (req, res) => {
   const oath = await readOath(row.oath);
   if (!oath) return res.status(404).json({ error: "Oath not found" });
   const details = await prisma.oathDetails.findUnique({ where: { oath: row.oath } });
-  return res.json({ oath, goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], alreadyStarted: oath.status !== 0 });
+  return res.json({ oath, goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], habitObjects: details?.habitObjects ?? [], alreadyStarted: oath.status !== 0 });
 });
 
 get("/api/oaths/:oath/invite", async (req: AuthedRequest, res) => {
@@ -119,11 +120,11 @@ get("/api/oaths/:oath/invite", async (req: AuthedRequest, res) => {
     prisma.oathInvite.findFirst({ where: { oath: req.params.oath, createdBy: req.wallet }, orderBy: { createdAt: "desc" } }),
     prisma.oathDetails.findUnique({ where: { oath: req.params.oath } }),
   ]);
-  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], invite: savedInvite ? { code: savedInvite.code, deepLink: `kept://join/${savedInvite.code}` } : null });
+  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], habitObjects: details?.habitObjects ?? [], invite: savedInvite ? { code: savedInvite.code, deepLink: `kept://join/${savedInvite.code}` } : null });
 });
 
 post("/api/oaths/details", async (req: AuthedRequest, res) => {
-  const { oath, goalText, habits: rawHabits, minMinutes } = req.body ?? {};
+  const { oath, goalText, habits: rawHabits, habitObjects: rawObjects, minMinutes } = req.body ?? {};
   if (typeof oath !== "string" || typeof goalText !== "string" || !goalText.trim() || goalText !== goalText.trim()) {
     return res.status(400).json({ error: "Oath and goal text are required" });
   }
@@ -135,12 +136,15 @@ post("/api/oaths/details", async (req: AuthedRequest, res) => {
     return res.status(400).json({ error: "goalText must be the habits joined with · and be at most 501 characters" });
   }
   if (minMinutes !== undefined && !validMinMinutes(minMinutes)) return res.status(400).json({ error: "minMinutes must be a whole number from 1 to 720" });
+  // What each habit is proven with (one photo of it a day). Optional: without it every habit uses the Oath's own object.
+  const habitObjects = rawObjects === undefined ? undefined : parseHabitObjects(rawObjects, habits.length);
+  if (habitObjects && "error" in habitObjects) return res.status(400).json({ error: habitObjects.error });
   const info = await readOath(oath);
   if (!info) return res.status(404).json({ error: "Oath not found" });
   if (info.creator !== req.wallet || info.status !== 0) return res.status(403).json({ error: "Only the creator can save goal details while the Oath is Open" });
   if (createHash("sha256").update(goalText, "utf8").digest("hex") !== info.goalHash) return res.status(422).json({ error: "Goal text does not match the on-chain goal hash" });
-  const row = await prisma.oathDetails.upsert({ where: { oath }, create: { oath, creator: req.wallet, goalText, habits, minMinutes: minMinutes ?? null }, update: { goalText, habits, ...(minMinutes !== undefined ? { minMinutes } : {}) } });
-  return res.status(201).json({ oath, goalText, habits, minMinutes: row.minMinutes ?? config.sessionMinMinutes });
+  const row = await prisma.oathDetails.upsert({ where: { oath }, create: { oath, creator: req.wallet, goalText, habits, ...(habitObjects ? { habitObjects } : {}), minMinutes: minMinutes ?? null }, update: { goalText, habits, ...(habitObjects ? { habitObjects } : {}), ...(minMinutes !== undefined ? { minMinutes } : {}) } });
+  return res.status(201).json({ oath, goalText, habits, habitObjects: row.habitObjects, minMinutes: row.minMinutes ?? config.sessionMinMinutes });
 });
 
 get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
@@ -158,7 +162,7 @@ get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
   }));
   const configEconomics = await readConfigEconomics();
   const economics = oathEconomics(info, req.wallet, Math.floor(Date.now() / 1000), configEconomics?.legacyFeeBps ?? 0);
-  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], minMinutes: details?.minMinutes ?? config.sessionMinMinutes, dayIndex: currentDay, members, economics });
+  return res.json({ goalText: details?.goalText ?? null, habits: details?.habits?.length ? details.habits : details?.goalText ? [details.goalText] : [], habitObjects: details?.habitObjects ?? [], minMinutes: details?.minMinutes ?? config.sessionMinMinutes, dayIndex: currentDay, members, economics });
 });
 
 /** Terms a new Oath gets if created now. Existing Oaths keep the terms in their own account (see details). */
@@ -182,7 +186,88 @@ post("/api/proof/challenge", async (req: AuthedRequest, res) => {
   const rejected = proofRejection({ status: state.status, member: state.members.includes(req.wallet), day, numDays: state.numDays, startTs: state.startTs, daySeconds: state.daySeconds, now: Math.floor(Date.now() / 1000), alreadyRecorded: (state.daysKept[req.wallet] & (1 << day)) !== 0 });
   if (rejected === "non_member") return res.status(403).json({ error: "Wallet is not an Oath member" });
   if (rejected) return res.status(409).json({ error: `No proof can be taken now (${rejected})` });
+  if (req.body?.habit !== undefined) {
+    // One photo proves one habit: that habit's own object, and a gesture of its own.
+    const [details, doneRows] = await Promise.all([prisma.oathDetails.findUnique({ where: { oath } }), prisma.habitProof.findMany({ where: { oath, wallet: req.wallet, dayIndex: day } })]);
+    const texts = habitObjectTexts(details, state.objectId);
+    const done = doneRows.map((r) => r.habit).sort((a, b) => a - b);
+    const bad = habitRejection({ habit: req.body.habit, count: texts.length, done });
+    if (bad) return res.status(bad.status).json({ error: bad.error, done });
+    const habit = req.body.habit as number;
+    const challenge = await issueChallenge(habitChallengeKey(oath, habit), req.wallet, day);
+    return res.json({ phase: "habit", habit, object: texts[habit], ...challengeJson(challenge), done, habits: texts.length });
+  }
   return res.json(await dayChallenge(oath, req.wallet, day));
+});
+
+/**
+ * One photo proves one habit (DECISIONS D-98). The photo already passed POST /proof/verify for that habit's object and the
+ * gesture issued for it; this records it. Once every habit of the Oath has its photo, the day is recorded on chain.
+ */
+post("/api/proof/habit", async (req: AuthedRequest, res) => {
+  const { oath, dayIndex, habit, verificationId } = req.body ?? {};
+  if (typeof oath !== "string" || !Number.isInteger(dayIndex) || typeof verificationId !== "string" || !verificationId.trim() || verificationId.length > 64) {
+    return res.status(400).json({ error: "Expected oath, dayIndex, habit and verificationId from POST /proof/verify" });
+  }
+  const state = await readOath(oath);
+  if (!state) return res.status(404).json({ error: "Oath not found" });
+  const day = Number(dayIndex);
+  const rejected = proofRejection({ status: state.status, member: state.members.includes(req.wallet), day, numDays: state.numDays, startTs: state.startTs, daySeconds: state.daySeconds, now: Math.floor(Date.now() / 1000), alreadyRecorded: (state.daysKept[req.wallet] & (1 << day)) !== 0 });
+  if (rejected === "non_member") return res.status(403).json({ error: "Wallet is not an Oath member" });
+  if (rejected) return res.status(409).json({ error: `No proof can be taken now (${rejected})` });
+  const [details, doneRows] = await Promise.all([prisma.oathDetails.findUnique({ where: { oath } }), prisma.habitProof.findMany({ where: { oath, wallet: req.wallet, dayIndex: day } })]);
+  const texts = habitObjectTexts(details, state.objectId);
+  const bad = habitRejection({ habit, count: texts.length, done: doneRows.map((r) => r.habit) });
+  if (bad) return res.status(bad.status).json({ error: bad.error });
+  const h = habit as number;
+  const challenge = await currentChallenge(habitChallengeKey(oath, h), req.wallet, day, null, CHALLENGE_UPLOAD_GRACE_MS);
+  if (!challenge) return res.status(409).json({ error: "Gesture challenge expired; a new one is needed", challengeExpired: true });
+  const expected = { object: texts[h]!, gesture: GESTURE_TEXT[challenge.gesture as ChallengeGesture] };
+  const check = await claimVerification(verificationId, req.wallet, expected);
+  if ("error" in check) return res.status(422).json({ error: check.error, expected });
+  const v = check.verification;
+  // A check that names an Oath, day or habit must be for this one.
+  if ((v.oath !== null && (v.oath !== oath || v.dayIndex !== day)) || (v.habit !== null && v.habit !== h)) {
+    await releaseVerification(v.id);
+    return res.status(422).json({ error: "That photo check was for a different Oath, day or habit", expected });
+  }
+  try {
+    await prisma.habitProof.create({ data: { oath, wallet: req.wallet, dayIndex: day, habit: h, proofHash: v.proofHash, verificationId: v.id, object: expected.object } });
+  } catch {
+    await releaseVerification(v.id);
+    return res.status(409).json({ error: "That habit is already proven today" });
+  }
+  const all = await prisma.habitProof.findMany({ where: { oath, wallet: req.wallet, dayIndex: day }, orderBy: { habit: "asc" } });
+  const done = all.map((r) => r.habit);
+  if (done.length < texts.length) return res.status(201).json({ habit: h, done, dayKept: false });
+
+  // Every habit has its photo: the day is kept. Only the combined hash of the photos goes on chain.
+  const undo = async () => { await prisma.habitProof.deleteMany({ where: { oath, wallet: req.wallet, dayIndex: day, habit: h } }).catch(() => undefined); await releaseVerification(v.id); };
+  const verifier = config.verifierSecretKey ? keypairFromEnv(config.verifierSecretKey) : null;
+  if (!verifier) { await undo(); return res.status(503).json({ error: "Verifier key is not configured" }); }
+  const dayHash = combinedHabitsHash(all.map((r) => r.proofHash));
+  const prior = await prisma.oathProof.findUnique({ where: { oath_wallet_dayIndex: { oath, wallet: req.wallet, dayIndex: day } } });
+  try {
+    if (prior?.status === "PENDING" && prior.signature && prior.signature !== "pending" && prior.proofHash === dayHash) {
+      const confirmation = await connection.confirmTransaction(prior.signature, "confirmed");
+      if (confirmation.value.err) throw new Error(`Verifier check-in failed: ${JSON.stringify(confirmation.value.err)}`);
+      await prisma.oathProof.update({ where: { id: prior.id }, data: { status: "RECORDED" } });
+      return res.status(200).json({ habit: h, done, dayKept: true, signature: prior.signature, recovered: true });
+    }
+    const data = { proofHash: dayHash, photoPath: "", objectLabel: texts.join(", ").slice(0, 200), objectConfidence: v.objectConfidence, gestureLabel: v.gestureSeen, gestureConfidence: v.gestureMatches ? 1 : 0, challengeGesture: challenge.gesture, failedAttempts: 0, signature: "pending", status: "PENDING" };
+    const row = prior ? await prisma.oathProof.update({ where: { id: prior.id }, data }) : await prisma.oathProof.create({ data: { oath, wallet: req.wallet, dayIndex: day, ...data } });
+    const signature = await recordCheckin(verifier, new PublicKey(oath), new PublicKey(req.wallet), day, Buffer.from(dayHash, "hex"), async (sig) => {
+      await prisma.oathProof.update({ where: { id: row.id }, data: { signature: sig } });
+    });
+    await prisma.oathProof.update({ where: { id: row.id }, data: { status: "RECORDED", signature } });
+    return res.status(201).json({ habit: h, done, dayKept: true, signature, proofHash: dayHash });
+  } catch (e) {
+    // Not recorded: the last habit's photo is not counted, so a retry with the same check can finish the day.
+    await undo();
+    const message = e instanceof Error ? e.message : "Proof submission failed";
+    if (message.includes("Verifier check-in failed:")) await prisma.oathProof.updateMany({ where: { oath, wallet: req.wallet, dayIndex: day, status: "PENDING" }, data: { status: "FAILED" } }).catch(() => undefined);
+    return res.status(502).json({ error: message, retryable: true });
+  }
 });
 
 /** Photo 1 of 2: a passing check for the start challenge opens the session; the end photo opens after minMinutes. */

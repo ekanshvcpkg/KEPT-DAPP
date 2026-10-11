@@ -14,6 +14,7 @@ import { ROUTES, presentation, routeName } from "@/app/routes";
 import { STILL_OFFLINE } from "@/screens/M2";
 import { useDev } from "@/state/dev";
 import { useSession } from "@/state/session";
+import { useIntro } from "@/state/intro";
 import { useUi } from "@/state/ui";
 import { useDeviceOaths } from "@/features/oaths/device";
 import { mockOaths } from "@/features/oaths/mockStore";
@@ -101,6 +102,7 @@ describe("onboarding on mocks", () => {
     useDeviceOaths.setState(useDeviceOaths.getInitialState(), true);
     mockOaths.reset();
     useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
+    useIntro.setState({ seen: true });
     queryClient.clear();
   });
 
@@ -210,10 +212,10 @@ describe("onboarding on mocks", () => {
     await saveBtn(true);
     await fireEvent.changeText(field, "read 10 pages");
     await saveBtn(true);
-    // Six quick picks. Yoga mat and Skipping rope are supported too, but found by search.
+    // Six quick picks. Everything else is found by search.
     for (const o of ["Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant"]) expect(screen.getByLabelText(o)).toBeTruthy();
     expect(screen.queryByLabelText("Yoga mat")).toBeNull();
-    expect(screen.queryByLabelText("Skipping rope")).toBeNull();
+    expect(screen.queryByLabelText("Kettlebell")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Book"));
     expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();
     // Nothing is committed until Save.
@@ -248,29 +250,32 @@ describe("onboarding on mocks", () => {
     await nextBtn(true);
   }, 60000);
 
-  it("C2: one Oath checks one proof object, so a habit can't name another one without switching them all", async () => {
+  it("C2: every habit has its own proof object (the gym with a dumbbell, reading with a book)", async () => {
     await startC2();
     await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.addHabit") }));
-    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "read");
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "go to the gym");
+    await fireEvent.press(screen.getByLabelText("Dumbbell"));
+    await fireEvent.press(await saveBtn());
+    // A second habit starts blank (it does not inherit the first one's object) and takes a different object without any conflict.
+    await fireEvent.press(await screen.findByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "read 10 pages");
+    expect(screen.getByText(t("additions.oathCreate.noProof"))).toBeTruthy();
+    await saveBtn(true);
     await fireEvent.press(screen.getByLabelText("Book"));
     await fireEvent.press(await saveBtn());
-    // A second habit starts on the Oath's object.
-    await fireEvent.press(await screen.findByRole("button", { name: t("additions.oathCreate.addHabit") }));
-    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "water");
-    expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();
-    await saveBtn();
-    // Another object is a visible conflict with a way out; Save stays off.
-    await fireEvent.press(screen.getByLabelText("Plant"));
-    expect(await screen.findByText(t("additions.oathCreate.conflictTitle", { object: "Book" }))).toBeTruthy();
-    await saveBtn(true);
-    await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.switchAll", { object: "Plant" }) }));
-    expect(await screen.findByLabelText(card("read", "Plant"))).toBeTruthy();
-    expect(screen.getByLabelText(card("water", "Plant"))).toBeTruthy();
-    expect(useDraft.getState().draft).toMatchObject({ habits: ["read", "water"], habitObjectIds: [5, 5], objectId: 5 });
+    expect(await screen.findByLabelText(card("go to the gym", "Dumbbell"))).toBeTruthy();
+    expect(screen.getByLabelText(card("read 10 pages", "Book"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habits: ["go to the gym", "read 10 pages"], habitObjectEntries: ["dumbbell", "book"], habitObjectIds: [0, 1], objectId: 0 });
     await nextBtn();
+    // Changing one habit's object leaves the other's alone.
+    await fireEvent.press(screen.getByLabelText(card("read 10 pages", "Book")));
+    await fireEvent.press(await screen.findByLabelText("Plant"));
+    await fireEvent.press(await saveBtn());
+    expect(await screen.findByLabelText(card("read 10 pages", "Plant"))).toBeTruthy();
+    expect(screen.getByLabelText(card("go to the gym", "Dumbbell"))).toBeTruthy();
   }, 60000);
 
-  it("C2 search: aliases select their object, unsupported things stay locked, no match has a state, and the pick reaches the created Oath", async () => {
+  it("C2 search: any object the model can look for is pickable, aliases select their object, no match has a state, and the picks reach the created Oath", async () => {
     await startC2();
     await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.addHabit") }));
     await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "stretch");
@@ -278,17 +283,15 @@ describe("onboarding on mocks", () => {
     const row = (key: string) => new RegExp(`^${t(`additions.objects.entry.${key}` as CopyKey)}\\.`);
     await fireEvent(search, "focus");
 
-    // Unsupported: listed, locked, and picking it changes nothing.
+    // Anything in the catalog can be picked: a kettlebell is its own object, not a dumbbell.
     await fireEvent.changeText(search, "kettlebell");
     const kettlebell = await screen.findByLabelText(row("kettlebell"));
-    expect(kettlebell.props.accessibilityState).toMatchObject({ disabled: true });
-    await fireEvent.press(kettlebell);
-    expect(await screen.findByText(t("additions.objects.unavailableToast"))).toBeTruthy();
+    expect(kettlebell.props.accessibilityState?.disabled).toBeFalsy();
     // No match: a designed empty state.
     await fireEvent.changeText(search, "zzzqx");
     expect(await screen.findByText(t("additions.objects.noResults", { query: "zzzqx" }))).toBeTruthy();
 
-    // An alias selects the object it is: "pilates" is a yoga mat (not one of the six quick picks).
+    // An alias finds the object it is: "pilates" is a yoga mat (not one of the six quick picks).
     await fireEvent.changeText(search, "pilates");
     await fireEvent.press(await screen.findByLabelText(row("yoga_mat")));
     expect(await screen.findByText(t("additions.oathCreate.proofSummary", { object: "Yoga mat" }))).toBeTruthy();
@@ -297,16 +300,27 @@ describe("onboarding on mocks", () => {
     expect(await screen.findByLabelText(card("stretch", "Yoga mat"))).toBeTruthy();
     expect(useDraft.getState().draft).toMatchObject({ habitObjectIds: [7], habitObjectEntries: ["yoga_mat"], objectId: 7 });
 
+    // A second habit with an object that is none of the program's eight.
+    await fireEvent.press(await screen.findByRole("button", { name: t("additions.oathCreate.addHabit") }));
+    await fireEvent.changeText(await screen.findByLabelText(t("additions.oathCreate.habitName")), "swing for 5 minutes");
+    const search2 = screen.getByLabelText(t("additions.objects.searchLabel"));
+    await fireEvent(search2, "focus");
+    await fireEvent.changeText(search2, "kettlebell");
+    await fireEvent.press(await screen.findByLabelText(row("kettlebell")));
+    await fireEvent.press(await saveBtn());
+    expect(await screen.findByLabelText(card("swing for 5 minutes", "Kettlebell"))).toBeTruthy();
+    expect(useDraft.getState().draft).toMatchObject({ habitObjectEntries: ["yoga_mat", "kettlebell"], habitObjectIds: [7, -1], objectId: 7 });
+
     // On through C3-C6: the Oath is created with the program's object_id and the saved habits.
     for (let i = 0; i < 4; i++) await fireEvent.press(await nextBtn());
-    expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "stretch" }))).toBeTruthy();
-    expect(screen.getByText("Yoga mat")).toBeTruthy();
+    expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "stretch · swing for 5 minutes" }))).toBeTruthy();
+    expect(screen.getByText("Yoga mat · Kettlebell")).toBeTruthy();
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C6.pin.0") }));
     expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "1,000" }), {}, slow)).toBeTruthy();
     expect(useUi.getState().fx?.feel).toBe("payout");
     const created = mockOaths.list("7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q").filter((o) => o.name === "Stronger every day");
     expect(created).toHaveLength(1);
-    expect(created[0]).toMatchObject({ objectId: 7, habits: ["stretch"], goal: "stretch" });
+    expect(created[0]).toMatchObject({ objectId: 7, habits: ["stretch", "swing for 5 minutes"], habitObjects: ["yoga mat", "kettlebell"], goal: "stretch · swing for 5 minutes" });
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C7·ok.pin.0") }));
     expect(await screen.findByText(t("screens.C8.b0.title"))).toBeTruthy();
     expect(useUi.getState().fx).toBeNull();
@@ -355,29 +369,54 @@ describe("onboarding on mocks", () => {
     useDev.setState({ scenario: "activeGroup" });
     useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
     useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
-    storeChallenge("mock-oath-1", 2, { photo: 2, dayIndex: 2, objectId: 0, gesture: "victory", expiresAt: Math.floor(Date.now() / 1000) - 60 });
+    // Iron Week has two habits (a dumbbell, a book); the first is proven, so the next is the second.
+    storeChallenge("mock-oath-1", 1, { habit: 1, dayIndex: 2, object: "book", gesture: "victory", expiresAt: Math.floor(Date.now() / 1000) - 60 });
     await render(<App />);
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
     // From D2, so the Oath is already loaded when F4 mounts (that's when the stale one was picked up).
     await act(async () => { navigateTo("D2", { id: "mock-oath-1" }); });
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.D2.pin.0") }));
-    expect(await screen.findByText(t("screens.F4.b1.chip.0"))).toBeTruthy();
+    expect(await screen.findByText(t("additions.proof.pill", { n: 2, total: 2 }))).toBeTruthy();
     expect(screen.queryByText(t("screens.F2c.b0.title"))).toBeNull();
     await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
     expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 3 }), {}, slow)).length).toBeGreaterThan(0); // title + FX pill
     expect(screen.queryByText(t("screens.F2c.b0.title"))).toBeNull();
   }, 30000);
 
-  it("the camera screen shows the gesture the server issued for this photo, with the Oath's object", async () => {
+  it("one photo proves one habit: the first opens F3 with what is still to do, the last keeps the day", async () => {
+    const wallet = "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q";
+    useDev.setState({ scenario: "activeGroup" });
+    useSession.setState({ token: "mock.x", wallet, genesis: true, onboarded: true });
+    useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
+    // Iron Week has two habits (a dumbbell, a book); start from none of them proven today.
+    mockOaths.ensureSeeded("activeGroup", wallet);
+    mockOaths.prove("mock-oath-1", wallet, "none");
+    await render(<App />);
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    await act(async () => { navigateTo("F1", { id: "mock-oath-1", habit: 0 }); });
+    // The first habit is the gym, proven with a dumbbell.
+    expect(await screen.findByText(t("additions.proof.pill", { n: 1, total: 2 }), {}, slow)).toBeTruthy();
+    await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
+    expect(await screen.findByText(t("screens.F3.b2.title", { habit: "Lift for 20 minutes" }), {}, slow)).toBeTruthy();
+    expect(screen.getByText(t("additions.proof.f3SubOne"))).toBeTruthy();
+    expect(screen.queryByText(t("screens.F5.b1.title", { day: 3 }))).toBeNull(); // the day is not kept yet
+    // The second is reading, proven with a book.
+    await fireEvent.press(screen.getByRole("button", { name: t("screens.F3.pin.0") }));
+    expect(await screen.findByText(t("additions.proof.pill", { n: 2, total: 2 }), {}, slow)).toBeTruthy();
+    await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
+    expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 3 }), {}, slow)).length).toBeGreaterThan(0);
+  }, 60000);
+
+  it("the camera screen shows the gesture the server issued for this photo, with the habit's own object", async () => {
     useDev.setState({ scenario: "activeGroup" });
     useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
     useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
-    storeChallenge("mock-oath-1", 2, { photo: 2, dayIndex: 2, objectId: 0, gesture: "open_palm", expiresAt: Math.floor(Date.now() / 1000) + 100 });
+    storeChallenge("mock-oath-1", 1, { habit: 1, dayIndex: 2, object: "book", gesture: "open_palm", expiresAt: Math.floor(Date.now() / 1000) + 100 });
     await render(<App />);
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
     await act(async () => { navigateTo("D2", { id: "mock-oath-1" }); });
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.D2.pin.0") }));
-    expect(await screen.findByText(t("screens.F1.b0.label", { object: "Dumbbell", gesture: gestureText("open_palm") }))).toBeTruthy();
+    expect(await screen.findByText(t("screens.F1.b0.label", { object: "Book", gesture: gestureText("open_palm") }))).toBeTruthy();
   }, 30000);
 
   it("F2b's close button leaves even when it is the only screen (a link opened it)", async () => {
@@ -558,6 +597,42 @@ describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
   });
 });
 
+describe("intro (A1·i)", () => {
+  beforeAll(() => queryClient.setDefaultOptions({ queries: { ...queryClient.getDefaultOptions().queries, gcTime: Infinity } }));
+  beforeEach(async () => {
+    await setAppMode(null);
+    await AsyncStorage.clear();
+    useDev.setState({ overrides: Object.fromEntries(SLICES.map((s) => [s, "mock"])), mockWallet: true, scenario: "fresh" });
+    useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
+    queryClient.clear();
+  });
+  const page = (n: number) => t("additions.intro.page", { n, total: 3 });
+
+  it("a first launch opens the three-page intro; Next and Skip move through it, and the last page starts onboarding", async () => {
+    useIntro.setState({ seen: false });
+    await render(<App />);
+    expect(await screen.findByLabelText(page(1), undefined, slow)).toBeTruthy();
+    expect(useIntro.getState().seen).toBe(false);
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.intro.next") }));
+    expect(await screen.findByLabelText(page(2))).toBeTruthy();
+    // Skip jumps to the last page, which carries A1's two buttons.
+    await fireEvent.press(screen.getByRole("button", { name: t("additions.intro.skip") }));
+    expect(await screen.findByLabelText(page(3))).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t("additions.intro.next") })).toBeNull();
+    expect(screen.getByRole("button", { name: t("screens.A1.pin.1") })).toBeTruthy();
+    expect(useIntro.getState().seen).toBe(true);
+    await fireEvent.press(screen.getByRole("button", { name: t("screens.A1.pin.0") }));
+    expect(await screen.findByText(t("additions.mode.demo"))).toBeTruthy();
+  }, 30000);
+
+  it("once seen, the splash goes straight to A1", async () => {
+    useIntro.setState({ seen: true });
+    await render(<App />);
+    expect(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow)).toBeTruthy();
+    expect(screen.queryByLabelText(page(1))).toBeNull();
+  }, 30000);
+});
+
 describe("onboarding on Live", () => {
   // Live has no mock path (D-80): the real sign-in code runs against test stand-ins for the wallet app and the
   // backend (src/testing/fakeLive.ts). The Dev menu holds everything that used to put Live on the mock; it must change nothing.
@@ -573,6 +648,7 @@ describe("onboarding on Live", () => {
     useDev.setState({ overrides: Object.fromEntries(SLICES.map((s) => [s, "mock"])), mockWallet: true, scenario: "notEligible" });
     useDeviceOaths.setState({ shownResults: [], recapShownOn: null });
     useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
+    useIntro.setState({ seen: true });
     queryClient.clear();
   });
   afterEach(() => { restoreFetch(); resetWallet(); useDev.setState({ overrides: {}, mockWallet: false }); });

@@ -109,22 +109,24 @@ export interface OathsApi {
    * After a confirmed create: store the goal text, make an invite (group), and register the Oath
    * with the settlement scheduler (docs/ARCHITECTURE.md §7, BACKEND_GAPS P0-9). Returns the code.
    */
-  register(oath: OathFacts, goal: string, habits: string[]): Promise<string | null>;
+  register(oath: OathFacts, goal: string, habits: string[], habitObjects: string[]): Promise<string | null>;
   /** After a confirmed join: register for settlement and reminders. */
   watch(oath: OathFacts): Promise<void>;
 }
 
 /** A gesture the backend may ask for. The design has three; the backend draws from five (BACKEND_GAPS P0-3). */
 export type GestureLabel = "thumbs_up" | "victory" | "open_palm" | "closed_fist" | "pointing_up";
-export interface Challenge { photo: 1 | 2; dayIndex: number; objectId: number; gesture: GestureLabel; expiresAt: number; waitUntil?: number }
+/** One photo proves one habit: `object` is what the model looks for (the habit's own object, as text) and `gesture` what the server asked for. */
+export interface Challenge { habit: number; dayIndex: number; object: string; gesture: GestureLabel; expiresAt: number }
 export type ProofOutcome =
-  | { status: "pass"; endAllowedAt?: number }
+  /** `dayKept`: this was the last habit of the day. */
+  | { status: "pass"; dayKept: boolean }
   | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean }
   | { status: "unavailable" }
   | { status: "expired" };
 
 export interface ProofApi {
-  challenge(oath: OathFacts, photo: 1 | 2, dayIndex: number, avoid?: GestureLabel): Promise<Challenge>;
+  challenge(oath: OathFacts, habit: number, dayIndex: number, avoid?: GestureLabel): Promise<Challenge>;
   /** `image` is base64 JPEG from the camera. */
   submit(oath: OathFacts, c: Challenge, image: string, imageUri?: string): Promise<ProofOutcome>;
 }

@@ -18,7 +18,7 @@ import { color, metrics } from "@/theme";
 import { useGo, useParams } from "@/app/nav";
 import { useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, objectName, skrWhole } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathObjects, skrWhole } from "@/features/oaths/present";
 import { rematchActions, useRematch } from "@/features/queries";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
@@ -66,7 +66,7 @@ export function R1() {
       <ScreenKeeper id="R1" lines={[k]} chips={keeperAt("R1", [t("screens.R1.b0.chip.0", { amount: skrWhole(held) }), t("screens.R1.b0.chip.1", { time: shortDuration(left) })]).chips ?? []} />
       <Title heading={t("screens.R1.b1.title", { amount: skrWhole(held) })} sub={t("additions.rematch.winBackHalf")} />
       <Breakdown rows={[
-        { label: t("screens.R1.b2.row0.l"), value: t("screens.R1.b2.row0.v", { name: f.name, n: f.numDays, object: objectName(f.objectId) }) },
+        { label: t("screens.R1.b2.row0.l"), value: t("screens.R1.b2.row0.v", { name: f.name, n: f.numDays, object: oathObjects(f) }) },
         { label: t("screens.R1.b2.row1.l"), value: t("screens.R1.b2.row1.v", { amount: skrWhole(lost) }), color: color.red.base },
         { label: t("screens.R1.b2.row2.l"), value: t("screens.R1.b2.row2.v", { amount: skrWhole(held) }), color: color.lime.base },
         { label: t("screens.R1.b2.row3.l"), value: t("screens.R1.b2.row3.v", { amount: skrWhole(f.stake) }) },

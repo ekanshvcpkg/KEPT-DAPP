@@ -1,6 +1,7 @@
 // Mock Oaths and proof, on the mock store (features/oaths/mockStore.ts).
 import { mockOaths } from "@/features/oaths/mockStore";
 import { useDeviceOaths } from "@/features/oaths/device";
+import { habitsOf } from "@/features/oaths/model";
 import { devWait } from "@/state/dev";
 import { ApiError } from "../errors";
 import type { GestureLabel, OathsApi, ProofApi } from "../types";
@@ -42,11 +43,13 @@ export function mockOathsApi(ctx: MockContext): OathsApi {
 export function mockProofApi(ctx: MockContext): ProofApi {
   const wallet = () => ctx.wallet() ?? MOCK_WALLET;
   return {
-    challenge: async (oath, photo, dayIndex, avoid) => {
+    challenge: async (oath, habit, dayIndex, avoid) => {
       await delay(ctx);
       const options = DESIGN_GESTURES.filter((g) => g !== avoid);
       const gesture = options[Math.floor(Math.random() * options.length)]!;
-      return { photo, dayIndex, objectId: oath.objectId, gesture, expiresAt: Math.floor(clock.now() / 1000) + CHALLENGE_SECONDS };
+      const h = habitsOf(oath)[habit];
+      if (!h) throw new ApiError("NOT_FOUND", `mock: no habit ${habit}`, 404);
+      return { habit, dayIndex, object: h.object, gesture, expiresAt: Math.floor(clock.now() / 1000) + CHALLENGE_SECONDS };
     },
     submit: async (oath, ch) => {
       await delay(ctx);
@@ -56,10 +59,9 @@ export function mockProofApi(ctx: MockContext): ProofApi {
       const s = ctx.scenario();
       if (s === "proofUnavailable") return { status: "unavailable" };
       if (s === "proofFail") {
-        return { status: "fail", attempts: ch.photo === 2 ? useDeviceOaths.getState().failPhoto2(oath.id, ch.dayIndex) : 1 };
+        return { status: "fail", attempts: useDeviceOaths.getState().failHabit(oath.id, ch.habit, ch.dayIndex) };
       }
-      if (oath.source === "mock") mockOaths.prove(oath.id, wallet(), ch.photo === 1 ? "photo1" : "kept");
-      return { status: "pass" };
+      return { status: "pass", dayKept: oath.source === "mock" ? mockOaths.proveHabit(oath.id, wallet(), ch.habit) : true };
     },
   };
 }

@@ -112,6 +112,8 @@ model OathDetails {
   creator    String
   goalText   String
   habits     String[] @default([])
+  /// What each habit is proven with (the text the on-device model is asked for), same order as habits; empty = the Oath's own object.
+  habitObjects String[] @default([])
   /// Minutes between the start and end photo; null = SESSION_MIN_MINUTES.
   minMinutes Int?
   name       String?
@@ -247,11 +249,14 @@ model ProofVerification {
   /// e.g. bounty checks). Group review counts only FAIL rows that match the end photo being reviewed.
   oath             String?
   dayIndex         Int?
+  /// The habit this check was for (one photo proves one habit); null for checks sent without one.
+  habit            Int?
   sessionId        Int?
   usedAt           DateTime?
   createdAt        DateTime  @default(now())
   @@index([wallet, createdAt])
   @@index([wallet, oath, dayIndex])
+  @@index([wallet, oath, dayIndex, habit])
 }
 
 /// Start photo of a two-photo day. Keyed like challenges: an Oath address, or `bounty:<id>`.
@@ -266,4 +271,19 @@ model ProofSession {
   startedAt           DateTime @default(now())
   endAllowedAt        DateTime
   @@unique([key, wallet, dayIndex])
+}
+
+/// A habit's proven photo for one day (one photo proves one habit). Once every habit of the Oath has one, the day is recorded on chain.
+model HabitProof {
+  id             Int      @id @default(autoincrement())
+  oath           String
+  wallet         String
+  dayIndex       Int
+  habit          Int
+  proofHash      String
+  verificationId String
+  /// The object text this photo was checked for.
+  object         String
+  createdAt      DateTime @default(now())
+  @@unique([oath, wallet, dayIndex, habit])
 }

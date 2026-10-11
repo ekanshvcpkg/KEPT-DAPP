@@ -26,7 +26,7 @@ import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { shortWallet } from "@/features/oaths/names";
-import { objectIcon, skrWhole, weekday } from "@/features/oaths/present";
+import { oathIcon, skrWhole, weekday } from "@/features/oaths/present";
 import { useActivity, walletActions } from "@/features/queries";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
@@ -71,7 +71,7 @@ export function W1() {
         <Button kind="s" size="row" icon="qrcode" label={t("screens.W1.b2.btn.1")} onPress={() => go("W4")} />
       </ButtonRow>
       {claim ? (
-        <OathCard variant="lime" icon={objectIcon(claim.facts.objectId)} name={t("screens.W1.b3.name", { amount: skrWhole(claim.claimable) })}
+        <OathCard variant="lime" icon={oathIcon(claim.facts)} name={t("screens.W1.b3.name", { amount: skrWhole(claim.claimable) })}
           meta={t("screens.W1.b3.meta", { name: claim.facts.name, when: weekday(endOf(claim)) })} onPress={() => go("J1", { id: claim.facts.id })}
           button={{ kind: "l", label: t("screens.W1.b3.btn"), onPress: () => go("J1", { id: claim.facts.id }) }} />
       ) : null}

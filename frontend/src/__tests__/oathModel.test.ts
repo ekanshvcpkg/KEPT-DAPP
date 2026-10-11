@@ -24,7 +24,7 @@ describe("oathView", () => {
 
   it("mid-Oath: day number, grid cells, today's pending members and the miss preview", () => {
     const f = oath();
-    f.members[1] = { ...f.members[1]!, daysKept: 0, proofToday: "photo1" }; // B hasn't kept day 2 yet
+    f.members[1] = { ...f.members[1]!, daysKept: 0, proofToday: "partial" }; // B hasn't kept day 2 yet
     const v = oathView(f, DAY + 3600, W[0]!); // day 2 (index 1), 1 h in
     expect(v.dayNumber).toBe(2);
     expect(v.members.map((m) => m.cells)).toEqual(["kkf", "mhf", "kkf", "mkf"]);

@@ -10,5 +10,21 @@
   "screens.D2.b7.sub": "{shares} · KEPT {fee} SKR",
   "screens.E2.b3.row1.v": "−{cost} SKR each miss",
   "screens.E2.b3.row3.l": "KEPT's share",
-  "screens.E2.b3.row3.v": "One equal share of lost SKR"
+  "screens.E2.b3.row3.v": "One equal share of lost SKR",
+  "screens.A1.b2.sub": "Stake SKR on a daily habit. Prove it with a photo. Miss, and the people who kept take your share.",
+  "screens.B1.b3.btn": "Prove next",
+  "screens.B1.b3.tag.2": "{done} of {total} done",
+  "screens.D2.pin.0": "Prove next",
+  "screens.D2·low.pin.0": "Prove next",
+  "screens.F1·perm.b2.sub": "One photo per habit, every day. Checked by AI on your phone. The photo never leaves it.",
+  "screens.F3.b1.chip": "Habit proven",
+  "screens.F3.b2.title": "{habit} is in.",
+  "screens.F3.b4.text": "Today shows \"In progress\" until every habit is in.",
+  "screens.F3.pin.0": "Prove next habit",
+  "screens.C5.b1.o1.s": "After 3 failed checks of a photo, the group votes. Majority approves; a tie rejects.",
+  "screens.D2.b5.sub": "A photo failed 3 times. Your vote counts.",
+  "screens.N1.b1.rev1.s": "Iron Week · a photo failed 3 times · 41h left",
+  "screens.N1.b2.ng1.s": "Iron Week · a habit is still due",
+  "screens.I5.b1.r0.s": "Day kept · 21:04",
+  "screens.I5.b1.r1.t": "Habit proven"
 }

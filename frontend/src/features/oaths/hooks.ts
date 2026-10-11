@@ -13,7 +13,7 @@ import { useDraft } from "@/state/drafts";
 import type { OathDraft } from "@/state/drafts";
 import { useNow } from "../time";
 import { useDeviceOaths } from "./device";
-import { habitsReady, savedHabits, sharedProofObject } from "./habits";
+import { habitProofTexts, habitsReady, programIdOf, savedHabits } from "./habits";
 import { oathView } from "./model";
 import type { OathFacts, OathSource } from "./model";
 import { mockOaths } from "./mockStore";
@@ -73,10 +73,12 @@ const tzOffset = () => -new Date().getTimezoneOffset();
 export const oathActions = {
   async create(d: OathDraft): Promise<{ id: string; code: string | null }> {
     const source = createSource();
-    // Only saved habits (a name and a valid proof object) are created, and they share the Oath's one proof object.
-    if (!habitsReady(d)) throw new Error("Every habit needs a name and the same proof object");
+    // Only saved habits (a name and a proof object) are created. Each habit keeps its own proof object (stored with the
+    // Oath's details); the program's `object_id` is only a tag, the first of the eight among the habits' objects, else 0.
+    if (!habitsReady(d)) throw new Error("Every habit needs a name and a proof object");
     const habits = savedHabits(d).map((h) => h.name);
-    const proofObject = sharedProofObject(savedHabits(d))!;
+    const habitObjects = habitProofTexts(d);
+    const proofObject = Math.max(0, savedHabits(d).map((h) => programIdOf(h.entry)).find((id) => id >= 0) ?? 0);
     const name = d.name.trim();
     if (!name) throw new Error("An Oath name is required");
     const goal = habits.join(" · ");
@@ -89,17 +91,17 @@ export const oathActions = {
     }
     const { oath, started } = await getTx(source).createOath({
       objectId: proofObject, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal,
-      ...(source === "mock" ? { name, habits } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
+      ...(source === "mock" ? { name, habits, habitObjects } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
     });
     // flows.md: a solo Oath goes C7·ok → D2, with no Start step. On chain it already started in the create
     // transaction; the mock starts it here.
     if (d.isSolo && !started) await getTx(source).startOath(oath);
-    useDeviceOaths.getState().remember(oath, { name, reviewMode: d.reviewMode, goal, habits });
+    useDeviceOaths.getState().remember(oath, { name, reviewMode: d.reviewMode, goal, habits, habitObjects });
     const api = getApi();
     let code: string | null = null;
     try {
       const facts = await api.oaths.get(oath);
-      code = await api.oaths.register(facts, goal, habits);
+      code = await api.oaths.register(facts, goal, habits, habitObjects);
     } catch {
       // The chain create is already confirmed. Keep the success path; C8 can recover the invite and
       // retry the backend follow-ups without asking the wallet to create another Oath.

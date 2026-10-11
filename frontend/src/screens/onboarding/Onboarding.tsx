@@ -25,6 +25,7 @@ import { resetStack, useContinue, useGo, useSheetRoute } from "@/app/nav";
 import { useSigningFlow } from "@/app/useSigningFlow";
 import type { SignOutcome } from "@/app/useSigningFlow";
 import { useSession } from "@/state/session";
+import { useIntro } from "@/state/intro";
 import { useDevHold } from "@/state/dev";
 import { keeperAt } from "@/app/layout";
 import { liveConfigured } from "@/config/env";
@@ -50,14 +51,15 @@ export function A0() {
     if (signedIn && onboarded) reset("B1");
     else if (signedIn) reset("A4");
     else if (invite !== null && useMode.getState().mode === "live") resetStack(["A1", "A2"]);
+    else if (!useIntro.getState().seen) reset("A1·i");
     else reset("A1");
   }, [reset]);
   useEffect(() => {
     let cancelled = false;
-    const hydrated = new Promise<void>((resolve) => {
-      if (useSession.persist.hasHydrated()) resolve();
-      else useSession.persist.onFinishHydration(() => resolve());
-    });
+    const hydrated = Promise.all([useSession, useIntro].map((store) => new Promise<void>((resolve) => {
+      if (store.persist.hasHydrated()) resolve();
+      else store.persist.onFinishHydration(() => resolve());
+    })));
     void Promise.all([hydrated, new Promise((r) => setTimeout(r, SPLASH_MIN_MS))]).then(async () => {
       if (cancelled || useDevHold.getState().hold) return; // the dev deep link can hold the splash
       if (useMode.getState().mode === "live") {
@@ -82,7 +84,7 @@ export function A0() {
               void routeAfterGate();
             } else {
               useSession.getState().setInvite(null);
-              reset("A1");
+              reset(useIntro.getState().seen ? "A1" : "A1·i");
             }
           }} />
       </View>

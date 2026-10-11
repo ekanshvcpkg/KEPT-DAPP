@@ -14,11 +14,13 @@ interface DeviceOathState {
   reviewModes: Record<string, ReviewMode>;
   goals: Record<string, string>;
   habits: Record<string, string[]>;
+  /** What each habit is proven with (text, same order as `habits`). */
+  habitObjects: Record<string, string[]>;
   /** Invite codes for Oaths created here (the backend can look them up, but not list them). */
   codes: Record<string, string>;
-  /** Oath id → day index on which photo 1 passed. */
-  photo1: Record<string, number>;
-  /** Oath id → failed photo-2 checks today: [dayIndex, count]. */
+  /** Oath id → today's proven habits, as [dayIndex, habit positions] (what this device has seen pass; the server is the record). */
+  habitsDone: Record<string, [number, number[]]>;
+  /** `${oath id}:${habit}` → failed checks of that habit today: [dayIndex, count]. */
   fails: Record<string, [number, number]>;
   /** `${oathId}:${outcome}` keys of result screens already shown (D-29). */
   shownResults: string[];
@@ -28,16 +30,19 @@ interface DeviceOathState {
   known: string[];
   /** Oath id → the HP the Oath screen last showed (motion.md §2–3: damage / heal play from it). */
   seenHp: Record<string, number>;
-  remember(id: string, extra?: { name?: string; reviewMode?: ReviewMode; goal?: string; habits?: string[]; code?: string }): void;
+  remember(id: string, extra?: { name?: string; reviewMode?: ReviewMode; goal?: string; habits?: string[]; habitObjects?: string[]; code?: string }): void;
   rename(id: string, name: string): void;
-  passPhoto1(id: string, day: number): void;
-  failPhoto2(id: string, day: number): number;
+  /** A habit's photo passed on `day`: remembers it, and returns every habit proven that day. */
+  passHabit(id: string, day: number, habit: number): number[];
+  /** The habits the server says are proven on `day` (replaces what this device remembered). */
+  setHabitsDone(id: string, day: number, done: number[]): void;
+  failHabit(id: string, habit: number, day: number): number;
   markShown(key: string): void;
   markRecap(date: string): void;
   seeHp(id: string, hp: number): void;
 }
 
-const EMPTY = { names: {}, reviewModes: {}, goals: {}, habits: {}, codes: {}, photo1: {}, fails: {}, shownResults: [], recapShownOn: null, known: [], seenHp: {} };
+const EMPTY = { names: {}, reviewModes: {}, goals: {}, habits: {}, habitObjects: {}, codes: {}, habitsDone: {}, fails: {}, shownResults: [], recapShownOn: null, known: [], seenHp: {} };
 
 export const useDeviceOaths = create<DeviceOathState>()(persist((set, get) => ({
   ...EMPTY,
@@ -47,14 +52,22 @@ export const useDeviceOaths = create<DeviceOathState>()(persist((set, get) => ({
     ...(extra.reviewMode ? { reviewModes: { ...s.reviewModes, [id]: extra.reviewMode } } : {}),
     ...(extra.goal ? { goals: { ...s.goals, [id]: extra.goal } } : {}),
     ...(extra.habits ? { habits: { ...s.habits, [id]: extra.habits } } : {}),
+    ...(extra.habitObjects ? { habitObjects: { ...s.habitObjects, [id]: extra.habitObjects } } : {}),
     ...(extra.code ? { codes: { ...s.codes, [id]: extra.code } } : {}),
   })),
   rename: (id, name) => set((s) => ({ names: { ...s.names, [id]: name } })),
-  passPhoto1: (id, day) => set((s) => ({ photo1: { ...s.photo1, [id]: day } })),
-  failPhoto2: (id, day) => {
-    const prev = get().fails[id];
+  passHabit: (id, day, habit) => {
+    const prev = get().habitsDone[id];
+    const done = [...new Set([...(prev && prev[0] === day ? prev[1] : []), habit])].sort((a, b) => a - b);
+    set((s) => ({ habitsDone: { ...s.habitsDone, [id]: [day, done] } }));
+    return done;
+  },
+  setHabitsDone: (id, day, done) => set((s) => ({ habitsDone: { ...s.habitsDone, [id]: [day, [...done].sort((a, b) => a - b)] } })),
+  failHabit: (id, habit, day) => {
+    const key = `${id}:${habit}`;
+    const prev = get().fails[key];
     const count = prev && prev[0] === day ? prev[1] + 1 : 1;
-    set((s) => ({ fails: { ...s.fails, [id]: [day, count] } }));
+    set((s) => ({ fails: { ...s.fails, [key]: [day, count] } }));
     return count;
   },
   markShown: (key) => set((s) => ({ shownResults: s.shownResults.includes(key) ? s.shownResults : [...s.shownResults, key] })),

@@ -220,16 +220,16 @@ export function H3() {
   if (!b || !v) return <Screen bar={<NavBar onBack={back} title="" />}><Skeleton height={200} /></Screen>;
   const me = v.members[v.me]!;
   const k = keeperLines("H3")[0]!;
-  const photos = me.facts.proofToday === "photo1" ? 1 : me.pendingToday ? 0 : 2;
+  const photos = me.pendingToday ? 0 : 1;
   const share = b.remaining > 0 ? b.pool / BigInt(b.remaining) : 0n;
   return (
     <Screen bar={<NavBar onBack={back} title={b.name} {...(v.life === "active" ? { right: t("screens.D2.nav.right", { day: v.dayNumber, length: b.numDays }) } : {})} />}>
       <Title heading={t("screens.H3.b0.title", { n: b.remaining, total: b.entrants })} />
       {v.life === "waiting" ? <Banner tone="vio" icon="weather-night" title={startsTitle(v.secondsToStart ?? 0)} sub={t("additions.core.startsIn", { time: shortDuration(v.secondsToStart ?? 0) })} /> : null}
       {v.life === "active" ? (
-        <OathCard icon={objectIcon(b.objectId)} name={t("screens.H3.b1.name")} meta={t("screens.H3.b1.meta", { object: objectName(b.objectId) })}
-          tags={[{ text: t("screens.H3.b1.tag.0", { n: photos }), icon: "camera-outline", ...(photos === 2 ? { tone: "g" as const } : {}) }, { text: t("screens.H3.b1.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" }]}
-          {...(me.pendingToday ? { button: { label: t("screens.H3.b1.btn"), kind: "p" as const, icon: "camera" as const, onPress: () => go(photos === 1 ? "F4" : "F1", { id: v.facts.id }) } } : {})} />
+        <OathCard icon={objectIcon(b.objectId)} name={t("screens.H3.b1.name")} meta={t("additions.proof.bountyMeta", { object: objectName(b.objectId) })}
+          tags={[{ text: t("additions.proof.bountyTag", { n: photos }), icon: "camera-outline", ...(photos === 1 ? { tone: "g" as const } : {}) }, { text: t("screens.H3.b1.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" }]}
+          {...(me.pendingToday ? { button: { label: t("screens.H3.b1.btn"), kind: "p" as const, icon: "camera" as const, onPress: () => go("F1", { id: v.facts.id, habit: 0 }) } } : {})} />
       ) : null}
       <ScreenKeeper id="H3" lines={[k]} />
       {b.recentlyOut.length ? <RowList label={t("screens.H3.b3.label")} rows={b.recentlyOut.map((o) => ({

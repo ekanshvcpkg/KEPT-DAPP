@@ -15,6 +15,7 @@ import { color } from "@/theme";
 import { M2 } from "@/screens/M2";
 import { PlusSheet } from "@/screens/sheets/PlusSheet";
 import { A0, A1, A1m, A2, A2e, A2s, A3, A3no, A4 } from "@/screens/onboarding/Onboarding";
+import { A1i } from "@/screens/onboarding/Intro";
 import { RecapSheet, TodayTab } from "@/screens/today/Today";
 import { C1, C2, C3, C4, C5, C6, C7, C7ok, C8 } from "@/screens/create/Create";
 import { C7fail, C7no, M3, M4 } from "@/screens/shared/Signing";
@@ -44,7 +45,7 @@ const Tab = createBottomTabNavigator();
 
 type StackId = Exclude<DesignId, "B1" | "D0" | "H1" | "I1" | "B2" | "B3" | "B4">;
 const BUILT: Record<StackId, ComponentType> = {
-  A0, A1, "A1·m": A1m, A2, "A2·s": A2s, "A2·e": A2e, A3, "A3·no": A3no, A4, M2, "+": PlusSheet,
+  A0, "A1·i": A1i, A1, "A1·m": A1m, A2, "A2·s": A2s, "A2·e": A2e, A3, "A3·no": A3no, A4, M2, "+": PlusSheet,
   B5: RecapSheet,
   C1, C2, C3, C4, C5, C6, C7, "C7·ok": C7ok, "C7·no": C7no, "C7·fail": C7fail, C8,
   D1, "D1·m": D1m, "D1·x": D1x, "D1·xs": D1xs, "D1·go": D1go, D2, "D2·low": D2, D3: D2, D4, D5,

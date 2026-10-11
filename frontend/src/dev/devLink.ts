@@ -96,7 +96,7 @@ const SHOTS: Partial<Record<DesignId, Shot>> = {
 };
 
 const TODAY_STATES = new Set<string>(["B2", "B3", "B4"]);
-const ONBOARDING = new Set<string>(["A0", "A1", "A1·m", "A2", "A2·s", "A2·e", "A3", "A3·no", "A4"]);
+const ONBOARDING = new Set<string>(["A0", "A1·i", "A1", "A1·m", "A2", "A2·s", "A2·e", "A3", "A3·no", "A4"]);
 /** The prototype's Bounty draft (K1–K5). */
 const SAMPLE_BOUNTY = { name: "Dawn Pages", message: "Read before your phone. 14 mornings.", link: "dawnpages.xyz" };
 /** The prototype's "You" avatar (reference/kept-kit.js › P.Y). */
@@ -146,7 +146,7 @@ function openDevLink(url: string): boolean {
   if (Number(q.cards) > 0) mockOaths.addDueForDev(W, Math.min(20, Number(q.cards)));
   // Results and the recap are moments shown once: mark them seen so they don't open over the target.
   const ids = mockOaths.list(W).map((o) => o.id);
-  useDeviceOaths.setState({ shownResults: ids.flatMap((o) => RESULT_SCREENS.map((k) => `${o}:${k}`)), recapShownOn: new Date(clock.now()).toDateString(), photo1: {}, fails: {}, seenHp: {} });
+  useDeviceOaths.setState({ shownResults: ids.flatMap((o) => RESULT_SCREENS.map((k) => `${o}:${k}`)), recapShownOn: new Date(clock.now()).toDateString(), habitsDone: {}, fails: {}, seenHp: {} });
 
   const route = (d: DesignId, p?: Params) => { const [name, params] = target(d, p); return { name, params }; };
   // Today's states (B2–B4) are the B1 tab on another scenario.

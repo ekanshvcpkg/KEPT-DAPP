@@ -27,7 +27,7 @@ import { oathActions, useOath } from "@/features/oaths/hooks";
 import { oathView } from "@/features/oaths/model";
 import type { OathView } from "@/features/oaths/model";
 import { nowSeconds } from "@/features/time";
-import { listNames, memberColor, memberInitial, memberName, objectIcon, reviewText, skrWhole } from "@/features/oaths/present";
+import { listNames, memberColor, memberInitial, memberName, oathIcon, reviewText, skrWhole } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useSession } from "@/state/session";
 import { missCost } from "@kept/engine";
@@ -230,7 +230,7 @@ export function E2() {
     <Screen bar={<NavBar onBack={back} title={t("screens.E2.nav.title")} />} bottomInset={pinned(1)}
       pinned={<Button kind="l" icon="draw-pen" label={t("screens.E2.pin.0", { amount: skrWhole(f.stake) })} onPress={() => go("E2·s", { id, code })} />}>
       <BodyText mono text={t("screens.E2.b0.text", { name: cName.toUpperCase() })} />
-      <OathCard icon={objectIcon(f.objectId)} name={f.name}
+      <OathCard icon={oathIcon(f)} name={f.name}
         meta={t("screens.E2.b1.meta", { name: cName, n: f.numDays, review: reviewText(f.reviewMode) })}
         {...(f.goal ? { line: t("screens.E2.b1.line", { goal: f.goal }) } : {})}
         tags={[{ text: t("screens.E2.b1.tag.0", { amount: skrWhole(f.stake) }), icon: "sack", tone: "lime" }, { text: t("screens.E2.b1.tag.1", { name: cName }), icon: "flag-checkered" }]}

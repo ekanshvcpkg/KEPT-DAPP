@@ -8,7 +8,9 @@ import type { IconName } from "@/components/primitives";
 import { formatSkr } from "@/lib/format";
 import { nowSeconds } from "@/features/time";
 import type { GestureLabel } from "@/api/types";
-import type { MemberView, ReviewMode } from "./model";
+import { habitsOf } from "./model";
+import type { MemberView, OathFacts, ReviewMode } from "./model";
+import { objectIconOfText, objectNameOfText } from "@/features/objects/proof";
 import { shortWallet } from "./names";
 
 export const skrText = (units: bigint, sign = false) => formatSkr(units, sign ? { sign: true } : {});
@@ -38,6 +40,11 @@ export function dayList(days: number[]): string {
 
 export const objectIcon = (objectId: number) => (OBJECTS[objectId]?.icon ?? OBJECTS[0].icon) as IconName;
 export const objectName = (objectId: number) => t(`common.objects.${OBJECTS[objectId]?.icon ?? OBJECTS[0].icon}` as CopyKey);
+
+/** An Oath's icon: that of its first habit's proof object. */
+export const oathIcon = (f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): IconName => objectIconOfText(habitsOf(f)[0]!.object);
+/** The objects an Oath's habits are proven with, each once: "Dumbbell · Book". */
+export const oathObjects = (f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): string => [...new Set(habitsOf(f).map((h) => objectNameOfText(h.object)))].join(" · ");
 
 export const reviewText = (m: ReviewMode) => t(m === "ai" ? "screens.C5.b1.o0.t" : "screens.C5.b1.o1.t");
 

@@ -18,7 +18,7 @@ test("production application mounts every V4 route and enforces auth before depe
       ["POST", "/bounty/1/challenge"], ["POST", "/bounty/1/start"], ["POST", "/bounty/1/proof"],
       ["GET", "/identity/11111111111111111111111111111111"],
       ["GET", "/reputation/11111111111111111111111111111111"],
-      ["POST", "/api/proof"], ["POST", "/api/proof/start"], ["POST", "/api/proof/challenge"],
+      ["POST", "/api/proof"], ["POST", "/api/proof/start"], ["POST", "/api/proof/challenge"], ["POST", "/api/proof/habit"],
       ["POST", "/api/nudges"], ["POST", "/api/reviews/1"],
       ["GET", "/api/oaths/11111111111111111111111111111111/reviews"],
     ]) {

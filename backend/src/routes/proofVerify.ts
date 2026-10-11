@@ -21,7 +21,7 @@ const startOfUtcDay = () => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); r
  * The image itself is never uploaded. A passing result returns a one-use ID for proof recording.
  */
 proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute(async (req: AuthedRequest, res) => {
-  const { proofHash, expectedObject, expectedGesture, oath, dayIndex } = req.body ?? {};
+  const { proofHash, expectedObject, expectedGesture, oath, dayIndex, habit } = req.body ?? {};
   const raw = req.body ?? {};
   if (typeof proofHash !== "string" || !HASH.test(proofHash) || typeof expectedObject !== "string" || typeof expectedGesture !== "string") {
     return res.status(400).json({ error: "Expected proofHash, expectedObject and expectedGesture from the on-device proof checker" });
@@ -36,8 +36,12 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     return res.status(400).json({ error: "oath and dayIndex must be sent together: an Oath address and a day from 0 to 255" });
   }
 
-  const session = withContext ? await findSession(oath, req.wallet, dayIndex) : null;
-  const context = withContext ? { oath, dayIndex, sessionId: session?.id ?? null } : {};
+  // One photo proves one habit: a check may name the habit it is for (0–7), so its failed tries are counted per habit.
+  if (habit !== undefined && (!withContext || !Number.isInteger(habit) || habit < 0 || habit > 7)) {
+    return res.status(400).json({ error: "habit must be a whole number from 0 to 7, sent with oath and dayIndex" });
+  }
+  const session = withContext && habit === undefined ? await findSession(oath, req.wallet, dayIndex) : null;
+  const context = withContext ? { oath, dayIndex, sessionId: session?.id ?? null, ...(habit !== undefined ? { habit } : {}) } : {};
   const row = await prisma.proofVerification.create({ data: { wallet: req.wallet, proofHash: proofHash.toLowerCase(), expectedObject, expectedGesture, ...context } });
   const used = await prisma.proofVerification.count({ where: { wallet: req.wallet, createdAt: { gte: startOfUtcDay() } } });
   if (used > DAILY_PHOTO_CHECKS) {
@@ -51,7 +55,9 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     status: pass ? "PASS" : "FAIL", objectPresent: verdict.objectPresent, objectConfidence: verdict.objectConfidence, gestureSeen: verdict.gestureSeen,
     gestureMatches: verdict.gestureMatches, looksLikeScreen: verdict.looksLikeScreenOrPrintout, reason: verdict.reason,
   } });
-  const failedChecks = withContext ? (session ? (await loadReviewFailures({ wallet: req.wallet, oath, dayIndex, session, object: expectedObject, gesture: expectedGesture })).length : 0) : undefined;
+  const failedChecks = habit !== undefined
+    ? await prisma.proofVerification.count({ where: { wallet: req.wallet, oath, dayIndex, habit, status: "FAIL" } })
+    : withContext ? (session ? (await loadReviewFailures({ wallet: req.wallet, oath, dayIndex, session, object: expectedObject, gesture: expectedGesture })).length : 0) : undefined;
   return res.json({ pass, verificationId: pass ? row.id : null, proofHash: row.proofHash, ...verdict, model: typeof raw.model === "string" ? raw.model.slice(0, 100) : "On-device models", ms: typeof raw.ms === "number" ? raw.ms : 0, checksLeft: Math.max(0, DAILY_PHOTO_CHECKS - used), failedChecks });
 }));
 

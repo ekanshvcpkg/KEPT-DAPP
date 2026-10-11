@@ -1,16 +1,79 @@
 {
  "$doc": "Routes the app has that design/flows.md doesn't (docs/DECISIONS.md D-80, D-91). scripts/gen-routes.mjs and __tests__/routes.test.ts apply them on top of flows.md › Route table.",
  "screens": [
-  { "id": "A1·m", "name": "Pick a mode", "after": "A1", "to": ["A2", "A4"] },
-  { "id": "E1·scan", "name": "Scan an invite QR", "after": "E1", "to": ["E2", "E3·code", "E3·late", "E3·in", "E3·elig", "E3·skr", "E1·code"] },
-  { "id": "E1·code", "name": "Type an invite code", "after": "E1·scan", "to": ["E2", "E3·code", "E3·late", "E3·in", "E3·elig", "E3·skr"] }
+  {
+   "id": "A1·i",
+   "name": "Intro",
+   "after": "A0",
+   "to": [
+    "A1",
+    "A1·m",
+    "A2"
+   ]
+  },
+  {
+   "id": "A1·m",
+   "name": "Pick a mode",
+   "after": "A1",
+   "to": [
+    "A2",
+    "A4"
+   ]
+  },
+  {
+   "id": "E1·scan",
+   "name": "Scan an invite QR",
+   "after": "E1",
+   "to": [
+    "E2",
+    "E3·code",
+    "E3·late",
+    "E3·in",
+    "E3·elig",
+    "E3·skr",
+    "E1·code"
+   ]
+  },
+  {
+   "id": "E1·code",
+   "name": "Type an invite code",
+   "after": "E1·scan",
+   "to": [
+    "E2",
+    "E3·code",
+    "E3·late",
+    "E3·in",
+    "E3·elig",
+    "E3·skr"
+   ]
+  }
  ],
  "edges": {
-  "A1": ["A1·m"],
-  "E1": ["E1·scan", "E1·code"],
-  "E3·code": ["E1·scan", "E1·code"],
-  "E3·late": ["E1·scan", "E1·code"],
-  "E3·in": ["E1·scan", "E1·code"],
-  "E3·elig": ["E1·scan", "E1·code"]
+  "A1": [
+   "A1·m"
+  ],
+  "E1": [
+   "E1·scan",
+   "E1·code"
+  ],
+  "E3·code": [
+   "E1·scan",
+   "E1·code"
+  ],
+  "E3·late": [
+   "E1·scan",
+   "E1·code"
+  ],
+  "E3·in": [
+   "E1·scan",
+   "E1·code"
+  ],
+  "E3·elig": [
+   "E1·scan",
+   "E1·code"
+  ],
+  "A0": [
+   "A1·i"
+  ]
  }
 }

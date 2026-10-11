@@ -16,7 +16,7 @@ beforeEach(() => { mockOaths.reset(); clock.reset(); scenario = "fresh"; });
 afterAll(() => clock.reset());
 
 describe("mock Oath loop", () => {
-  it("create → join → start → prove both photos → settle → claim", async () => {
+  it("create → join → start → prove the day → settle → claim", async () => {
     const { oath: id } = await tx.createOath({ objectId: 0, numDays: 3, stake: 1000n * SKR_UNIT, goalText: "lift", tzOffsetMinutes: 0, isSolo: false, reviewMode: "ai" });
     mockOaths.join(id, PEOPLE.riya.wallet);
     let o = await api.oaths.get(id);
@@ -30,12 +30,10 @@ describe("mock Oath loop", () => {
     let v = oathView(o, now(), MOCK_WALLET);
     expect(v.life).toBe("active");
     expect(v.dayNumber).toBe(1);
-    const c1 = await api.proof.challenge(o, 1, 0);
-    await expect(api.proof.submit(o, c1, "img")).resolves.toEqual({ status: "pass" });
-    expect(oathView(await api.oaths.get(id), now(), MOCK_WALLET).members[0]!.cells[0]).toBe("h");
-    const c2 = await api.proof.challenge(o, 2, 0, c1.gesture);
-    expect(c2.gesture).not.toBe(c1.gesture);
-    await api.proof.submit(o, c2, "img");
+    // One photo proves the day: a single-habit Oath is kept by its one habit's photo.
+    const c1 = await api.proof.challenge(o, 0, 0);
+    expect(c1).toMatchObject({ habit: 0, dayIndex: 0, object: "dumbbell" });
+    await expect(api.proof.submit(o, c1, "img")).resolves.toEqual({ status: "pass", dayKept: true });
     expect(oathView(await api.oaths.get(id), now(), MOCK_WALLET).members[0]!.cells[0]).toBe("k");
 
     for (let d = 0; d < 3; d++) clock.endDay(); // Riya (reliable) keeps the rest; we miss days 2–3
@@ -46,6 +44,30 @@ describe("mock Oath loop", () => {
     const { amount } = await tx.claim(id);
     expect(amount).toBe(v.claimable);
     expect(oathView(await api.oaths.get(id), now(), MOCK_WALLET).claimable).toBe(0n);
+  });
+
+  it("every habit has its own object and its own photo; the day is kept once all of them are in", async () => {
+    const { oath: id } = await tx.createOath({ objectId: 0, numDays: 3, stake: 1000n * SKR_UNIT, goalText: "lift · read", habits: ["lift", "read"], habitObjects: ["dumbbell", "kettlebell"], tzOffsetMinutes: 0, isSolo: true, reviewMode: "ai" });
+    await tx.startOath(id);
+    clock.endDay();
+    let o = await api.oaths.get(id);
+    expect(oathView(o, now(), MOCK_WALLET).habits.map((h) => [h.name, h.object, h.done])).toEqual([["lift", "dumbbell", false], ["read", "kettlebell", false]]);
+
+    const first = await api.proof.challenge(o, 1, 0); // any order: the second habit first
+    expect(first.object).toBe("kettlebell");
+    await expect(api.proof.submit(o, first, "img")).resolves.toEqual({ status: "pass", dayKept: false });
+    o = await api.oaths.get(id);
+    let v = oathView(o, now(), MOCK_WALLET);
+    expect(v.members[0]!.cells[0]).toBe("h"); // partly proven
+    expect(v.members[0]!.facts.proofToday).toBe("partial");
+    expect(v.habits.map((h) => h.done)).toEqual([false, true]);
+
+    const second = await api.proof.challenge(o, 0, 0, first.gesture);
+    expect(second.object).toBe("dumbbell");
+    await expect(api.proof.submit(o, second, "img")).resolves.toEqual({ status: "pass", dayKept: true });
+    v = oathView(await api.oaths.get(id), now(), MOCK_WALLET);
+    expect(v.members[0]!.cells[0]).toBe("k");
+    expect(v.habits.every((h) => h.done)).toBe(true);
   });
 
   it("scenarios seed the prototype's Today", async () => {

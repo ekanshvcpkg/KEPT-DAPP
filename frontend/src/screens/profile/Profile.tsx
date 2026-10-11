@@ -27,7 +27,7 @@ import { useIsDemo } from "@/state/mode";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { shortWallet } from "@/features/oaths/names";
-import { objectIcon, skrWhole } from "@/features/oaths/present";
+import { oathIcon, objectIcon, skrWhole } from "@/features/oaths/present";
 import { profileActions, useActivity, useBounties, useCreator, useMyProfile, usePerson, useStats, walletActions } from "@/features/queries";
 import { useSession } from "@/state/session";
 import { useSettings } from "@/state/settings";
@@ -93,7 +93,7 @@ function useShared(wallet: string | undefined): OathView[] {
 }
 const sharedRow = (go: ReturnType<typeof useGo>["go"]) => (v: OathView): RowProps => ({
   title: v.facts.name, sub: t("screens.I2.b2.r1.s", { day: v.dayNumber, length: v.facts.numDays }), value: t("screens.I2.b2.r1.r"),
-  leading: { kind: "icon", icon: objectIcon(v.facts.objectId) }, chevron: true, onPress: () => go("D2", { id: v.facts.id }),
+  leading: { kind: "icon", icon: oathIcon(v.facts) }, chevron: true, onPress: () => go("D2", { id: v.facts.id }),
 });
 
 // ── I2 / I2·p Someone's profile ──

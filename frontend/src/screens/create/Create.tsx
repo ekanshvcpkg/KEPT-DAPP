@@ -23,7 +23,7 @@ import { getApi, useApi } from "@/api";
 import { qk } from "@/api/queries";
 import { useGo, useParams } from "@/app/nav";
 import { oathActions, useOath } from "@/features/oaths/hooks";
-import { memberColor, memberInitial, memberName, objectName, reviewText, skrWhole } from "@/features/oaths/present";
+import { memberColor, memberInitial, memberName, reviewText, skrWhole } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { oathName } from "@/features/oaths/names";
 import { useDraft } from "@/state/drafts";
@@ -32,7 +32,9 @@ import { inviteUrl } from "@/config/env";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
-import { savedHabits, sharedProofObject } from "@/features/oaths/habits";
+import { habitProofTexts, savedHabits } from "@/features/oaths/habits";
+import { habitsOf } from "@/features/oaths/model";
+import { objectNameOfText } from "@/features/objects/proof";
 import { SigningScreen } from "../shared/Signing";
 
 const STEPS = 6;
@@ -132,8 +134,8 @@ export function C6() {
   const cost = skrWhole(missCost(stake));
   const rows = [
     { label: t("screens.C6.b1.row0.l"), value: t("screens.C6.b1.row0.v", { goal: savedHabits(draft).map((h) => h.name).join(" · ") }) },
-    // One proof object for the whole Oath (the program's `object_id`): every habit shares it.
-    { label: t("screens.C6.b1.row1.l"), value: objectName(sharedProofObject(savedHabits(draft)) ?? draft.objectId) },
+    // Each habit has its own proof object; the row lists them in the habits' order.
+    { label: t("screens.C6.b1.row1.l"), value: [...new Set(habitProofTexts(draft).map(objectNameOfText))].join(" · ") },
     { label: t("screens.C6.b1.row2.l"), value: t(`common.lengths.${LENGTHS.indexOf(draft.numDays)}` as CopyKey) },
     { label: t("screens.C6.b1.row3.l"), value: t("screens.C6.b1.row3.v", { amount: skrWhole(stake) }), color: color.lime.base },
     ...(draft.isSolo ? [] : [{ label: t("screens.C6.b1.row4.l"), value: reviewText(draft.reviewMode) }]),
@@ -207,7 +209,7 @@ export function C8() {
       try {
         const api = getApi();
         const next = current.goal
-          ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal])
+          ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal], habitsOf(current).map((h) => h.object))
           : (await api.invites.create(current.id)).code;
         if (next && active) {
           useDeviceOaths.getState().remember(current.id, { code: next });

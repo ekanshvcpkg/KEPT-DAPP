@@ -9,7 +9,7 @@ used before, go to Profile › Settings › **Restart demo** for the starting st
 
 | Time | Do | Say |
 |---|---|---|
-| 0:00 | Open KEPT. Tap **Get started** › **Try the demo** › **Looks like me**. | "KEPT is a habit bet with your friends. You swear an Oath, stake SKR, and prove it every day with two photos." |
+| 0:00 | Open KEPT. Tap **Get started** › **Try the demo** › **Looks like me**. | "KEPT is a habit bet with your friends. You swear an Oath, stake SKR, and prove each habit every day with one photo." |
 | 0:15 | On **Today**, point at the Iron Week card: Day 3/7, HP 90, "Photo 1 done", the countdown. | "Four friends, 1,000 SKR each. The bar is the Oath's HP: every miss costs it 20, every day heals 10. At zero the Oath breaks and everyone loses." |
 | 0:25 | Swipe the card sideways once, then back. | "Everything due today is one stack." |
 | 0:30 | Tap **Take photo 2**. Point the camera anywhere; tap the shutter. | "The app asks for an object and a hand sign, so you can't reuse an old photo. The check runs on the server; in Demo it's simulated." |

@@ -54,7 +54,7 @@ export function G1() {
       <Button kind="d" icon="close" label={t("screens.G1.pin.1")} disabled={busy} onPress={() => { void vote(false); }} />
     </>}>
       <Title heading={t("screens.G1.b0.title", { name: who })}
-        sub={t("screens.G1.b0.sub", { oath: view.facts.name, day: r.dayIndex + 1, object: objectName(r.objectId).toLowerCase(), gesture: gestureText(r.gesture) })} fs={28} />
+        sub={t("additions.proof.reviewSub", { oath: view.facts.name, day: r.dayIndex + 1, object: objectName(r.objectId).toLowerCase(), gesture: gestureText(r.gesture) })} fs={28} />
       {/* The photo itself needs the review route (P1-1); the frame shows the challenge until then. */}
       <ProofCamera state="review" object={objectIcon(r.objectId)} {...(gestureKey(r.gesture) ? { gesture: gestureKey(r.gesture)! } : {})} label={t("screens.G1.b1.label", { name: who })} height={300} />
       <ChipRow>

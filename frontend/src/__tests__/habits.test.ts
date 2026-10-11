@@ -1,11 +1,10 @@
-// C2's habit list rules, below the screen: what counts as a saved habit, what blocks Next, and that saving commits a
-// habit's name and proof object together.
+// C2's habit list rules, below the screen: what counts as a saved habit, what blocks Next, that every habit keeps its own
+// proof object, and that saving commits a habit's name and proof object together.
 import { OBJECTS } from "@kept/config";
 import { QUICK_PICK_OBJECTS } from "@/features/objects/catalog";
-import { habitEntries, habitPatch, habitProblem, habitsReady, proofConflict, removeHabit, saveHabit, savedHabits, sharedProofObject, switchAllHabits, validObjectId } from "@/features/oaths/habits";
+import { habitEntries, habitPatch, habitProblem, habitProofTexts, habitsReady, programIdOf, removeHabit, saveHabit, savedHabits, validObjectId } from "@/features/oaths/habits";
 
-const draft = (habits: string[], ids?: number[], entries?: string[]) => ({ habits, ...(ids ? { habitObjectIds: ids } : {}), ...(entries ? { habitObjectEntries: entries } : {}) });
-const BOOK = 1, PLANT = 5, YOGA = 7;
+const draft = (habits: string[], entries?: string[], ids?: number[]) => ({ habits, ...(entries ? { habitObjectEntries: entries } : {}), ...(ids ? { habitObjectIds: ids } : {}) });
 
 describe("what is a saved habit", () => {
   it("the empty placeholder is not a habit", () => {
@@ -16,70 +15,69 @@ describe("what is a saved habit", () => {
     expect(habitsReady(draft([""]))).toBe(false);
   });
 
-  it("needs a name AND a valid proof object", () => {
-    expect(savedHabits(draft(["read"], [BOOK]))).toEqual([{ name: "read", objectId: BOOK, entry: "book" }]);
+  it("needs a name AND a proof object", () => {
+    expect(savedHabits(draft(["read"], ["book"]))).toEqual([{ name: "read", entry: "book" }]);
     expect(savedHabits(draft(["read"]))).toEqual([]); // a name with no proof isn't saved
-    expect(savedHabits(draft(["read"], [-1]))).toEqual([]);
-    expect(savedHabits(draft(["read"], [8]))).toEqual([]); // the program has eight objects, 0 to 7
-    expect(savedHabits(draft(["read"], [1.5]))).toEqual([]);
-    expect(validObjectId(7)).toBe(true);
-    expect(validObjectId(8)).toBe(false);
-    expect(validObjectId(undefined)).toBe(false);
-    expect(habitProblem(draft(["read"], [-1]))).toBe("unfinished");
-    expect(habitsReady(draft(["read"], [-1]))).toBe(false);
-    expect(habitsReady(draft(["read"], [BOOK]))).toBe(true);
+    expect(savedHabits(draft(["read"], [""]))).toEqual([]);
+    expect(savedHabits(draft(["read"], ["not_an_object"]))).toEqual([]);
+    expect(habitProblem(draft(["read"], [""]))).toBe("unfinished");
+    expect(habitsReady(draft(["read"], [""]))).toBe(false);
+    expect(habitsReady(draft(["read"], ["book"]))).toBe(true);
   });
 
-  it("every habit shares the Oath's one proof object (the program has a single object_id)", () => {
-    expect(sharedProofObject([{ objectId: BOOK }, { objectId: BOOK }])).toBe(BOOK);
-    expect(sharedProofObject([{ objectId: BOOK }, { objectId: PLANT }])).toBeNull();
-    expect(sharedProofObject([])).toBeNull();
-    expect(habitProblem(draft(["read", "water"], [BOOK, PLANT]))).toBe("mixed");
-    expect(habitsReady(draft(["read", "water"], [BOOK, PLANT]))).toBe(false);
-    expect(habitsReady(draft(["read", "water"], [BOOK, BOOK]))).toBe(true);
+  it("a draft saved before entries still reads: the program id names the object", () => {
+    expect(savedHabits(draft(["read"], undefined, [1]))).toEqual([{ name: "read", entry: "book" }]);
+    expect(savedHabits(draft(["read"], undefined, [8]))).toEqual([]);
+    expect(validObjectId(7)).toBe(true);
+    expect(validObjectId(8)).toBe(false);
+  });
+
+  it("every habit has its own proof object: going to the gym with a dumbbell and reading with a book is fine", () => {
+    const d = draft(["go to the gym", "read 10 pages"], ["dumbbell", "book"]);
+    expect(habitProblem(d)).toBeNull();
+    expect(habitsReady(d)).toBe(true);
+    expect(habitProofTexts(d)).toEqual(["dumbbell", "book"]);
+  });
+
+  it("any catalog object is a proof object, not only the program's eight", () => {
+    const d = draft(["swing", "practise", "sketch"], ["kettlebell", "sheet_music", "sketchbook"]);
+    expect(habitsReady(d)).toBe(true);
+    expect(habitProofTexts(d)).toEqual(["kettlebell", "sheet music", "sketchbook"]);
   });
 
   it("at most eight habits", () => {
     const names = Array.from({ length: 9 }, (_, i) => `habit ${i}`);
-    expect(habitsReady(draft(names, names.map(() => BOOK)))).toBe(false);
-    expect(habitsReady(draft(names.slice(0, 8), names.slice(0, 8).map(() => BOOK)))).toBe(true);
+    expect(habitsReady(draft(names, names.map(() => "book")))).toBe(false);
+    expect(habitsReady(draft(names.slice(0, 8), names.slice(0, 8).map(() => "book")))).toBe(true);
   });
 });
 
-describe("saving, removing and switching", () => {
-  it("Save commits the name and the proof object together, and the Oath's object follows the list", () => {
-    const patch = saveHabit(draft([""]), null, { name: "  read 10 pages ", objectId: BOOK, entry: "book" });
-    expect(patch).toEqual({ habits: ["read 10 pages"], habitObjectIds: [BOOK], habitObjectEntries: ["book"], objectId: BOOK, objectEntry: "book" });
-    // Editing replaces the habit in place; the others are untouched.
-    const two = { ...patch, habits: [...patch.habits, "stretch"], habitObjectIds: [BOOK, BOOK], habitObjectEntries: ["book", "book"] };
-    const edited = saveHabit(two, 1, { name: "stretch for 5 minutes", objectId: BOOK, entry: "book" });
-    expect(edited.habits).toEqual(["read 10 pages", "stretch for 5 minutes"]);
-    expect(edited.habitObjectIds).toEqual([BOOK, BOOK]);
+describe("saving and removing", () => {
+  it("Save commits the name and the proof object together", () => {
+    const patch = saveHabit(draft([""]), null, { name: "  read 10 pages ", entry: "book" });
+    expect(patch).toEqual({ habits: ["read 10 pages"], habitObjectIds: [1], habitObjectEntries: ["book"], objectId: 1, objectEntry: "book" });
+    // Editing replaces the habit in place; the others are untouched, and each keeps its own object.
+    const two = saveHabit({ habits: patch.habits, habitObjectIds: patch.habitObjectIds, habitObjectEntries: patch.habitObjectEntries }, null, { name: "lift", entry: "dumbbell" });
+    expect(two.habits).toEqual(["read 10 pages", "lift"]);
+    expect(two.habitObjectEntries).toEqual(["book", "dumbbell"]);
+    const edited = saveHabit(two, 1, { name: "lift for 20 minutes", entry: "kettlebell" });
+    expect(edited.habits).toEqual(["read 10 pages", "lift for 20 minutes"]);
+    expect(edited.habitObjectEntries).toEqual(["book", "kettlebell"]);
   });
 
-  it("a saved habit keeps the catalog entry it was picked from", () => {
-    const p = saveHabit(draft([""]), null, { name: "yoga", objectId: YOGA, entry: "yoga_mat" });
-    expect(p.habitObjectEntries).toEqual(["yoga_mat"]);
-    expect(p.objectId).toBe(YOGA);
+  it("the program's object_id is only a tag: the first of the eight among the habits' objects, else 0", () => {
+    expect(saveHabit(draft([""]), null, { name: "swing", entry: "kettlebell" })).toMatchObject({ habitObjectIds: [-1], objectId: 0 });
+    const d = saveHabit(draft([""]), null, { name: "swing", entry: "kettlebell" });
+    expect(saveHabit(d, null, { name: "read", entry: "book" })).toMatchObject({ habitObjectIds: [-1, 1], objectId: 1 });
+    expect(programIdOf("yoga_mat")).toBe(7);
+    expect(programIdOf("kettlebell")).toBe(-1);
+    expect(programIdOf(null)).toBe(-1);
   });
 
   it("removing the last habit leaves the empty placeholder, not a saved habit", () => {
-    const p = removeHabit(draft(["read"], [BOOK], ["book"]), 0);
+    const p = removeHabit(draft(["read"], ["book"]), 0);
     expect(p).toMatchObject({ habits: [""], habitObjectIds: [], habitObjectEntries: [] });
-    expect(savedHabits({ habits: p.habits, habitObjectIds: p.habitObjectIds })).toEqual([]);
-  });
-
-  it("a different proof object for one habit is a conflict, and switching moves every habit", () => {
-    const d = draft(["read", "write"], [BOOK, BOOK], ["book", "book"]);
-    expect(proofConflict(habitEntries(d), BOOK)).toBeNull();
-    expect(proofConflict(habitEntries(d), PLANT)).toBe(BOOK);
-    expect(proofConflict([], PLANT)).toBeNull(); // the only habit may name any object
-    const all = switchAllHabits(d, 0, { name: "read", objectId: PLANT, entry: "plant" });
-    expect(all.habitObjectIds).toEqual([PLANT, PLANT]);
-    expect(all.objectId).toBe(PLANT);
-    expect(habitsReady({ habits: all.habits, habitObjectIds: all.habitObjectIds })).toBe(true);
-    // Switching while adding a new habit includes it.
-    expect(switchAllHabits(d, null, { name: "walk", objectId: PLANT, entry: "plant" }).habits).toEqual(["read", "write", "walk"]);
+    expect(savedHabits({ habits: p.habits, habitObjectEntries: p.habitObjectEntries })).toEqual([]);
   });
 
   it("habitPatch of nothing is the draft's blank state", () => {
@@ -93,7 +91,5 @@ describe("quick picks", () => {
     const ids = QUICK_PICK_OBJECTS.map((id) => OBJECTS.findIndex((o) => o.id === id));
     expect(ids.every((i) => i >= 0)).toBe(true);
     expect([...ids].sort((a, b) => a - b)).toEqual(ids);
-    // The other two stay reachable by search.
-    expect(OBJECTS.map((o) => o.id).filter((id) => !(QUICK_PICK_OBJECTS as readonly string[]).includes(id))).toEqual(["skipping_rope", "yoga_mat"]);
   });
 });

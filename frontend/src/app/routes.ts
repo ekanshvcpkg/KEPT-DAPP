@@ -19,7 +19,7 @@ export type Presentation = "tab" | "onboarding" | "sheet" | "moment" | "signing"
 const TABS = ["B1", "D0", "H1", "I1"];
 /** Today's other states are B1 itself (screens.md › B): going to one opens the Today tab. */
 export const TAB_STATES: Partial<Record<string, string>> = { B2: "B1", B3: "B1", B4: "B1" };
-const ONBOARDING = ["A0", "A1", "A2", "A2·s", "A2·e", "A3", "A3·no", "A4"];
+const ONBOARDING = ["A0", "A1·i", "A1", "A2", "A2·s", "A2·e", "A3", "A3·no", "A4"];
 /** A1·m is the app's mode picker (D-80, not in the design). */
 const SHEETS = ["+", "B5", "D1·x", "M3", "M4", "W2", "A1·m"];
 /** flows.md: fade, no back gesture until settled. */
