@@ -8,7 +8,12 @@ import { supplement } from "./supplement";
 export { tokens };
 export { metrics } from "./metrics";
 export { keeperRig } from "./keeperRig";
-export const color = { ...tokens.color, extra: supplement.color };
+/**
+ * Owner-approved token amendments (DECISIONS › Token amendments): design/tokens.json is read-only, so a
+ * changed value is applied here, over the generated tokens, for components and type styles alike.
+ */
+const palette = { ...tokens.color, text: { ...tokens.color.text, ...supplement.amend.text } };
+export const color = { ...palette, extra: supplement.color };
 export const space = tokens.space;
 export const radius = tokens.radius;
 export const z = tokens.z;
@@ -37,7 +42,7 @@ export type TypeName = keyof typeof tokens.type;
 const DEFAULT_TRACKING = -0.2;
 
 function resolveColor(path: string): string {
-  const v = path.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], tokens.color);
+  const v = path.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], palette);
   if (typeof v !== "string") throw new Error(`Unknown colour token ${path}`);
   return v;
 }

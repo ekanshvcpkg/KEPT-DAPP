@@ -13,6 +13,10 @@ All six questions were answered on 2026-10-09 (D-6, D-9, D-10, D-14, D-16, D-24)
 4. **Claim and results numbers:** J1, L1–L6 and D4 show **what the chain will actually pay**. Engine numbers appear only on the live Oath views (B1, D2, B5), labelled as estimates.
 5. **Oath names:** generated from object + length (e.g. "Iron Week"). The creator can **rename** while the Oath is Open.
 
+## Token amendments (owner-approved)
+`design/tokens.json` is read-only, so changed values live in `frontend/src/theme/supplement.ts › amend` and are applied over the generated tokens in `theme/index.ts` (components and type styles alike).
+1. **`text.tertiary` `#6A6A6A` → `#808080`** (owner, 2026-10-11; docs/notes/ACCESSIBILITY.md). Contrast for notes, captions, mono labels and hints: 3.4 → 4.7:1 on `bg.app` `#131313` (passes WCAG AA 4.5:1), 3.2 → 4.3:1 on `surface.1` `#1C1C1C` and 2.9 → 4.0:1 on `surface.2` `#222222` (still under 4.5:1 on cards). `text.secondary` `#8A8A8A` is unchanged, so the two stay distinct.
+
 ## Copy additions (owner-approved)
 These strings aren't in `design/copy.json`. They go in `frontend/src/copy/additions.json`, which `t()` reads alongside copy.json. Each one is listed here and nowhere else:
 - `"Starts tonight at midnight"`: D1 / D2 / B1 state between Start and day 1 (amendment 1).
