@@ -117,7 +117,7 @@ export function banner(i: 0 | 1 | 2 | 3 | 4) {
 // moves; on Today that more than doubled the frame time (16 → 38 ms, emulator). Black blurred drop shadows
 // barely show on the near-black background, so they're left out; insets, rings (no blur) and coloured
 // glows (the lime ones) stay.
-export type ShadowName = keyof typeof tokens.shadow;
+type ShadowName = keyof typeof tokens.shadow;
 const LAYERS = /,(?![^(]*\))/;
 const BLACK = /rgba\(\s*0\s*,\s*0\s*,\s*0\s*,|#000(?:000)?\b|\bblack\b/i;
 /** A box-shadow list without its black blurred outer layers (D-84). */

@@ -20,7 +20,7 @@ import { keeperFace, keeperFrame, rotAbout } from "./rig";
 import type { HandPose, KeeperAnimName, KeeperPropName } from "./rig";
 import type { KeeperMood } from "@/copy";
 
-export interface KeeperDrawingProps {
+interface KeeperDrawingProps {
   mood: KeeperMood;
   prop?: KeeperPropName;
   anim?: KeeperAnimName;

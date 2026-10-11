@@ -86,7 +86,7 @@ export function Bell({ count, onPress }: { count: number; onPress?: () => void }
 }
 
 // ── AppHeader (tab screens) ── KeeperMark · title · BalanceChip · Bell · optional extra.
-export interface AppHeaderProps {
+interface AppHeaderProps {
   title: string;
   /** Pre-formatted SKR amount (formatSkr at the edge). */
   balance: string;
@@ -140,7 +140,7 @@ function Step({ state }: { state: "done" | "current" | "next" }) {
 }
 
 // ── NavBar (flow screens) ── back/close · title or StepBar · mono right label · optional KeeperMark.
-export interface NavBarProps {
+interface NavBarProps {
   onBack: () => void;
   title?: string;
   steps?: [current: number, total: number];

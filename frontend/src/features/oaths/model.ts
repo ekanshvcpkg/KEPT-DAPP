@@ -65,7 +65,7 @@ export interface OathFacts {
 export type Life = "open" | "waiting" | "active" | "over" | "broken" | "settled" | "cancelled";
 
 /** DayMemberGrid cell codes (components/content/Oath.tsx › CellState). */
-export type Cell = "k" | "m" | "p" | "h" | "r" | "x" | "f";
+type Cell = "k" | "m" | "p" | "h" | "r" | "x" | "f";
 
 export interface MemberView {
   index: number;

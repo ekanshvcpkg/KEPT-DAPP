@@ -28,7 +28,7 @@ import { PinnedActions } from "../actions";
 import { momentSettleMs, pinnedDelay, useBackBlockedFor } from "./moment";
 import { ScreenSkeleton } from "./ScreenSkeleton";
 
-export interface ScreenProps {
+interface ScreenProps {
   /** NavBar or AppHeader element; omitted for Plain layouts (A0, A1). */
   bar?: ReactNode;
   children?: ReactNode;

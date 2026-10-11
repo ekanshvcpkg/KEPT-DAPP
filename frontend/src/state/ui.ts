@@ -8,9 +8,9 @@ import type { FxKind } from "@/components/chrome";
  * The haptic of an FX moment (motion.md §5–8): kept = success at 0 (F5), payout = success at 200,
  * broken = error then heavy, comeback = success then medium (L6). Defaults from the kind.
  */
-export type FxFeel = "kept" | "payout" | "broken" | "comeback" | "none";
+type FxFeel = "kept" | "payout" | "broken" | "comeback" | "none";
 
-export interface UiState {
+interface UiState {
   /** `route`: the key of the screen that played it; the layer clears when that screen isn't current. */
   fx: { kind?: FxKind; feel: FxFeel; id: number; route?: string } | null;
   devMenu: boolean;

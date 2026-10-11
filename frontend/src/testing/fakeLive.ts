@@ -11,7 +11,7 @@ import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 const DER_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
 
-export interface FakeWallet {
+interface FakeWallet {
   /** The wallet's account, base58. */
   address: string;
   authorize: jest.Mock;
@@ -44,7 +44,7 @@ export function resetWallet(): void {
   jest.mocked(transact).mockImplementation((() => Promise.reject(new Error("MWA is not available in tests"))) as unknown as typeof transact);
 }
 
-export interface FakeBackend {
+interface FakeBackend {
   fetch: jest.Mock;
   /** "METHOD /path" of every request, in order. */
   calls: string[];

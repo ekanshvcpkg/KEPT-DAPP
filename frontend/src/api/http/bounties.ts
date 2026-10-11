@@ -17,7 +17,7 @@ import type { HttpClient } from "./client";
 const CATEGORY: Category[] = ["Fitness", "Reading", "Hydration", "Music", "Outdoors", "Outdoors", "Fitness", "Mind"];
 const RECENTLY_OUT = 5;
 /** Live Bounty ids carry a prefix so they can't collide with an Oath address. */
-export const liveBountyId = (id: number) => `bounty-${id}`;
+const liveBountyId = (id: number) => `bounty-${id}`;
 const backendId = (id: string) => {
   const n = Number(id.replace(/^bounty-/, ""));
   if (!Number.isInteger(n) || n < 0) throw new ApiError("NOT_FOUND", `Bounty ${id} not found`, 404);
@@ -42,7 +42,7 @@ function toBounty(b: View, out: BountyFacts["recentlyOut"]): BountyFacts {
 }
 
 /** My entry as an Oath (D-53): the backend's daysKept is the same day bitmask the app uses. */
-export function bountyOath(b: View, me: Entry, wallet: string): OathFacts {
+function bountyOath(b: View, me: Entry, wallet: string): OathFacts {
   const paid = b.status === "PAID";
   return {
     id: liveBountyId(b.id), source: "chain", oathId: null, creator: wallet, name: b.title, goal: null,

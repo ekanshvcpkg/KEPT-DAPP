@@ -1,7 +1,7 @@
 // Every build-time setting in one place. Expo inlines `process.env.EXPO_PUBLIC_*` only when read with
 // this exact dot syntax, so each one is spelled out. The default is the hosted Devnet backend. `||`, not
 // `??`: an empty `EXPO_PUBLIC_API_URL=` line in a .env would otherwise leave Live with no server at all.
-export type Cluster = "devnet" | "testnet" | "mainnet-beta";
+type Cluster = "devnet" | "testnet" | "mainnet-beta";
 
 const cluster = (process.env.EXPO_PUBLIC_CLUSTER ?? "devnet") as Cluster;
 

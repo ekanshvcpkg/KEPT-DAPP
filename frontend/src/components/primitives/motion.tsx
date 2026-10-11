@@ -215,7 +215,7 @@ export function Shake({ trigger, children, style }: { trigger: number; children:
 export const LOOP_BUDGET_MS = 10_000;
 export const loopCycles = (periodMs: number) => Math.max(1, Math.round(LOOP_BUDGET_MS / periodMs));
 
-export type LoopKind = "beat" | "breath" | "float" | "spin" | "ping" | "glow";
+type LoopKind = "beat" | "breath" | "float" | "spin" | "ping" | "glow";
 /**
  * Ambient loops: beat (opacity 1 → .4), breath (−4 dp), float (−9 dp), spin (360°),
  * ping (scale 1 → 1.7, opacity .7 → 0), glow (scale out, fading). All but spin stop after LOOP_BUDGET_MS.
@@ -328,7 +328,7 @@ export function CountText({ text, from, ...rest }: { text: string; from?: string
   return <Text {...rest} style={[{ fontVariant: ["tabular-nums"] } as TextStyle, ...(Array.isArray(rest.style) ? rest.style : rest.style ? [rest.style] : [])]}>{shown}</Text>;
 }
 
-export interface PressScaleProps extends Omit<PressableProps, "style" | "children"> {
+interface PressScaleProps extends Omit<PressableProps, "style" | "children"> {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
   /** Scale while pressed (.98 buttons, .92–.95 round icon buttons). */

@@ -5,7 +5,7 @@ import { stakeUnits } from "@kept/config";
 import type { DayMark, OathState, OathTerms } from "./oath";
 import { simulate } from "./oath";
 
-export interface Scenario {
+interface Scenario {
   name: string;
   description: string;
   terms: OathTerms;

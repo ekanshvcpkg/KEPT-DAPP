@@ -10,14 +10,14 @@ import { createContext, isValidElement, useCallback, useContext, useEffect, useM
 import type { ReactNode } from "react";
 import { NavigationContext } from "@react-navigation/native";
 import { create } from "zustand";
-import type { KeeperLine, KeeperMood } from "@/copy";
+import type { KeeperLine } from "@/copy";
 import { metrics } from "@/theme";
 import { keeperAt, layoutOf } from "@/app/layout";
 import type { KeeperPlacementProps } from "./KeeperUI";
 import { KeeperNote, KeeperPlacement } from "./KeeperUI";
 import type { KeeperAnimName } from "./rig";
 
-export type ScreenKind = "tab" | "flow" | "sheet";
+type ScreenKind = "tab" | "flow" | "sheet";
 
 /** Lines the user has opened this session (`screen:line`): their mark stops knocking. */
 const useSeen = create<{ seen: Record<string, true>; mark(k: string): void }>()((set) => ({
@@ -27,7 +27,7 @@ const useSeen = create<{ seen: Record<string, true>; mark(k: string): void }>()(
 /** Test hook: forget what was read. */
 export const __resetSeenKeeperLines = () => useSeen.setState({ seen: {} });
 
-export interface ScreenKeeperState {
+interface ScreenKeeperState {
   kind: ScreenKind;
   /** The screen's own line(s); null when it has none (tabs then fall back to the idle line). */
   lines: KeeperLine[] | null;
@@ -112,7 +112,7 @@ export function useKeeperHost(id: string | undefined, kind: ScreenKind, idle: Ke
 const sameLines = (a: KeeperLine[] | null, b: KeeperLine[] | null) =>
   a === b || (!!a && !!b && a.length === b.length && a.every((l, i) => l.line === b[i]!.line && l.mood === b[i]!.mood));
 
-export interface ScreenKeeperProps extends Omit<KeeperPlacementProps, "mood" | "line" | "lines"> {
+interface ScreenKeeperProps extends Omit<KeeperPlacementProps, "mood" | "line" | "lines"> {
   /** The design id whose placement to use (app/layout.gen.json). */
   id: string;
   /** One or more lines; several cycle (bubble "k/n ›" inline, the note's action pill otherwise). */
@@ -155,4 +155,3 @@ export function isNoteOnlyKeeper(node: ReactNode, kind: ScreenKind): boolean {
   return isValidElement(node) && node.type === ScreenKeeper && !keeperIsInline((node.props as ScreenKeeperProps).id, kind);
 }
 
-export type { KeeperMood };

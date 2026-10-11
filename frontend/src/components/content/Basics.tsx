@@ -35,7 +35,7 @@ export function Note({ text, icon = "information-outline" }: { text: string; ico
 }
 
 // ── Banner (`ban`) ── tone → [bg, tile].
-export type BannerTone = keyof typeof color.bannerTone;
+type BannerTone = keyof typeof color.bannerTone;
 export function Banner({ tone, icon, title, sub, onPress }: { tone: Exclude<BannerTone, "$doc">; icon: IconName; title: string; sub?: string; onPress?: () => void }) {
   const [bg, tile] = color.bannerTone[tone];
   const body = (
@@ -81,7 +81,7 @@ export function OddsChip({ text, likely }: { text: string; likely: "keep" | "mis
 }
 
 // ── Breakdown (`brk`) ──
-export interface BreakdownRow { label: string; value: string; color?: string; total?: boolean }
+interface BreakdownRow { label: string; value: string; color?: string; total?: boolean }
 export function Breakdown({ rows, label }: { rows: BreakdownRow[]; label?: string }) {
   return (
     <View>

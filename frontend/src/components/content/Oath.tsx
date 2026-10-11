@@ -85,7 +85,7 @@ function Warn({ text, bg, icon = "alert-outline" }: { text: string; bg: string; 
 }
 
 // ── OathCard (`card`) ──
-export interface OathCardProps {
+interface OathCardProps {
   icon: IconName;
   name: string;
   meta: string;
@@ -154,7 +154,7 @@ export function OathCard(p: OathCardProps) {
 }
 
 // ── DayMemberGrid (`grid`) ── k kept · m missed · p pending · h photo 1 · r review · x broke · f future.
-export type CellState = "k" | "m" | "p" | "h" | "r" | "x" | "f";
+type CellState = "k" | "m" | "p" | "h" | "r" | "x" | "f";
 const CELL: Record<CellState, { bg: string; fg: string; icon: IconName | null; ring?: string; beat?: number }> = {
   k: { bg: color.gridCell.kept.bg, fg: color.gridCell.kept.fg, icon: "check-bold" },
   m: { bg: color.gridCell.missed.bg, fg: color.gridCell.missed.fg, icon: "close-thick", ring: color.red.base },

@@ -40,7 +40,7 @@ const q = (t: number, a: number, c: number, b: number) => {
 };
 
 /** Everything that depends only on mood / prop / bust: drawn once. */
-export interface KeeperFace {
+interface KeeperFace {
   eL: string; eR: string; bean: boolean; beanR: boolean; arcL: boolean; arcR: boolean; glL: boolean; glR: boolean;
   gx: number; gyBase: number; gr: number; stitch: string | null; ticks: string | null; mouth: string | null; teeth: string | null;
   shadesSmall: boolean; vein: boolean; spark: boolean; lines: boolean; tilt: number; props: Record<"seal" | "ledger" | "lens" | "coin" | "sack" | "cup" | "scythe", boolean>;
@@ -80,8 +80,8 @@ export function rotAbout(r: number, cx: number, cy: number): number[] {
   return [c, s, -s, c, cx - c * cx + s * cy, cy - s * cx - c * cy];
 }
 
-export interface HandFrame { m: number[]; pose: HandPose; wig: number }
-export interface KeeperFrame {
+interface HandFrame { m: number[]; pose: HandPose; wig: number }
+interface KeeperFrame {
   root: number[]; blink: number[]; tilt: number[]; gx: number; gy: number;
   left: HandFrame; right: HandFrame; sl: string; sr: string;
   coin: { y: number; ry: number; ry2: number; fill: string; face: boolean; trail: boolean; ty: number; ty2: number };

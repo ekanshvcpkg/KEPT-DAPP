@@ -9,7 +9,7 @@ import type { PersistOptions } from "zustand/middleware";
 /** Unscoped: the mode itself and the Dev menu. */
 export const persistStorage = createJSONStorage(() => AsyncStorage);
 
-export type StorageScope = "demo" | "live" | "none";
+type StorageScope = "demo" | "live" | "none";
 let scope: StorageScope = "none";
 let isReady = false;
 let markReady: () => void = () => {};

@@ -14,7 +14,7 @@ import { color, metrics, space } from "@/theme";
 import { useSettings } from "@/state/settings";
 import { Icon, PressScale, Text } from "../primitives";
 
-export interface DeckCard { key: string; node: ReactNode }
+interface DeckCard { key: string; node: ReactNode }
 
 /** Cards drawn: the top one and two behind it. */
 const SHOWN = 3;

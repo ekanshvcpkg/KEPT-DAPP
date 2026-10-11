@@ -17,7 +17,7 @@ export function defaultFlags(mode: AppMode | null): Record<Slice, SliceMode> {
   return Object.fromEntries(SLICES.map((s) => [s, mode === "demo" ? "mock" : "http"])) as Record<Slice, SliceMode>;
 }
 
-export interface DevState {
+interface DevState {
   overrides: Partial<Record<Slice, SliceMode>>;
   scenario: Scenario;
   /** Mock wallet instead of MWA, while no app mode is chosen. Never applies to Live. */

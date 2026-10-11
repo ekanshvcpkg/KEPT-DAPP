@@ -1,7 +1,7 @@
 // MWA `sign_messages` answers with the *signed payload* for each message: the message bytes followed by the
 // 64-byte ed25519 signature (the protocol library splits it the same way for sign-in payloads). The backend
 // (POST /api/auth/verify) checks a bare 64-byte signature over the message, so the signature is cut off the end.
-export const SIGNATURE_BYTES = 64;
+const SIGNATURE_BYTES = 64;
 
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
 

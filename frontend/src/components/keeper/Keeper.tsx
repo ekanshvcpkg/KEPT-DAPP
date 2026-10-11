@@ -11,7 +11,7 @@ import type { KeeperAnimName, KeeperPropName } from "./rig";
 export type KeeperProp = KeeperPropName;
 export type KeeperAnim = KeeperAnimName;
 
-export interface KeeperProps {
+interface KeeperProps {
   mood: KeeperMood;
   prop?: KeeperProp;
   anim?: KeeperAnim;
