@@ -110,7 +110,8 @@ export function SentenceInput({ label, prefix, value, onChange, max, suggestions
             {...(mono ? { autoCorrect: false, autoCapitalize: "none" as const, spellCheck: false, autoComplete: "off" as const } : {})}
             {...(placeholder ? { placeholder } : {})}
             {...(autoFocus ? { autoFocus } : {})}
-            placeholderTextColor={color.text.ghost}
+            // secondary (about 5:1 on the field), not ghost (1.5:1): readable, and still plainly not the typed text, which is primary white.
+            placeholderTextColor={color.text.secondary}
             selectionColor={color.lime.base}
             cursorColor={color.lime.base}
             style={[valueStyle, { padding: 0, minWidth: 40, flexGrow: 1 }]}

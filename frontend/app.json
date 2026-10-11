@@ -62,7 +62,8 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/withReleaseSigning"
+      "./plugins/withReleaseSigning",
+      "./plugins/withDevMenuNoFab"
     ]
   }
 }
