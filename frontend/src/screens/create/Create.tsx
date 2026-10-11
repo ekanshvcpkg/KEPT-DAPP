@@ -103,7 +103,7 @@ export function C4() {
   const genesis = useSession((s) => s.genesis);
   const api = useApi();
   const price = useQuery({ queryKey: qk.price, queryFn: () => api.wallet.price(), retry: false });
-  const costs = [0, 1, 2].map((k) => skrWhole(missCost(units(draft.stakeSkr), draft.numDays, k)));
+  const cost = skrWhole(missCost(units(draft.stakeSkr)));
   const pickMode = (i: number) => {
     if (i === 1 && !genesis) { toast(t("screens.C4.b1.o1.s")); return; }
     set({ isSolo: i === 0 });
@@ -116,7 +116,7 @@ export function C4() {
       <BodyText mono text={t("screens.C4.b2.text")} />
       <OptionGrid mode="big" small value={STAKES_SKR.indexOf(draft.stakeSkr as (typeof STAKES_SKR)[number])} onChange={(i) => set({ stakeSkr: STAKES_SKR[i]! })}
         items={STAKES_SKR.map((s, i) => ({ title: t(`screens.C4.b3.o${i}.t` as CopyKey), ...(price.data ? { sub: formatUsd(units(s), price.data.usdPerSkr) } : {}) }))} />
-      <Banner tone="lime" icon="sack" title={t("screens.C4.b4.title", { cost: costs[0]! })} sub={t("screens.C4.b4.sub", { second: costs[1]!, third: costs[2]! })} />
+      <Banner tone="lime" icon="sack" title={t("screens.C4.b4.title", { cost })} sub={t("screens.C4.b4.sub")} />
     </Step>
   );
 }
@@ -139,7 +139,7 @@ export function C6() {
   const { go } = useGo();
   const { draft } = useDraft();
   const stake = units(draft.stakeSkr);
-  const costs = [0, 1, 2].map((k) => skrWhole(missCost(stake, draft.numDays, k)));
+  const cost = skrWhole(missCost(stake));
   const rows = [
     { label: t("screens.C6.b1.row0.l"), value: t("screens.C6.b1.row0.v", { goal: draft.goal.trim() }) },
     { label: t("screens.C6.b1.row1.l"), value: objectName(draft.objectId) },
@@ -154,7 +154,7 @@ export function C6() {
       <RowList label={t("screens.C6.b2.label")} rows={[
         { title: t("screens.C6.b2.r0.t"), sub: t("screens.C6.b2.r0.s"), leading: { kind: "icon", icon: "heart-pulse", fg: color.text.primary } },
         { title: t("screens.C6.b2.r1.t"), sub: t("screens.C6.b2.r1.s"), leading: { kind: "icon", icon: "fire", fg: color.red.base } },
-        { title: t("screens.C6.b2.r2.t", { cost: costs[0]! }), sub: t("screens.C6.b2.r2.s", { second: costs[1]!, third: costs[2]! }), leading: { kind: "icon", icon: "sack", fg: color.lime.base } },
+        { title: t("screens.C6.b2.r2.t", { cost }), sub: t("screens.C6.b2.r2.s"), leading: { kind: "icon", icon: "sack", fg: color.lime.base } },
         { title: t("screens.C6.b2.r3.t"), sub: t("screens.C6.b2.r3.s"), leading: { kind: "icon", icon: "percent-outline", fg: color.text.primary } },
       ]} />
     </Step>

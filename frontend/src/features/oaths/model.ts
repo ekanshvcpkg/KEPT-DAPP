@@ -71,7 +71,15 @@ export interface MemberView {
   index: number;
   facts: MemberFacts;
   isMe: boolean;
+  /** The engine's balance for this member: a projection of the rules (D-91), not money paid. */
   balance: bigint;
+  /**
+   * What is really theirs to show as "in play": the engine balance for demo Oaths, but for a chain Oath that hasn't
+   * settled just the stake locked in its vault. Even where the program settles by the same rules (rules v3, DECISIONS
+   * D-91), money only moves at settlement and the days to come are unplayed, so a projected balance must not read as
+   * money held or earned; older Oaths (rules v1) settle differently altogether.
+   */
+  inPlay: bigint;
   missed: number[];
   keptDays: number;
   cells: string;
@@ -82,6 +90,8 @@ export interface MemberView {
 export interface OathView {
   facts: OathFacts;
   life: Life;
+  /** True while the engine's money numbers are only a projection: a chain Oath that hasn't settled or been cancelled. */
+  estimated: boolean;
   me: number;
   isCreator: boolean;
   /** 0-based current day while a day is running. */
@@ -131,6 +141,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
     : phase?.phase === "over" ? "over"
     : "active";
 
+  const estimated = f.source === "chain" && f.status !== "settled" && f.status !== "cancelled";
   const members: MemberView[] = f.members.map((m, i) => {
     const missed = Array.from({ length: Math.min(finished, state.brokeOnDay === null ? finished : state.brokeOnDay + 1) }, (_, d) => d).filter((d) => !bit(m.daysKept, d));
     const cells = Array.from({ length: f.numDays }, (_, d): Cell => {
@@ -146,6 +157,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
       facts: m,
       isMe: i === me,
       balance: state.balances[i] ?? 0n,
+      inPlay: estimated ? f.stake : (state.balances[i] ?? 0n),
       missed,
       keptDays: state.keptDays[i] ?? 0,
       cells,
@@ -164,6 +176,7 @@ export function oathView(f: OathFacts, now: number, myWallet: string | null): Oa
   return {
     facts: f,
     life,
+    estimated,
     me,
     isCreator: myWallet !== null && f.creator === myWallet,
     dayIndex,

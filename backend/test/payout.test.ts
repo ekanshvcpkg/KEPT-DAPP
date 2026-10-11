@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calculatePayouts, calculatePayoutsV2, effectiveDays, feeForStake, fullDaysMask, settleAt, slashAmount } from "../src/shared/payout.js";
@@ -134,4 +135,63 @@ test("a freeze-covered day counts toward the full mask; v2 settles one Oath day 
   assert.equal(effectiveDays(0b101, 0b010) === fullDaysMask(3), true);
   assert.equal(settleAt({ startTs: 1_000, numDays: 3, daySeconds: 100, rulesVersion: 1 }), 1_300);
   assert.equal(settleAt({ startTs: 1_000, numDays: 3, daySeconds: 100, rulesVersion: 2 }), 1_400);
+});
+
+
+// ---- Rules v3 (owner money model, D-91): the same numbers as the program and the app's engine ----
+import { closedDayCount, missCostV3, replayV3 } from "../src/shared/payout.js";
+
+test("v3: the owner's examples", () => {
+  const SKR = 1_000_000n;
+  assert.deepEqual(replayV3(100n * SKR, 1_000, false, [7, 7, 7, 0b110], 3), { payouts: [102_500_000n, 102_500_000n, 102_500_000n, 90_000_000n], toTreasury: 2_500_000n, held: 0n, brokeDay: null, hp: 100 });
+  const two = replayV3(100n * SKR, 1_000, false, [7, 7, 0b110, 0b110], 3)!;
+  assert.deepEqual(two.payouts, [106_666_666n, 106_666_666n, 90_000_000n, 90_000_000n]);
+  assert.equal(two.toTreasury, 6_666_668n);
+  assert.deepEqual(replayV3(100n * SKR, 1_000, false, [7, 7, 7, 7], 3)!.payouts, Array(4).fill(100n * SKR));
+});
+
+test("v3: each forfeiture rounds on its own, remainders go to KEPT, a day nobody kept goes to KEPT", () => {
+  const r = replayV3(30n, 1_000, false, [7, 0b110, 0b110], 3)!;
+  assert.deepEqual(r.payouts, [32n, 27n, 27n]); assert.equal(r.toTreasury, 4n);
+  const none = replayV3(50_000_000n, 1_000, false, [0b110, 0b110], 3)!;
+  assert.equal(none.toTreasury, 10_000_000n); assert.deepEqual(none.payouts, [45_000_000n, 45_000_000n]);
+  assert.equal(missCostV3(1_001n, 1_000), 100n);
+});
+
+test("v3: a break holds half and sends half to the treasury; later days are not played", () => {
+  const r = replayV3(1_000_000_000n, 1_000, false, [7, 0b100, 0b100, 0b100], 3)!;
+  assert.equal(r.brokeDay, 1); assert.deepEqual(r.payouts, [0n, 0n, 0n, 0n]);
+  assert.equal(r.held + r.toTreasury, 4_000_000_000n);
+  assert.equal(replayV3(1_000n, 1_000, true, [0], 7)!.brokeDay, 3, "solo: 100 -> 65 -> 30 (+10) ... breaks on the fourth miss");
+});
+
+test("v3: replays only the closed days", () => {
+  assert.equal(closedDayCount({ startTs: 1_000, daySeconds: 120, numDays: 3 }, 1_000 + 250), 2);
+  assert.equal(closedDayCount({ startTs: 1_000, daySeconds: 120, numDays: 3 }, 99_999), 3);
+  assert.equal(closedDayCount({ startTs: 0, daySeconds: 120, numDays: 3 }, 99_999), 0);
+  assert.deepEqual(replayV3(100n, 1_000, false, [0, 7], 0)!.payouts, [100n, 100n]);
+});
+
+test("v3: every scenario in the shared engine vectors (what the app and the program also test against)", () => {
+  const file = JSON.parse(readFileSync(new URL("../../packages/engine/test-vectors/oath-vectors.json", import.meta.url), "utf8"));
+  assert.ok(file.vectors.length >= 14);
+  for (const v of file.vectors) {
+    const members = v.terms.members as number;
+    const kept = Array.from({ length: members }, (_, i) => (v.marks as string[]).reduce((m, day, d) => (day[i] === "k" ? m | (1 << d) : m), 0));
+    const r = replayV3(BigInt(v.terms.stake), v.terms.missBps, v.terms.solo, kept, v.terms.days)!;
+    assert.deepEqual(r.payouts.map(String), v.expected.balances, v.name);
+    assert.equal(r.toTreasury, BigInt(v.expected.fee) + BigInt(v.expected.toTreasury), v.name);
+    assert.equal(r.held, v.expected.held.reduce((a: bigint, x: string) => a + BigInt(x), 0n), v.name);
+    assert.equal(r.brokeDay, v.expected.brokeOnDay, v.name);
+    assert.equal(r.hp, v.expected.hp, v.name);
+  }
+});
+
+test("v3: every token is accounted for in every 3-member pattern", () => {
+  for (const stake of [0n, 7n, 999n, 1_000_000_007n]) {
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b++) {
+      const r = replayV3(stake, 1_000, false, [7, a, b], 3)!;
+      assert.equal(r.payouts.reduce((x, y) => x + y, 0n) + r.toTreasury + r.held, stake * 3n);
+    }
+  }
 });

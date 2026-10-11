@@ -2,6 +2,7 @@
 // additions (additions.json). Data-bearing keys are interpolated through templates.json.
 import copyJson from "../../../design/copy.json";
 import additionsJson from "./additions.json";
+import amendmentsJson from "./amendments.json";
 import templatesJson from "./templates.json";
 
 type Copy = typeof copyJson;
@@ -29,7 +30,12 @@ export type Vars = Record<string, string | number>;
 const SCREEN_IDS = Object.keys(copyJson.screens).sort((a, b) => b.length - a.length);
 const TEMPLATES = templatesJson as unknown as Record<string, { template: string; sample: Record<string, string> } | undefined>;
 
+/** Owner amendments to design strings (D-91); a key here wins over design/copy.json. */
+const AMENDMENTS = amendmentsJson as Record<string, string>;
+
 function lookup(key: string): string | undefined {
+  const amended = AMENDMENTS[key];
+  if (key !== "$meta" && typeof amended === "string") return amended;
   if (key.startsWith("screens.")) {
     const rest = key.slice("screens.".length);
     const id = SCREEN_IDS.find((s) => rest.startsWith(`${s}.`));
@@ -79,3 +85,4 @@ export const sampleData = copyJson.sampleData;
 /** Internal: exposed for the drift test. */
 export const __templates = TEMPLATES;
 export const __lookup = lookup;
+export const __amendments = AMENDMENTS;

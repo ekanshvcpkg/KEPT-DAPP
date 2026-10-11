@@ -118,3 +118,71 @@ export function calculatePayoutsV2(stake: bigint, successes: boolean[], feesColl
   if (payouts.reduce((a, b) => a + b, 0n) + toTreasury + carryover !== collected) return null;
   return { payouts, slashed, toTreasury, carryover, dust };
 }
+
+// ---- Rules v3: the owner's money model (docs/DECISIONS.md D-91). Mirrors `replay_v3` in the program's economics.rs ----
+// Every new Oath records rules v3: no entry fee; each missed day costs 10% of the original stake (capped at the
+// balance); each member's forfeiture is split on its own into k + 1 equal shares between that day's k keepers and
+// KEPT, with every remainder going to KEPT; a day nobody kept goes to KEPT; HP as in design/rules.md, and on a break
+// the balances are half held for the Rematch window and half sent to KEPT.
+
+export const RULES_V3 = 3;
+export const MISS_BPS = 1_000;
+export const BREAK_HOLD_BPS = 5_000n;
+/** Oath days after a break settles before the held half is released to the treasury. */
+export const HELD_WINDOW_DAYS = 7;
+const HP = { start: 100, max: 100, heal: 10, missGroup: 20, missSolo: 35 } as const;
+
+/** All amounts are mint base units. `toTreasury` is sent at settlement; `held` stays in the vault until `sweep_held`. */
+export type SettlementV3 = { payouts: bigint[]; toTreasury: bigint; held: bigint; brokeDay: number | null; hp: number };
+
+/** Cost of one miss: `missBps` of the original stake, rounded down. */
+export function missCostV3(stake: bigint, missBps: number): bigint {
+  return (stake * BigInt(missBps)) / BPS;
+}
+
+/** Oath days that have fully ended at `now`, never more than `numDays`. */
+export function closedDayCount(oath: { startTs: number; daySeconds: number; numDays: number }, now: number): number {
+  if (oath.startTs <= 0 || oath.daySeconds <= 0 || now < oath.startTs) return 0;
+  return Math.max(0, Math.min(oath.numDays, Math.floor((now - oath.startTs) / oath.daySeconds)));
+}
+
+/**
+ * Replays the first `days` days from the members' `days_kept` bitmasks (bit d = day d kept). Returns null where the
+ * program returns None (no members, more than four, a value outside u64, or a failed conservation check).
+ */
+export function replayV3(stake: bigint, missBps: number, solo: boolean, daysKept: number[], days: number): SettlementV3 | null {
+  const n = daysKept.length;
+  if (n === 0 || n > 4 || days < 0 || days > 16 || stake < 0n || stake > U64_MAX) return null;
+  const cost = missCostV3(stake, missBps);
+  const damagePerMiss = solo ? HP.missSolo : HP.missGroup;
+  let balances = daysKept.map(() => stake);
+  let toTreasury = 0n;
+  let held = 0n;
+  let hp: number = HP.start;
+  for (let d = 0; d < days; d++) {
+    const start = balances;
+    const kept = daysKept.map((m) => (m & (1 << d)) !== 0);
+    const lost = balances.map((b, i) => (kept[i] ? 0n : cost < b ? cost : b));
+    balances = balances.map((b, i) => b - lost[i]);
+    const missed = kept.filter((k) => !k).length;
+    const after = hp - missed * damagePerMiss;
+    if (after <= 0) {
+      held = start.reduce((a, b) => a + (b * BREAK_HOLD_BPS) / BPS, 0n);
+      toTreasury += start.reduce((a, b) => a + b, 0n) - held;
+      if (toTreasury + held !== stake * BigInt(n)) return null;
+      return { payouts: daysKept.map(() => 0n), toTreasury, held, brokeDay: d, hp: 0 };
+    }
+    const keepers = kept.flatMap((k, i) => (k ? [i] : []));
+    for (const p of lost) {
+      if (p === 0n) continue;
+      if (keepers.length === 0) { toTreasury += p; continue; }
+      const each = p / BigInt(keepers.length + 1);
+      for (const i of keepers) balances[i] += each;
+      toTreasury += p - each * BigInt(keepers.length);
+    }
+    hp = Math.min(HP.max, after + HP.heal);
+  }
+  const paid = balances.reduce((a, b) => a + b, 0n);
+  if (paid + toTreasury + held !== stake * BigInt(n)) return null;
+  return { payouts: balances, toTreasury, held, brokeDay: null, hp };
+}

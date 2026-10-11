@@ -14,6 +14,66 @@ export type KeptTest = {
   },
   "instructions": [
     {
+      "name": "buyFreeze",
+      "docs": [
+        "Buys this member's one freeze credit (rules v2) with un-staked SKR at the price fixed at creation.",
+        "Only while Active: credits cannot be bought before the Oath starts, so cancellation never refunds one."
+      ],
+      "discriminator": [
+        141,
+        122,
+        222,
+        91,
+        71,
+        245,
+        184,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "memberToken",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "signer": true
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cancelOath",
       "discriminator": [
         221,
@@ -95,6 +155,99 @@ export type KeptTest = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "configureEconomics",
+      "docs": [
+        "Activates rules v2 (entry fee, freeze credits, 50% slash) for Oaths created from now on, or changes",
+        "the fee/freeze price for later Oaths. Existing Oaths keep the terms they were created with.",
+        "Also creates the locked carryover reserve for the stake mint."
+      ],
+      "discriminator": [
+        138,
+        106,
+        39,
+        56,
+        110,
+        220,
+        138,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "carryoverVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  114,
+                  114,
+                  121,
+                  111,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stakeMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "feeBps",
+          "type": "u16"
+        },
+        {
+          "name": "freezePrice",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "createOath",
@@ -550,10 +703,15 @@ export type KeptTest = {
         },
         {
           "name": "authority",
+          "writable": true,
           "signer": true,
           "relations": [
             "keeper"
           ]
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -715,6 +873,177 @@ export type KeptTest = {
       "args": []
     },
     {
+      "name": "sweepCarryover",
+      "docs": [
+        "Moves a settled rules v2 Oath's carryover (slashed stake with no successful member) from its vault into",
+        "the locked carryover reserve. Anyone may call it; it runs once per Oath."
+      ],
+      "discriminator": [
+        235,
+        192,
+        38,
+        170,
+        94,
+        100,
+        22,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "carryoverVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  114,
+                  114,
+                  121,
+                  111,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stakeMint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sweepHeld",
+      "docs": [
+        "Releases the money held after a broken rules v3 Oath to the treasury once the Rematch window has passed.",
+        "Anyone may call it; it runs once per Oath. (Rematch recovery is not built yet, so nothing else can claim it.)"
+      ],
+      "discriminator": [
+        100,
+        17,
+        19,
+        81,
+        244,
+        168,
+        32,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "updateTreasury",
       "docs": [
         "Move future protocol fees and rounding dust to a new Token or Token-2022 account.",
@@ -765,6 +1094,39 @@ export type KeptTest = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "useFreeze",
+      "docs": [
+        "Spends this member's freeze credit on one closed day that has no recorded proof. The day then",
+        "counts as kept at settlement. Only the day index comes from the client, and the program checks it."
+      ],
+      "discriminator": [
+        63,
+        143,
+        171,
+        67,
+        242,
+        183,
+        104,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "dayIndex",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -810,6 +1172,19 @@ export type KeptTest = {
   ],
   "events": [
     {
+      "name": "carryoverSwept",
+      "discriminator": [
+        126,
+        197,
+        174,
+        12,
+        119,
+        186,
+        126,
+        249
+      ]
+    },
+    {
       "name": "checkinRecorded",
       "discriminator": [
         85,
@@ -833,6 +1208,71 @@ export type KeptTest = {
         150,
         248,
         33
+      ]
+    },
+    {
+      "name": "economicsConfigured",
+      "discriminator": [
+        71,
+        206,
+        186,
+        114,
+        80,
+        239,
+        104,
+        236
+      ]
+    },
+    {
+      "name": "feeCollected",
+      "discriminator": [
+        12,
+        28,
+        17,
+        248,
+        244,
+        36,
+        8,
+        73
+      ]
+    },
+    {
+      "name": "freezeBought",
+      "discriminator": [
+        159,
+        250,
+        64,
+        103,
+        245,
+        133,
+        251,
+        224
+      ]
+    },
+    {
+      "name": "freezeUsed",
+      "discriminator": [
+        58,
+        88,
+        26,
+        101,
+        91,
+        126,
+        106,
+        223
+      ]
+    },
+    {
+      "name": "heldSwept",
+      "discriminator": [
+        54,
+        161,
+        218,
+        49,
+        37,
+        189,
+        229,
+        8
       ]
     },
     {
@@ -885,6 +1325,32 @@ export type KeptTest = {
         200,
         168,
         138
+      ]
+    },
+    {
+      "name": "oathSettledV2",
+      "discriminator": [
+        230,
+        228,
+        15,
+        248,
+        216,
+        86,
+        93,
+        233
+      ]
+    },
+    {
+      "name": "oathSettledV3",
+      "discriminator": [
+        132,
+        187,
+        82,
+        180,
+        14,
+        34,
+        209,
+        29
       ]
     },
     {
@@ -1051,9 +1517,84 @@ export type KeptTest = {
       "code": 6029,
       "name": "overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6030,
+      "name": "invalidFreezePrice",
+      "msg": "Freeze price must be positive"
+    },
+    {
+      "code": 6031,
+      "name": "legacyRules",
+      "msg": "Oath uses legacy rules without fees or freezes"
+    },
+    {
+      "code": 6032,
+      "name": "noFreezeCredit",
+      "msg": "No freeze credit bought"
+    },
+    {
+      "code": 6033,
+      "name": "freezeAlreadyBought",
+      "msg": "Freeze credit already bought"
+    },
+    {
+      "code": 6034,
+      "name": "freezeAlreadyUsed",
+      "msg": "Freeze credit already used"
+    },
+    {
+      "code": 6035,
+      "name": "dayNotClosed",
+      "msg": "A freeze can only cover a day that has closed"
+    },
+    {
+      "code": 6036,
+      "name": "dayAlreadyKept",
+      "msg": "Day already kept"
+    },
+    {
+      "code": 6037,
+      "name": "nothingToSweep",
+      "msg": "No carryover to sweep"
+    },
+    {
+      "code": 6038,
+      "name": "wrongCarryoverVault",
+      "msg": "Carryover reserve does not match config"
+    },
+    {
+      "code": 6039,
+      "name": "economicsNotConfigured",
+      "msg": "Rules v2 economics are not configured"
+    },
+    {
+      "code": 6040,
+      "name": "conservationViolated",
+      "msg": "Settlement does not account for every escrowed token"
     }
   ],
   "types": [
+    {
+      "name": "carryoverSwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reserveTotal",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "checkinRecorded",
       "type": {
@@ -1136,6 +1677,102 @@ export type KeptTest = {
       }
     },
     {
+      "name": "economicsConfigured",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feeBps",
+            "type": "u16"
+          },
+          {
+            "name": "freezePrice",
+            "type": "u64"
+          },
+          {
+            "name": "carryoverVault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "feeCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "freezeBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "freezeUsed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "dayIndex",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "heldSwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "keeper",
       "type": {
         "kind": "struct",
@@ -1174,6 +1811,18 @@ export type KeptTest = {
               "array": [
                 "u8",
                 8
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved to keep the V4 account allocation stable for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                57
               ]
             }
           }
@@ -1362,6 +2011,62 @@ export type KeptTest = {
           {
             "name": "fee",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "oathSettledV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "slashed",
+            "type": "u64"
+          },
+          {
+            "name": "toTreasury",
+            "type": "u64"
+          },
+          {
+            "name": "carryover",
+            "type": "u64"
+          },
+          {
+            "name": "dust",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "oathSettledV3",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "toTreasury",
+            "type": "u64"
+          },
+          {
+            "name": "held",
+            "type": "u64"
+          },
+          {
+            "name": "brokeDayPlusOne",
+            "type": "u8"
+          },
+          {
+            "name": "hp",
+            "type": "u8"
           }
         ]
       }

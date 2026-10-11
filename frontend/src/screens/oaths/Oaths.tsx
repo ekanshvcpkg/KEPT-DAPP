@@ -16,7 +16,7 @@ import { RowList } from "@/components/content/Rows";
 import type { RowProps } from "@/components/content/Rows";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
-import { shortDuration } from "@/lib/format";
+import { formatSkr, shortDuration } from "@/lib/format";
 import { color, metrics } from "@/theme";
 import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOath, useOathList, oathActions } from "@/features/oaths/hooks";
@@ -71,7 +71,7 @@ export function OathsTab() {
             meta={v.facts.isSolo ? t("screens.D0.b3.meta", { day: v.dayNumber, length: v.facts.numDays }) : t("screens.D0.b2.meta", { day: v.dayNumber, length: v.facts.numDays })}
             hp={v.hp}
             tags={[
-              ...(me ? [{ text: t("screens.D0.b2.tag.0", { amount: skrWhole(me.balance) }), icon: "sack" as const, tone: "lime" as const }] : []),
+              ...(me ? [{ text: t("screens.D0.b2.tag.0", { amount: skrWhole(me.inPlay) }), icon: "sack" as const, tone: "lime" as const }] : []),
               ...(me && !me.pendingToday ? [{ text: t("screens.D0.b3.tag.1"), icon: "check-bold" as const, tone: "g" as const }] : []),
               ...(v.life === "waiting" ? [{ text: t("additions.core.startsIn", { time: shortDuration(v.secondsToStart ?? 0) }), icon: "timer-sand" as const }] : []),
               ...pending.slice(0, 1).map((m) => ({ text: t("screens.D0.b2.tag.1", { name: memberName(m) }), icon: "timer-sand" as const, tone: "ora" as const })),
@@ -285,16 +285,18 @@ function Active({ v }: { v: OathView }) {
         title: memberName(m),
         sub: f.rematchOf ? recoveryLine(v, m.index) : m.facts.keptRate === null ? t("common.keptRateNew") : t("screens.D2.b6.r0.s", { rate: Math.round(m.facts.keptRate * 100), days: m.facts.rateDays }),
         leading: m.facts.avatar ? { kind: "avatar", config: m.facts.avatar } : { kind: "initial", initial: memberInitial(m), bg: memberColor(m) },
-        value: t("screens.D2.b6.r0.r", { amount: skrWhole(m.balance) }),
-        valueSub: m.missed.length === 0 ? t("screens.D2.b6.r0.rs") : m.missed.length === 1 ? t("screens.D2.b6.r2.rs", { day: m.missed[0]! + 1 }) : t("screens.D2·low.b3.r2.rs", { n: m.missed.length }),
+        value: t("screens.D2.b6.r0.r", { amount: formatSkr(m.balance) }),
+        // On chain the program pays out (D-14); until it settles by the same rule (D-91) this is a projection, not money earned.
+        valueSub: m.missed.length === 0 ? t(v.estimated ? "additions.core.estimate" : "screens.D2.b6.r0.rs")
+          : (text => (v.estimated ? t("additions.core.estimateAfter", { text }) : text))(m.missed.length === 1 ? t("screens.D2.b6.r2.rs", { day: m.missed[0]! + 1 }) : t("screens.D2·low.b3.r2.rs", { n: m.missed.length })),
         ...(m.missed.length ? { valueColor: color.orange.base } : {}),
         ...(!m.isMe ? { chevron: true, onPress: () => go("I2", { wallet: m.facts.wallet }) } : {}),
       }))} />
       {v.preview ? <Banner tone="ora" icon="cards-playing-outline"
         title={t("screens.D2.b7.title", { name: memberName(v.members[v.preview.member]!) })}
         sub={t("screens.D2.b7.sub", {
-          shares: v.members.filter((m) => (v.preview!.result.won[m.index] ?? 0n) > 0n).map((m) => `${memberName(m)} +${skrWhole(v.preview!.result.won[m.index]!)}`).join(" · "),
-          fee: skrWhole(v.preview.result.fee),
+          shares: v.members.filter((m) => (v.preview!.result.won[m.index] ?? 0n) > 0n).map((m) => `${memberName(m)} +${formatSkr(v.preview!.result.won[m.index]!)}`).join(" · "),
+          fee: formatSkr(v.preview.result.fee),
         })} /> : null}
     </Screen>
   );

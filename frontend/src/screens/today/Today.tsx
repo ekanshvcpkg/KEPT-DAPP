@@ -124,7 +124,7 @@ function TodayCard({ v, urgent }: { v: OathView; urgent?: boolean }) {
       line={t(photo1 ? "screens.B1.b3.line" : "screens.B4.b1.line", { goal: capitalise(goal) })}
       onPress={() => go("D2", { id: v.facts.id })}
       tags={[
-        { text: t("screens.B1.b3.tag.0", { amount: skrWhole(mine.balance) }), icon: "sack", tone: "lime" },
+        { text: t("screens.B1.b3.tag.0", { amount: skrWhole(mine.inPlay) }), icon: "sack", tone: "lime" },
         // reference/kept-screens-1.js › B1 / B4: the clock is always red, photo 1 violet.
         { text: t("screens.B1.b3.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" },
         ...(photo1 ? [{ text: t("screens.B1.b3.tag.2"), icon: "camera" as const, tone: "vio" as const }] : []),
@@ -156,7 +156,7 @@ function AllDone({ items }: { items: OathView[] }) {
   const k = keeperLines("B2")[0]!;
   const reset = Math.min(...items.map((v) => v.secondsToReset ?? Infinity));
   // Free Bounties have nothing at stake: leave their 0 out of "1,043 + 500".
-  const safe = items.map((v) => myToday(v)!.balance).filter((b) => b > 0n).map(skrWhole).join(" + ");
+  const safe = items.map((v) => myToday(v)!.inPlay).filter((b) => b > 0n).map(skrWhole).join(" + ");
   const stats = useStats();
   return (
     <TabScreen tab="today" layout="B2">
@@ -211,7 +211,8 @@ function recapOf(views: OathView[]): RecapRow[] {
   return views.filter((v) => v.lastDay && v.me >= 0 && (v.life === "active" || v.life === "broken") && v.dayIndex === (v.lastDay.day + 1)).map((v) => ({
     v,
     missed: v.members.filter((m) => !m.isMe && (v.lastDay!.lost[m.index] ?? 0n) > 0n).map(memberName),
-    won: v.lastDay!.won[v.me] ?? 0n,
+    // A projection is not a win: only demo Oaths show what the day paid (D-91; the chain pays at settlement).
+    won: v.estimated ? 0n : (v.lastDay!.won[v.me] ?? 0n),
   }));
 }
 

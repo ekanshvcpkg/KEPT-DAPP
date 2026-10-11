@@ -130,6 +130,8 @@ class Harness {
   useFreeze(u: User, day: number) { return this.send(u.signer, [{ address: this.oath, role: W }, { address: u.signer.address, role: RS }], Buffer.concat([disc("use_freeze"), Buffer.from([day])])); }
   sweep(payer: User) { return this.send(payer.signer, [{ address: this.config, role: W }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: this.reserve, role: W }, { address: this.mint, role: R }, { address: TOKEN, role: R }], disc("sweep_carryover")); }
 
+  sweepHeld(payer: User, treasury: Address = this.treasury) { return this.send(payer.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: treasury, role: W }, { address: this.mint, role: R }, { address: TOKEN, role: R }], disc("sweep_held")); }
+
   memberCount() { return this.data(this.oath)[138]; }
   memberKeeper(i: number) { return addr(PublicKey.findProgramAddressSync([Buffer.from("keeper"), this.data(this.oath).subarray(MEMBER(i), MEMBER(i) + 32)], PROGRAM)[0]); }
   payouts() { const d = this.data(this.oath); return Array.from({ length: d[138] }, (_, i) => d.readBigUInt64LE(MEMBER(i) + 36)); }
@@ -143,7 +145,8 @@ class Harness {
     const t = d.subarray(OATH_BASE);
     return { tag: t.subarray(0, 8).toString("latin1"), version: t[8], feeBps: t.readUInt16LE(9), feePerMember: t.readBigUInt64LE(11), freezePrice: t.readBigUInt64LE(19),
       feesCollected: t.readBigUInt64LE(27), freezeProceeds: t.readBigUInt64LE(35), bought: t[43], used: t[44], frozen: [0, 1, 2, 3].map((i) => t.readUInt16LE(45 + i * 2)),
-      treasuryPaid: t.readBigUInt64LE(53), carryover: t.readBigUInt64LE(61), swept: t[69] === 1, dust: t.readBigUInt64LE(70) };
+      treasuryPaid: t.readBigUInt64LE(53), carryover: t.readBigUInt64LE(61), swept: t[69] === 1, dust: t.readBigUInt64LE(70),
+      missBps: t.readUInt16LE(78), heldTotal: t.readBigUInt64LE(80), heldReleaseTs: t.readBigInt64LE(88), heldSwept: t[96] === 1, brokeDayPlusOne: t[97] };
   }
   reserveTotal() { return this.data(this.config).readBigUInt64LE(139 + 50); }
 
@@ -155,6 +158,20 @@ class Harness {
     ok(await this.creatorIx(this.users[0], "start_oath"));
     return this.users.slice(0, n);
   }
+  /**
+   * Rewrites a fresh rules v3 Oath into the rules v2 state the program used to create (fee on top of each stake,
+   * freeze price, escrowed fees), so the v2 settlement path, which still serves existing v2 Oaths, stays covered.
+   */
+  forceV2(n: number, stake: bigint) {
+    const f = shared.feeForStake(stake, FEE_BPS)!;
+    const d = this.data(this.oath); const t = OATH_BASE;
+    d[t + 8] = 2; d.writeUInt16LE(FEE_BPS, t + 9); d.writeBigUInt64LE(f, t + 11); d.writeBigUInt64LE(FREEZE_PRICE, t + 19); d.writeBigUInt64LE(f * BigInt(n), t + 27);
+    d.writeUInt16LE(0, t + 78); this.put(this.oath, d);
+    this.put(this.vault, this.tokenData(pk(this.oath), (stake + f) * BigInt(n)), TOKEN);
+    for (let i = 0; i < n; i++) this.put(this.users[i].token, this.tokenData(pk(this.users[i].signer.address), START_BALANCE - stake - f), TOKEN);
+  }
+  /** A started Oath in rules v2 state (see forceV2). */
+  async activeV2Oath(n: number, stake: bigint) { const users = await this.activeOath(n, stake); this.forceV2(n, stake); return users; }
   afterGrace(numDays = 3n) { this.setTime(T0 + numDays * DAY + DAY); }
 }
 
@@ -163,7 +180,7 @@ const fee = (stake: bigint) => shared.feeForStake(stake, FEE_BPS)!;
 describe("KEPT rules v2 economics", () => {
   it("IDL has the economics instructions", () => {
     const names = idlJson.instructions.map((i: any) => i.name);
-    for (const name of ["configure_economics", "buy_freeze", "use_freeze", "sweep_carryover"]) expect(names).to.include(name);
+    for (const name of ["configure_economics", "buy_freeze", "use_freeze", "sweep_carryover", "sweep_held"]) expect(names).to.include(name);
   });
 
   it("only the config admin can activate rules v2, and the fee/freeze price are validated", async () => {
@@ -176,29 +193,28 @@ describe("KEPT rules v2 economics", () => {
     ok(await h.configure(2_000, 99n)); // re-configuring keeps the same reserve
   });
 
-  it("charges 15% on top of each stake at create and join and snapshots the terms", async () => {
+  it("new Oaths record rules v3 and charge no entry fee, even after rules v2 were configured", async () => {
     const h = await Harness.create(2); ok(await h.configure());
     const [alice, bob] = h.users;
     ok(await h.createOath(alice, 1_000n));
-    expect(h.token(alice.token)).to.equal(START_BALANCE - 1_150n);
-    expect(h.terms()).to.include({ tag: "KEPTTRM1", version: 2, feeBps: FEE_BPS, feePerMember: 150n, freezePrice: FREEZE_PRICE, feesCollected: 150n });
-    // A later config change must not alter this Oath's fee or freeze price.
+    expect(h.token(alice.token)).to.equal(START_BALANCE - 1_000n, "stake only");
+    expect(h.terms()).to.include({ tag: "KEPTTRM1", version: 3, feePerMember: 0n, feesCollected: 0n, freezePrice: 0n, missBps: 1_000 });
     ok(await h.configure(2_000, 99n));
     ok(await h.join(bob));
-    expect(h.token(bob.token)).to.equal(START_BALANCE - 1_150n, "joiner pays the fee fixed at creation");
-    expect(h.token(h.vault)).to.equal(2_300n, "stake and fee escrowed; nothing sent to treasury yet");
+    expect(h.token(bob.token)).to.equal(START_BALANCE - 1_000n);
+    expect(h.token(h.vault)).to.equal(2_000n, "exactly the stakes are escrowed");
     expect(h.token(h.treasury)).to.equal(0n);
-    expect(h.terms()).to.include({ feeBps: FEE_BPS, freezePrice: FREEZE_PRICE, feesCollected: 300n });
+    expect(h.terms()).to.include({ version: 3, feesCollected: 0n });
   });
 
-  it("refunds stake and fee when the creator cancels while Open; claims are once only", async () => {
-    const h = await Harness.create(3); ok(await h.configure());
+  it("refunds the stake when the creator cancels while Open; claims are once only", async () => {
+    const h = await Harness.create(3);
     const [alice, bob, carol] = h.users;
     ok(await h.createOath(alice, 1_000n)); ok(await h.join(bob));
-    fails(await h.buyFreeze(bob), "NotActive"); // no freeze purchases while Open, so nothing else to refund
+    fails(await h.buyFreeze(bob), "LegacyRules"); // rules v3 has no freezes
     fails(await h.creatorIx(bob, "cancel_oath"), "ConstraintHasOne");
     ok(await h.creatorIx(alice, "cancel_oath"));
-    expect(h.payouts()).to.deep.equal([1_150n, 1_150n]);
+    expect(h.payouts()).to.deep.equal([1_000n, 1_000n]);
     ok(await h.claim(alice)); ok(await h.claim(bob));
     expect(h.token(alice.token)).to.equal(START_BALANCE); expect(h.token(bob.token)).to.equal(START_BALANCE);
     expect(h.token(h.vault)).to.equal(0n); expect(h.token(h.treasury)).to.equal(0n);
@@ -207,9 +223,16 @@ describe("KEPT rules v2 economics", () => {
     fails(await h.creatorIx(alice, "cancel_oath"), "NotOpen");
   });
 
+  it("a rules v3 Oath has no freezes", async () => {
+    const h = await Harness.create(2);
+    const [, bob] = await h.activeOath(2, 1_000n);
+    fails(await h.buyFreeze(bob), "LegacyRules");
+    fails(await h.useFreeze(bob, 0), "LegacyRules");
+  });
+
   it("freeze credits: one per member, bought with un-staked SKR, at the snapshotted price", async () => {
     const h = await Harness.create(3); ok(await h.configure());
-    const [alice, bob] = await h.activeOath(2, 1_000n);
+    const [alice, bob] = await h.activeV2Oath(2, 1_000n);
     const outsider = h.users[2];
     fails(await h.buyFreeze(outsider), "NotMember");
     ok(await h.buyFreeze(bob));
@@ -222,7 +245,7 @@ describe("KEPT rules v2 economics", () => {
 
   it("freeze use: only for a closed, unkept day, only once, only by its owner", async () => {
     const h = await Harness.create(2); ok(await h.configure());
-    const [alice, bob] = await h.activeOath(2, 1_000n);
+    const [alice, bob] = await h.activeV2Oath(2, 1_000n);
     ok(await h.buyFreeze(bob));
     h.setTime(T0 + DAY / 2n);
     fails(await h.useFreeze(bob, 0), "DayNotClosed"); // current day
@@ -240,7 +263,7 @@ describe("KEPT rules v2 economics", () => {
 
   it("all succeed (one day covered by a freeze): everyone recovers the full stake, treasury gets fees and freeze price", async () => {
     const h = await Harness.create(2); ok(await h.configure());
-    const [alice, bob] = await h.activeOath(2, 1_000n);
+    const [alice, bob] = await h.activeV2Oath(2, 1_000n);
     ok(await h.buyFreeze(bob));
     h.setDaysKept([0b111, 0b101]); h.setTime(T0 + 2n * DAY);
     ok(await h.useFreeze(bob, 1));
@@ -260,7 +283,7 @@ describe("KEPT rules v2 economics", () => {
 
   it("one unsuccessful member: 50% back once (despite two misses), the other 50% to successful members; dust to treasury", async () => {
     const h = await Harness.create(4); ok(await h.configure());
-    const users = await h.activeOath(4, 1_001n);
+    const users = await h.activeV2Oath(4, 1_001n);
     h.setDaysKept([0b111, 0b111, 0b111, 0b100]); h.afterGrace();
     ok(await h.settle(users[0]));
     const f = fee(1_001n);
@@ -275,7 +298,7 @@ describe("KEPT rules v2 economics", () => {
 
   it("no successful member: slashed half is carryover in the locked reserve, not treasury; sweep runs once", async () => {
     const h = await Harness.create(2); ok(await h.configure());
-    const [alice, bob] = await h.activeOath(2, 1_000n);
+    const [alice, bob] = await h.activeV2Oath(2, 1_000n);
     h.setDaysKept([0b011, 0b000]); h.afterGrace();
     fails(await h.sweep(alice), "NotSettled");
     ok(await h.settle(bob));
@@ -294,7 +317,7 @@ describe("KEPT rules v2 economics", () => {
 
   it("settlement and claim retries are rejected without moving tokens", async () => {
     const h = await Harness.create(2); ok(await h.configure());
-    const [alice, bob] = await h.activeOath(2, 1_000n);
+    const [alice, bob] = await h.activeV2Oath(2, 1_000n);
     h.setDaysKept([0b111, 0b011]); h.afterGrace();
     ok(await h.settle(alice));
     const treasury = h.token(h.treasury), vault = h.token(h.vault);
@@ -308,7 +331,7 @@ describe("KEPT rules v2 economics", () => {
   it("on-chain payouts equal the TypeScript preview for every 3-member outcome", async () => {
     for (let mask = 0; mask < 8; mask++) {
       const h = await Harness.create(3); ok(await h.configure());
-      const users = await h.activeOath(3, 2_500_000_001n);
+      const users = await h.activeV2Oath(3, 2_500_000_001n);
       const successes = [0, 1, 2].map((i) => (mask & (1 << i)) !== 0);
       h.setDaysKept(successes.map((s) => (s ? 0b111 : 0b010))); h.afterGrace();
       ok(await h.settle(users[0]));
@@ -317,22 +340,6 @@ describe("KEPT rules v2 economics", () => {
       expect(h.token(h.treasury)).to.equal(expected.toTreasury);
       expect(h.terms()).to.include({ carryover: expected.carryover, dust: expected.dust });
     }
-  });
-
-  it("an Oath created before activation keeps rules v1: no fee for later joiners, no freezes, old payout", async () => {
-    const h = await Harness.create(2);
-    const [alice, bob] = h.users;
-    ok(await h.createOath(alice, 1_000n));
-    expect(h.terms()).to.include({ version: 1, feePerMember: 0n });
-    ok(await h.configure());
-    ok(await h.join(bob));
-    expect(h.token(bob.token)).to.equal(START_BALANCE - 1_000n, "no fee after activation for an Oath created before it");
-    ok(await h.creatorIx(alice, "start_oath"));
-    fails(await h.buyFreeze(bob), "LegacyRules");
-    h.setDaysKept([0b111, 0b011]); h.setTime(T0 + 3n * DAY);
-    ok(await h.settle(alice)); // v1 has no grace day
-    expect(h.payouts()).to.deep.equal(shared.calculatePayouts(1_000n, LEGACY_FEE_BPS, [true, false])!.payouts).and.deep.equal([1_900n, 0n]);
-    expect(h.token(h.treasury)).to.equal(100n);
   });
 
   it("a pre-upgrade 316-byte Active Oath is still read and settled under rules v1 after activation", async () => {
@@ -356,5 +363,154 @@ describe("KEPT rules v2 economics", () => {
     expect(h.token(h.treasury)).to.equal(125n);
     ok(await h.claim(alice)); expect(h.token(h.vault)).to.equal(0n);
     fails(await h.sweep(alice), "LegacyRules");
+  });
+});
+
+describe("KEPT rules v3 settlement (owner money model, DECISIONS D-91)", () => {
+  const SKR = 1_000_000n;
+  const days = (n: number) => (1 << n) - 1;
+  /** One mask per member from marks like ["kkkm","kkkk"] (day by day, member by member). */
+  const masksOf = (marks: string[], members: number) => Array.from({ length: members }, (_, i) => marks.reduce((m, day, d) => (day[i] === "k" ? m | (1 << d) : m), 0));
+
+  it("all keep: everyone gets the full stake back, nothing reaches the treasury, no entry fee was ever charged", async () => {
+    const h = await Harness.create(4);
+    const users = await h.activeOath(4, 100n * SKR);
+    h.setDaysKept([7, 7, 7, 7]); h.setTime(T0 + 3n * DAY);
+    ok(await h.settle(users[0]));
+    expect(h.payouts()).to.deep.equal(Array(4).fill(100n * SKR));
+    expect(h.token(h.treasury)).to.equal(0n);
+    for (const u of users) ok(await h.claim(u));
+    for (const u of users) expect(h.token(u.token)).to.equal(START_BALANCE);
+    expect(h.token(h.vault)).to.equal(0n);
+    expect(h.terms()).to.include({ version: 3, treasuryPaid: 0n, heldTotal: 0n, brokeDayPlusOne: 0 });
+  });
+
+  it("the owner's examples: one miss splits 10 SKR four ways; two misses split each forfeiture three ways", async () => {
+    const one = await Harness.create(4);
+    let users = await one.activeOath(4, 100n * SKR);
+    one.setDaysKept([7, 7, 7, 0b110]); one.setTime(T0 + 3n * DAY);
+    ok(await one.settle(users[0]));
+    expect(one.payouts()).to.deep.equal([102_500_000n, 102_500_000n, 102_500_000n, 90_000_000n]);
+    expect(one.token(one.treasury)).to.equal(2_500_000n, "KEPT's equal share is transferred to the configured treasury");
+    for (const u of users) ok(await one.claim(u));
+    expect(one.token(one.vault)).to.equal(0n);
+
+    const two = await Harness.create(4);
+    users = await two.activeOath(4, 100n * SKR);
+    two.setDaysKept([7, 7, 0b110, 0b110]); two.setTime(T0 + 3n * DAY);
+    ok(await two.settle(users[0]));
+    expect(two.payouts()).to.deep.equal([106_666_666n, 106_666_666n, 90_000_000n, 90_000_000n]);
+    expect(two.token(two.treasury)).to.equal(6_666_668n, "the rounding remainder goes to KEPT");
+  });
+
+  it("settling early is rejected until every day has closed, and an Oath settles once", async () => {
+    const h = await Harness.create(2);
+    const [alice, bob] = await h.activeOath(2, 100n * SKR);
+    h.setDaysKept([7, 7]);
+    h.setTime(T0 + 3n * DAY - 1n); fails(await h.settle(alice), "TooEarly");
+    h.setTime(T0 + 3n * DAY); ok(await h.settle(alice));
+    fails(await h.settle(bob), "NotActive");
+  });
+
+  it("repeated misses cost the same 10 % every time", async () => {
+    const h = await Harness.create(4);
+    const users = await h.activeOath(4, 100n * SKR);
+    // 7-day Oath is not available in this harness (3 days): member 3 misses every day except day 1.
+    h.setDaysKept([7, 7, 7, 0b010]); h.setTime(T0 + 3n * DAY);
+    ok(await h.settle(users[0]));
+    expect(h.payouts()).to.deep.equal([105_000_000n, 105_000_000n, 105_000_000n, 80_000_000n]);
+    expect(h.token(h.treasury)).to.equal(5_000_000n);
+  });
+
+  it("a day nobody keeps sends that day's forfeitures to the treasury", async () => {
+    const h = await Harness.create(2);
+    const [alice, bob] = await h.activeOath(2, 50n * SKR);
+    h.setDaysKept([0b110, 0b110]); h.setTime(T0 + 3n * DAY);
+    ok(await h.settle(alice));
+    expect(h.payouts()).to.deep.equal([45n * SKR, 45n * SKR]);
+    expect(h.token(h.treasury)).to.equal(10n * SKR);
+    ok(await h.claim(alice)); ok(await h.claim(bob));
+    expect(h.token(h.vault)).to.equal(0n);
+  });
+
+  it("a broken Oath (HP 0) settles once the breaking day closes: half the balances to the treasury, half held; held is swept after 7 days", async () => {
+    const h = await Harness.create(4);
+    const users = await h.activeOath(4, 1_000n * SKR);
+    // Members 1-3 miss days 0 and 1: HP 100 -> 40 +10 -> 50 -> -10: broken on day 1.
+    h.setDaysKept([7, 0b100, 0b100, 0b100]);
+    h.setTime(T0 + 1n * DAY + DAY / 2n); fails(await h.settle(users[0]), "TooEarly");
+    h.setTime(T0 + 2n * DAY);
+    ok(await h.settle(users[0]));
+    expect(h.payouts()).to.deep.equal([0n, 0n, 0n, 0n]);
+    const t = h.terms()!;
+    expect(t.brokeDayPlusOne).to.equal(2);
+    expect(t.heldTotal + t.treasuryPaid).to.equal(4_000n * SKR);
+    expect(h.token(h.treasury)).to.equal(t.treasuryPaid);
+    expect(h.token(h.vault)).to.equal(t.heldTotal, "the held half stays in the vault");
+    expect(t.heldReleaseTs).to.equal(T0 + 2n * DAY + 7n * DAY);
+    fails(await h.sweepHeld(users[1]), "TooEarly");
+    h.setTime(t.heldReleaseTs - 1n); fails(await h.sweepHeld(users[1]), "TooEarly");
+    h.setTime(t.heldReleaseTs);
+    const other = await generateKeyPairSigner(); void other;
+    fails(await h.sweepHeld(users[1], h.users[0].token), "ConstraintAddress"); // only the configured treasury
+    ok(await h.sweepHeld(users[1]));
+    expect(h.token(h.treasury)).to.equal(4_000n * SKR);
+    expect(h.token(h.vault)).to.equal(0n);
+    fails(await h.sweepHeld(users[1]), "NothingToSweep");
+    for (const u of users) ok(await h.claim(u)); // claims of 0 still succeed
+    expect(h.data(users[0].keeper).readUInt32LE(48)).to.equal(1, "a broken Oath counts as missed for everyone");
+  });
+
+  it("nothing is held when the Oath does not break, and sweep_held rejects", async () => {
+    const h = await Harness.create(2);
+    const [alice, bob] = await h.activeOath(2, 100n * SKR);
+    h.setDaysKept([7, 0b100]); h.setTime(T0 + 3n * DAY); ok(await h.settle(alice));
+    fails(await h.sweepHeld(bob), "NothingToSweep");
+  });
+
+  it("only the configured treasury token account receives KEPT's share", async () => {
+    const h = await Harness.create(2);
+    const [alice, bob] = await h.activeOath(2, 100n * SKR);
+    h.setDaysKept([7, 0b100]); h.setTime(T0 + 3n * DAY);
+    const wrong = h.users[0].token;
+    const keepers = [0, 1].map((i) => ({ address: h.memberKeeper(i), role: W }));
+    fails(await h.send(alice.signer, [{ address: h.config, role: R }, { address: h.oath, role: W }, { address: h.vault, role: W }, { address: wrong, role: W }, { address: h.mint, role: R }, { address: TOKEN, role: R }], disc("settle_oath"), keepers), "ConstraintAddress");
+    ok(await h.settle(alice));
+    expect(h.token(h.treasury) > 0n).to.equal(true);
+    void bob;
+  });
+
+  it("every group scenario in the shared engine vectors settles on chain to the same payouts, treasury and held amounts", async () => {
+    const file = JSON.parse(readFileSync(path.join(__dirname, "..", "..", "packages", "engine", "test-vectors", "oath-vectors.json"), "utf8"));
+    let checked = 0;
+    for (const v of file.vectors) {
+      if (v.terms.solo || v.terms.days !== 3) continue; // the harness runs 3-day group Oaths
+      const members = v.terms.members as number, stake = BigInt(v.terms.stake);
+      const h = await Harness.create(members);
+      const users = await h.activeOath(members, stake);
+      h.setDaysKept(masksOf(v.marks, members));
+      h.setTime(T0 + 3n * DAY); // every day has closed; an Oath that broke earlier is replayed the same way
+      ok(await h.settle(users[0]));
+      const e = v.expected;
+      expect(h.payouts().map(String), v.name).to.deep.equal(e.balances);
+      expect(h.token(h.treasury), v.name).to.equal(BigInt(e.fee) + BigInt(e.toTreasury));
+      expect(h.terms()!.heldTotal, v.name).to.equal(e.held.reduce((a: bigint, x: string) => a + BigInt(x), 0n));
+      expect(h.terms()!.brokeDayPlusOne, v.name).to.equal(e.brokeOnDay === null ? 0 : e.brokeOnDay + 1);
+      checked++;
+    }
+    expect(checked).to.be.greaterThan(5);
+  });
+
+  it("conserves every token for every 3-member miss pattern, and settles under the unchanged account layout", async () => {
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b += 3) {
+      const h = await Harness.create(3);
+      const users = await h.activeOath(3, 333_333_337n);
+      h.setDaysKept([7, a, b]); h.setTime(T0 + 3n * DAY);
+      ok(await h.settle(users[0]));
+      const t = h.terms()!;
+      expect(h.payouts().reduce((x, y) => x + y, 0n) + h.token(h.treasury) + t.heldTotal, `${a}/${b}`).to.equal(3n * 333_333_337n);
+      expect(h.token(h.vault)).to.equal(h.payouts().reduce((x, y) => x + y, 0n) + t.heldTotal);
+      expect(h.data(h.oath).length).to.equal(OATH_BASE + 110, "Oath account size is unchanged by v3");
+    }
   });
 });

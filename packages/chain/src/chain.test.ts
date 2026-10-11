@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import BN from "bn.js";
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { accountsCoder, IDL, PROGRAM_ERRORS } from "./idl";
-import { decodeOath, memberSlotOffset, oathDiscriminator } from "./accounts";
-import { cancelOathIx, claimIx, createOathIx, goalHash, joinOathIx, settleOathIx, startOathIx } from "./instructions";
+import { decodeOath, decodeOathTerms, memberSlotOffset, OATH_BASE_LEN, oathDiscriminator } from "./accounts";
+import { cancelOathIx, claimIx, createOathIx, goalHash, joinOathIx, settleOathIx, startOathIx, sweepHeldIx } from "./instructions";
 import type { ProgramEnv } from "./instructions";
 import { configPda, keeperPda, oathPda, vaultPda } from "./pda";
 import { classifyTxError } from "./errors";
@@ -84,9 +84,26 @@ test("instruction data uses Anchor discriminators (same as the API's hand-hashed
   assert.ok(settle.keys[7]!.pubkey.equals(keeperPda(programId, bob)) && settle.keys[7]!.isWritable);
 });
 
-test("IDL is the V4 program and errors map by code", () => {
-  assert.deepEqual(IDL.instructions.map((i) => i.name).sort(), ["cancel_oath", "claim", "create_oath", "initialize_config", "join_oath", "migrate_keeper", "record_checkin", "settle_oath", "start_oath", "update_treasury"]);
+test("IDL is the current program (rules v3 included) and errors map by code", () => {
+  assert.deepEqual(IDL.instructions.map((i) => i.name).sort(), ["buy_freeze", "cancel_oath", "claim", "configure_economics", "create_oath", "initialize_config", "join_oath", "migrate_keeper", "record_checkin", "settle_oath", "start_oath", "sweep_carryover", "sweep_held", "update_treasury", "use_freeze"]);
   assert.equal(PROGRAM_ERRORS.get(6009)?.name, "NotOpen");
+});
+
+test("sweep_held is permissionless and pays only the configured treasury", () => {
+  const oath = oathPda(programId, creator, 7n);
+  const ix = sweepHeldIx(env, { oath });
+  assert.deepEqual([...ix.data], [...disc("global:sweep_held")]);
+  assert.ok(ix.keys.every((k) => !k.isSigner));
+  assert.ok(ix.keys[3]!.pubkey.equals(env.treasury) && ix.keys[3]!.isWritable);
+  assert.ok(ix.keys[2]!.pubkey.equals(vaultPda(programId, oath)));
+});
+
+test("Oath terms decode: no region is rules v1; v3 carries the miss rate, the held amount and the break day", () => {
+  assert.equal(decodeOathTerms(new Uint8Array(OATH_BASE_LEN))!.rulesVersion, 1);
+  const t = Buffer.alloc(110); t.write("KEPTTRM1", 0, "latin1"); t[8] = 3; t.writeUInt16LE(1_000, 78); t.writeBigUInt64LE(1_900n, 80); t.writeBigInt64LE(5_000n, 88); t[97] = 2; t.writeBigUInt64LE(2_100n, 53);
+  const d = decodeOathTerms(Buffer.concat([Buffer.alloc(OATH_BASE_LEN), t]))!;
+  assert.deepEqual([d.rulesVersion, d.missBps, d.heldTotal, d.heldReleaseTs, d.heldSwept, d.brokeDay, d.treasuryPaid], [3, 1_000, 1_900n, 5_000, false, 1, 2_100n]);
+  t[8] = 9; assert.equal(decodeOathTerms(Buffer.concat([Buffer.alloc(OATH_BASE_LEN), t])), null);
 });
 
 test("tx errors classify into the screens' outcomes", () => {

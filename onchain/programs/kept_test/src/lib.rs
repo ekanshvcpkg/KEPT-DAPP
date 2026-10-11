@@ -98,19 +98,13 @@ pub mod kept_test {
         oath.members = [Member::default(); MAX_MEMBERS];
         oath.members[0] = Member { authority: ctx.accounts.creator.key(), staked: true, days_kept: 0, claimed: false, payout: 0 };
         initialize_keeper(&mut ctx.accounts.keeper, ctx.accounts.creator.key(), ctx.bumps.keeper);
-        // Snapshot the rules now so later Config changes cannot alter this Oath's terms.
-        let mut terms = match read_economics(&ctx.accounts.config.to_account_info().try_borrow_data()?) {
-            Some(e) => OathTerms::new(RULES_V2, e.fee_bps, fee_for_stake(stake_amount, e.fee_bps).ok_or(KeptError::Overflow)?, e.freeze_price),
-            None => OathTerms::new(RULES_LEGACY, 0, 0, 0),
-        };
-        terms.fees_collected = terms.fee_per_member;
-        // The fee is escrowed in the vault on top of the stake: refunded on cancel, paid to treasury at settlement.
-        // The zero-stake solo path has no tokens to escrow; group creators transfer stake.
-        let due = stake_amount.checked_add(terms.fee_per_member).ok_or(KeptError::Overflow)?;
-        if due > 0 { transfer_stake(&ctx.accounts.token_program, &ctx.accounts.stake_mint,
-            &ctx.accounts.creator_token, &ctx.accounts.vault, &ctx.accounts.creator, due)?; }
+        // Every new Oath records rules v3 (the owner's money model, DECISIONS D-91): no entry fee, so a member's
+        // vault balance is exactly the stake. Fixed here, so later program or Config changes cannot alter this Oath.
+        // The zero-stake solo path has no tokens to escrow; group creators transfer the stake.
+        let terms = OathTerms::new_v3();
+        if stake_amount > 0 { transfer_stake(&ctx.accounts.token_program, &ctx.accounts.stake_mint,
+            &ctx.accounts.creator_token, &ctx.accounts.vault, &ctx.accounts.creator, stake_amount)?; }
         write_terms(&oath.to_account_info(), &terms)?;
-        if terms.fee_per_member > 0 { emit!(FeeCollected { oath: oath.key(), member: oath.creator, amount: terms.fee_per_member }); }
         emit!(OathCreated { oath: oath.key(), creator: oath.creator, oath_id, is_solo, stake_amount });
         Ok(())
     }
@@ -197,18 +191,51 @@ pub mod kept_test {
         let oath_info = ctx.accounts.oath.to_account_info();
         let mut terms = read_terms(&oath_info.try_borrow_data()?)?;
         let v2 = terms.rules_version == RULES_V2;
+        let v3 = terms.rules_version == RULES_V3;
         let oath = &mut ctx.accounts.oath;
         require!(oath.status == OathStatus::Active, KeptError::NotActive);
         require!(ctx.accounts.vault.owner == oath.key() && ctx.accounts.vault.mint == oath.mint, KeptError::BadVault);
         let end = oath.start_ts.checked_add(i64::from(oath.num_days) * i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)?;
-        // Rules v2 wait one more Oath day so a missed last day can still be covered by a freeze.
-        let settle_at = if v2 { end.checked_add(i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)? } else { end };
-        require!(Clock::get()?.unix_timestamp >= settle_at, KeptError::TooEarly);
+        let now = Clock::get()?.unix_timestamp;
+        let member_count = oath.member_count as usize;
+        // Rules v3 replay the closed days from the proofs on chain. An Oath whose HP reached 0 may settle as soon
+        // as the breaking day has closed; otherwise it settles after the last day like every other Oath.
+        let v3_result = if v3 {
+            let days_kept: Vec<u16> = oath.members[..member_count].iter().map(|m| m.days_kept).collect();
+            let closed = closed_days(oath.start_ts, oath.day_seconds, oath.num_days, now);
+            let s = replay_v3(oath.stake_amount, terms.miss_bps, oath.is_solo, &days_kept, closed).ok_or(KeptError::ConservationViolated)?;
+            require!(s.broke_day.is_some() || closed == oath.num_days, KeptError::TooEarly);
+            Some(s)
+        } else {
+            // Rules v2 wait one more Oath day so a missed last day can still be covered by a freeze.
+            let settle_at = if v2 { end.checked_add(i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)? } else { end };
+            require!(now >= settle_at, KeptError::TooEarly);
+            None
+        };
         let full = if oath.num_days == 16 { u16::MAX } else { (1u16 << oath.num_days) - 1 };
-        let successes: Vec<bool> = oath.members[..oath.member_count as usize].iter().enumerate()
-            .map(|(i, m)| effective_days(m.days_kept, if v2 { terms.frozen_days[i] } else { 0 }) == full).collect();
+        let successes: Vec<bool> = oath.members[..member_count].iter().enumerate().map(|(i, m)| match &v3_result {
+            Some(s) => s.broke_day.is_none() && m.days_kept & full == full,
+            None => effective_days(m.days_kept, if v2 { terms.frozen_days[i] } else { 0 }) == full,
+        }).collect();
         let total_fee;
-        if v2 {
+        if let Some(s) = v3_result {
+            let owed = s.payouts.iter().try_fold(s.to_treasury.checked_add(s.held).ok_or(KeptError::Overflow)?, |sum, p| sum.checked_add(*p)).ok_or(KeptError::Overflow)?;
+            require!(ctx.accounts.vault.amount >= owed, KeptError::VaultUnderfunded);
+            for (i, payout) in s.payouts.iter().enumerate() { oath.members[i].payout = *payout; }
+            if s.to_treasury > 0 {
+                transfer_from_vault(&ctx.accounts.token_program, &ctx.accounts.stake_mint, &ctx.accounts.vault,
+                    &ctx.accounts.treasury, &oath_info, oath.creator, oath.oath_id, oath.bump, s.to_treasury)?;
+            }
+            terms.treasury_paid = s.to_treasury;
+            terms.held_total = s.held;
+            if let Some(day) = s.broke_day {
+                terms.broke_day_plus_one = day + 1;
+                // Held money stays in the vault for a Rematch window of 7 Oath days, then `sweep_held` releases it.
+                terms.held_release_ts = now.checked_add(HELD_WINDOW_DAYS.checked_mul(i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)?).ok_or(KeptError::Overflow)?;
+            }
+            total_fee = s.to_treasury;
+            emit!(OathSettledV3 { oath: oath.key(), to_treasury: s.to_treasury, held: s.held, broke_day_plus_one: terms.broke_day_plus_one, hp: s.hp as u8 });
+        } else if v2 {
             let s = calculate_payouts_v2(oath.stake_amount, &successes, terms.fees_collected, terms.freeze_proceeds).ok_or(KeptError::ConservationViolated)?;
             let owed = s.payouts.iter().try_fold(s.to_treasury.checked_add(s.carryover).ok_or(KeptError::Overflow)?, |sum, p| sum.checked_add(*p)).ok_or(KeptError::Overflow)?;
             require!(ctx.accounts.vault.amount >= owed, KeptError::VaultUnderfunded);
@@ -255,7 +282,7 @@ pub mod kept_test {
             keeper.try_serialize(&mut out)?;
         }
         oath.status = OathStatus::Settled;
-        if v2 { write_terms(&oath_info, &terms)?; }
+        if v2 || v3 { write_terms(&oath_info, &terms)?; }
         emit!(OathSettled { oath: oath.key(), fee: total_fee });
         Ok(())
     }
@@ -325,6 +352,25 @@ pub mod kept_test {
         write_terms(&oath_info, &terms)?;
         write_economics(&config_info, &economics)?;
         emit!(CarryoverSwept { oath: oath.key(), amount: terms.carryover, reserve_total: economics.carryover_total });
+        Ok(())
+    }
+
+    /// Releases the money held after a broken rules v3 Oath to the treasury once the Rematch window has passed.
+    /// Anyone may call it; it runs once per Oath. (Rematch recovery is not built yet, so nothing else can claim it.)
+    pub fn sweep_held(ctx: Context<SweepHeld>) -> Result<()> {
+        let oath_info = ctx.accounts.oath.to_account_info();
+        let mut terms = read_terms(&oath_info.try_borrow_data()?)?;
+        let oath = &ctx.accounts.oath;
+        require!(terms.rules_version == RULES_V3, KeptError::LegacyRules);
+        require!(oath.status == OathStatus::Settled, KeptError::NotSettled);
+        require!(terms.held_total > 0 && !terms.held_swept, KeptError::NothingToSweep);
+        require!(Clock::get()?.unix_timestamp >= terms.held_release_ts, KeptError::TooEarly);
+        require!(ctx.accounts.vault.owner == oath.key() && ctx.accounts.vault.mint == oath.mint, KeptError::BadVault);
+        transfer_from_vault(&ctx.accounts.token_program, &ctx.accounts.stake_mint, &ctx.accounts.vault,
+            &ctx.accounts.treasury, &oath_info, oath.creator, oath.oath_id, oath.bump, terms.held_total)?;
+        terms.held_swept = true;
+        write_terms(&oath_info, &terms)?;
+        emit!(HeldSwept { oath: oath.key(), amount: terms.held_total });
         Ok(())
     }
 
@@ -524,6 +570,14 @@ pub struct JoinOath<'info> {
     #[account(address=oath.mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
     pub token_program: Interface<'info, TokenInterface>,
 }
+#[derive(Accounts)] pub struct SweepHeld<'info> {
+    #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
+    #[account(mut)] pub oath: Account<'info, Oath>,
+    #[account(mut, seeds=[VAULT_SEED, oath.key().as_ref()], bump)] pub vault: InterfaceAccount<'info, TokenAccount>,
+    #[account(mut, address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
+    #[account(address=oath.mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+}
 #[derive(Accounts)] pub struct MigrateKeeper<'info> {
     #[account(mut, seeds=[KEEPER_SEED, authority.key().as_ref()], bump, has_one=authority,
         realloc=8+Keeper::INIT_SPACE, realloc::payer=authority, realloc::zero=true)]
@@ -544,6 +598,8 @@ pub struct JoinOath<'info> {
 #[event] pub struct FreezeBought { pub oath: Pubkey, pub member: Pubkey, pub price: u64 }
 #[event] pub struct FreezeUsed { pub oath: Pubkey, pub member: Pubkey, pub day_index: u8 }
 #[event] pub struct OathSettledV2 { pub oath: Pubkey, pub slashed: u64, pub to_treasury: u64, pub carryover: u64, pub dust: u64 }
+#[event] pub struct OathSettledV3 { pub oath: Pubkey, pub to_treasury: u64, pub held: u64, pub broke_day_plus_one: u8, pub hp: u8 }
+#[event] pub struct HeldSwept { pub oath: Pubkey, pub amount: u64 }
 #[event] pub struct CarryoverSwept { pub oath: Pubkey, pub amount: u64, pub reserve_total: u64 }
 
 #[error_code] pub enum KeptError {

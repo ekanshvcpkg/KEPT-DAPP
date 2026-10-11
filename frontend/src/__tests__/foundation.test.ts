@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { __lookup, __templates, interpolate, keeperLines, t } from "@/copy";
+import { __amendments, __lookup, __templates, interpolate, keeperLines, t } from "@/copy";
+import designCopy from "../../../design/copy.json";
 import type { CopyKey } from "@/copy";
 import { angleToPoints, hpSegmentColor, splitShadow, type as typeStyles } from "@/theme";
 import { clock, formatSkr, formatUsd, shortDuration } from "@/lib/format";
@@ -14,10 +15,24 @@ describe("copy", () => {
       expect(interpolate(tpl.template, tpl.sample)).toBe(__lookup(key));
     }
   });
+  it("amendments (D-91) replace existing design keys only, and none keeps the old 1.5× / 10% fee wording", () => {
+    const design = (key: string) => {
+      const rest = key.slice("screens.".length);
+      const id = Object.keys(designCopy.screens).sort((a, b) => b.length - a.length).find((s) => rest.startsWith(`${s}.`))!;
+      return (designCopy.screens as Record<string, Record<string, string>>)[id]?.[rest.slice(id.length + 1)];
+    };
+    for (const [key, text] of Object.entries(__amendments)) {
+      if (key === "$meta") continue;
+      expect(design(key)).toEqual(expect.any(String));
+      expect(text).not.toMatch(/1\.5|10% fee|then \d|Then \d/);
+      expect(__templates[key]).toBeUndefined();
+    }
+  });
   it("t() reads screen keys whose ids contain · and +", () => {
     expect(t("screens.C7·no.pin.0" as CopyKey)).toBeTruthy();
-    expect(t("screens.D2.b1.text")).toBe("9h 18m left today · first miss −143 SKR");
-    expect(t("screens.D2.b1.text", { timeLeft: "3h 2m", cost: "500" })).toBe("3h 2m left today · first miss −500 SKR");
+    expect(t("screens.C4.b4.title", { cost: "100" })).toBe("A miss costs 100 SKR");
+    expect(t("screens.D2.b1.text", { timeLeft: "3h 2m", cost: "100" })).toBe("3h 2m left today · a miss costs −100 SKR");
+    expect(t("screens.D2.b7.sub", { shares: "You +25", fee: "25" })).toBe("You +25 · KEPT 25 SKR");
   });
   it("interpolates placeholders that copy.json already has", () => {
     expect(t("common.hpOf", { hp: 70 })).toBe("70 / 100");

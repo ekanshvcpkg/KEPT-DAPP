@@ -1,0 +1,14 @@
+{
+  "$meta": "Rule amendments to design/copy.json (owner, D-91): these full keys replace the design's text. A string with {placeholders} is filled by t() like any other. Keep this list short and tied to a DECISIONS entry.",
+  "screens.C3.b0.sub": "Longer Oaths have more days to keep. Every miss costs 10% of your stake.",
+  "screens.C4.b4.title": "A miss costs {cost} SKR",
+  "screens.C4.b4.sub": "That's 10% of your stake, every time. Shared with whoever kept, and KEPT.",
+  "screens.C6.b2.r2.s": "Every miss costs the same. Paid to whoever kept.",
+  "screens.C6.b2.r3.t": "KEPT's share",
+  "screens.C6.b2.r3.s": "KEPT takes one equal share of lost SKR. Kept SKR is never charged.",
+  "screens.D2.b1.text": "{timeLeft} left today · a miss costs −{cost} SKR",
+  "screens.D2.b7.sub": "{shares} · KEPT {fee} SKR",
+  "screens.E2.b3.row1.v": "−{cost} SKR each miss",
+  "screens.E2.b3.row3.l": "KEPT's share",
+  "screens.E2.b3.row3.v": "One equal share of lost SKR"
+}

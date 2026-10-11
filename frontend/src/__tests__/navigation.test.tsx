@@ -190,7 +190,7 @@ describe("onboarding on mocks", () => {
     await fireEvent.press(await next()); // C1 → C2
     await fireEvent.press(await next()); // C2 → C3
     await fireEvent.press(await next()); // C3 → C4 (group, 1,000 SKR by default)
-    expect(await screen.findByText(t("screens.C4.b4.title", { cost: "143" }))).toBeTruthy();
+    expect(await screen.findByText(t("screens.C4.b4.title", { cost: "100" }))).toBeTruthy();
     await fireEvent.press(await next()); // C4 → C5
     await fireEvent.press(await next()); // C5 → C6
     expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "read 20 pages" }))).toBeTruthy();

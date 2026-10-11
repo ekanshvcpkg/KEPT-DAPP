@@ -15,11 +15,11 @@ const oath = (o: Partial<OathFacts> = {}): OathFacts => ({
 });
 
 describe("oathView", () => {
-  it("reproduces the rules.md worked example once all 3 days are over", () => {
+  it("reproduces the D-91 worked example (engine test vectors) once all 3 days are over", () => {
     const v = oathView(oath(), 3 * DAY + 10, W[0]!);
     expect(v.life).toBe("over");
-    expect(v.results.map((r) => r.final)).toEqual([1_468_750_000n, 779_166_667n, 1_468_750_000n, 166_666_667n]);
-    expect(v.state.feeTotal).toBe(116_666_666n);
+    expect(v.results.map((r) => r.final)).toEqual([1_091_666_666n, 925_000_000n, 1_091_666_666n, 800_000_000n]);
+    expect(v.state.feeTotal).toBe(91_666_668n);
   });
 
   it("mid-Oath: day number, grid cells, today's pending members and the miss preview", () => {
@@ -31,7 +31,9 @@ describe("oathView", () => {
     expect(v.hp).toBe(70); // day 1: B and D missed → −40, +10
     expect(v.members[0]!.pendingToday).toBe(false);
     expect(v.preview?.member).toBe(1);
-    expect(v.myMissCost).toBe(333_333_333n);
+    expect(v.myMissCost).toBe(100_000_000n); // 10% of 1,000 SKR, whatever the length (D-91)
+    // If B misses today, A / C / D (the keepers) and KEPT split B's 100.
+    expect(v.preview?.result.fee).toBe(25_000_000n);
   });
 
   it("an Open Oath has no day yet; a waiting one counts down to its first midnight", () => {
@@ -48,6 +50,20 @@ describe("oathView", () => {
     expect(v.results[1]).toMatchObject({ final: 0n, lost: 1_000_000_000n });
     expect(v.claimable).toBe(0n);
     expect(oathView(f, 4 * DAY, W[0]!).claimable).toBe(1_333_333_333n);
+  });
+
+  it("a chain Oath that hasn't settled never shows the engine's projection as money: in play = the stake, estimated", () => {
+    const f = oath({ source: "chain", status: "active" });
+    const v = oathView(f, 3 * DAY + 10, W[0]!);
+    expect(v.estimated).toBe(true);
+    expect(v.members[0]!.balance).toBe(1_091_666_666n); // the projection (D-91), for D2's "estimate" row
+    expect(v.members.map((m) => m.inPlay)).toEqual(Array(4).fill(1000n * SKR_UNIT));
+    expect(v.claimable).toBe(0n);
+    const demo = oathView(oath(), 3 * DAY + 10, W[0]!);
+    expect(demo.estimated).toBe(false);
+    expect(demo.members[0]!.inPlay).toBe(1_091_666_666n);
+    // Once the chain has settled, the payout is what counts and nothing is an estimate.
+    expect(oathView(oath({ source: "chain", status: "settled" }), 4 * DAY, W[0]!).estimated).toBe(false);
   });
 
   it("a cancelled Oath refunds the stake", () => {

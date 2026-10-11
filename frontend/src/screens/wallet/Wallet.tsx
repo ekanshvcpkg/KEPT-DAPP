@@ -53,7 +53,7 @@ export function W1() {
   const { views } = useOathList();
   const activity = useActivity();
   const claim = views.find((v) => v.claimable > 0n);
-  const mineIn = (v: OathView) => (v.me >= 0 ? v.members[v.me]!.balance : 0n);
+  const mineIn = (v: OathView) => (v.me >= 0 ? v.members[v.me]!.inPlay : 0n);
   const sum = (vs: OathView[]) => vs.reduce((a, v) => a + mineIn(v), 0n);
   const locked = views.filter((v) => LOCKED.includes(v.life) && !v.facts.rematchOf && v.facts.stake > 0n);
   const rematch = views.filter((v) => LOCKED.includes(v.life) && v.facts.rematchOf);

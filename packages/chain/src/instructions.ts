@@ -16,7 +16,7 @@ export interface ProgramEnv {
   tokenProgram: PublicKey;
 }
 
-type IxName = "create_oath" | "join_oath" | "start_oath" | "cancel_oath" | "settle_oath" | "claim";
+type IxName = "create_oath" | "join_oath" | "start_oath" | "cancel_oath" | "settle_oath" | "sweep_held" | "claim";
 
 function metas(name: IxName, accounts: Record<string, PublicKey>): AccountMeta[] {
   const ix = IDL.instructions.find((i) => i.name === name);
@@ -101,7 +101,10 @@ export const startOathIx = (env: ProgramEnv, a: { oath: PublicKey; creator: Publ
 export const cancelOathIx = (env: ProgramEnv, a: { oath: PublicKey; creator: PublicKey }) =>
   build(env, "cancel_oath", { oath: a.oath, creator: a.creator });
 
-/** Permissionless (no signer in SettleOath): any fee payer may settle once the Oath has ended. */
+/**
+ * Permissionless (no signer in SettleOath): any fee payer may settle once the Oath has ended, or, under rules v3, once
+ * the day its HP reached 0 has closed. The KEPT share goes to `env.treasury`, which must be the Config's treasury.
+ */
 export function settleOathIx(env: ProgramEnv, a: { oath: PublicKey; members: PublicKey[] }) {
   return build(env, "settle_oath", {
     config: configPda(env.programId),
@@ -112,6 +115,17 @@ export function settleOathIx(env: ProgramEnv, a: { oath: PublicKey; members: Pub
     token_program: env.tokenProgram,
   }, {}, a.members.map((m) => ({ pubkey: keeperPda(env.programId, m), isSigner: false, isWritable: true })));
 }
+
+/** Rules v3: releases the held half of a broken Oath to the treasury once the Rematch window has passed. Permissionless. */
+export const sweepHeldIx = (env: ProgramEnv, a: { oath: PublicKey }) =>
+  build(env, "sweep_held", {
+    config: configPda(env.programId),
+    oath: a.oath,
+    vault: vaultPda(env.programId, a.oath),
+    treasury: env.treasury,
+    stake_mint: env.stakeMint,
+    token_program: env.tokenProgram,
+  });
 
 export const claimIx = (env: ProgramEnv, a: { oath: PublicKey; member: PublicKey; destination: PublicKey }) =>
   build(env, "claim", {

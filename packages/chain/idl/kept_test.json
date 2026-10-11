@@ -8,6 +8,66 @@
   },
   "instructions": [
     {
+      "name": "buy_freeze",
+      "docs": [
+        "Buys this member's one freeze credit (rules v2) with un-staked SKR at the price fixed at creation.",
+        "Only while Active: credits cannot be bought before the Oath starts, so cancellation never refunds one."
+      ],
+      "discriminator": [
+        141,
+        122,
+        222,
+        91,
+        71,
+        245,
+        184,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "member_token",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "signer": true
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cancel_oath",
       "discriminator": [
         221,
@@ -89,6 +149,99 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "configure_economics",
+      "docs": [
+        "Activates rules v2 (entry fee, freeze credits, 50% slash) for Oaths created from now on, or changes",
+        "the fee/freeze price for later Oaths. Existing Oaths keep the terms they were created with.",
+        "Also creates the locked carryover reserve for the stake mint."
+      ],
+      "discriminator": [
+        138,
+        106,
+        39,
+        56,
+        110,
+        220,
+        138,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "carryover_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  114,
+                  114,
+                  121,
+                  111,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stake_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "fee_bps",
+          "type": "u16"
+        },
+        {
+          "name": "freeze_price",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "create_oath",
@@ -544,10 +697,15 @@
         },
         {
           "name": "authority",
+          "writable": true,
           "signer": true,
           "relations": [
             "keeper"
           ]
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -709,6 +867,177 @@
       "args": []
     },
     {
+      "name": "sweep_carryover",
+      "docs": [
+        "Moves a settled rules v2 Oath's carryover (slashed stake with no successful member) from its vault into",
+        "the locked carryover reserve. Anyone may call it; it runs once per Oath."
+      ],
+      "discriminator": [
+        235,
+        192,
+        38,
+        170,
+        94,
+        100,
+        22,
+        244
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "carryover_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  114,
+                  114,
+                  121,
+                  111,
+                  118,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "stake_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sweep_held",
+      "docs": [
+        "Releases the money held after a broken rules v3 Oath to the treasury once the Rematch window has passed.",
+        "Anyone may call it; it runs once per Oath. (Rematch recovery is not built yet, so nothing else can claim it.)"
+      ],
+      "discriminator": [
+        100,
+        17,
+        19,
+        81,
+        244,
+        168,
+        32,
+        114
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "oath"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "update_treasury",
       "docs": [
         "Move future protocol fees and rounding dust to a new Token or Token-2022 account.",
@@ -759,6 +1088,39 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "use_freeze",
+      "docs": [
+        "Spends this member's freeze credit on one closed day that has no recorded proof. The day then",
+        "counts as kept at settlement. Only the day index comes from the client, and the program checks it."
+      ],
+      "discriminator": [
+        63,
+        143,
+        171,
+        67,
+        242,
+        183,
+        104,
+        45
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "day_index",
+          "type": "u8"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -804,6 +1166,19 @@
   ],
   "events": [
     {
+      "name": "CarryoverSwept",
+      "discriminator": [
+        126,
+        197,
+        174,
+        12,
+        119,
+        186,
+        126,
+        249
+      ]
+    },
+    {
       "name": "CheckinRecorded",
       "discriminator": [
         85,
@@ -827,6 +1202,71 @@
         150,
         248,
         33
+      ]
+    },
+    {
+      "name": "EconomicsConfigured",
+      "discriminator": [
+        71,
+        206,
+        186,
+        114,
+        80,
+        239,
+        104,
+        236
+      ]
+    },
+    {
+      "name": "FeeCollected",
+      "discriminator": [
+        12,
+        28,
+        17,
+        248,
+        244,
+        36,
+        8,
+        73
+      ]
+    },
+    {
+      "name": "FreezeBought",
+      "discriminator": [
+        159,
+        250,
+        64,
+        103,
+        245,
+        133,
+        251,
+        224
+      ]
+    },
+    {
+      "name": "FreezeUsed",
+      "discriminator": [
+        58,
+        88,
+        26,
+        101,
+        91,
+        126,
+        106,
+        223
+      ]
+    },
+    {
+      "name": "HeldSwept",
+      "discriminator": [
+        54,
+        161,
+        218,
+        49,
+        37,
+        189,
+        229,
+        8
       ]
     },
     {
@@ -879,6 +1319,32 @@
         200,
         168,
         138
+      ]
+    },
+    {
+      "name": "OathSettledV2",
+      "discriminator": [
+        230,
+        228,
+        15,
+        248,
+        216,
+        86,
+        93,
+        233
+      ]
+    },
+    {
+      "name": "OathSettledV3",
+      "discriminator": [
+        132,
+        187,
+        82,
+        180,
+        14,
+        34,
+        209,
+        29
       ]
     },
     {
@@ -1045,9 +1511,84 @@
       "code": 6029,
       "name": "Overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidFreezePrice",
+      "msg": "Freeze price must be positive"
+    },
+    {
+      "code": 6031,
+      "name": "LegacyRules",
+      "msg": "Oath uses legacy rules without fees or freezes"
+    },
+    {
+      "code": 6032,
+      "name": "NoFreezeCredit",
+      "msg": "No freeze credit bought"
+    },
+    {
+      "code": 6033,
+      "name": "FreezeAlreadyBought",
+      "msg": "Freeze credit already bought"
+    },
+    {
+      "code": 6034,
+      "name": "FreezeAlreadyUsed",
+      "msg": "Freeze credit already used"
+    },
+    {
+      "code": 6035,
+      "name": "DayNotClosed",
+      "msg": "A freeze can only cover a day that has closed"
+    },
+    {
+      "code": 6036,
+      "name": "DayAlreadyKept",
+      "msg": "Day already kept"
+    },
+    {
+      "code": 6037,
+      "name": "NothingToSweep",
+      "msg": "No carryover to sweep"
+    },
+    {
+      "code": 6038,
+      "name": "WrongCarryoverVault",
+      "msg": "Carryover reserve does not match config"
+    },
+    {
+      "code": 6039,
+      "name": "EconomicsNotConfigured",
+      "msg": "Rules v2 economics are not configured"
+    },
+    {
+      "code": 6040,
+      "name": "ConservationViolated",
+      "msg": "Settlement does not account for every escrowed token"
     }
   ],
   "types": [
+    {
+      "name": "CarryoverSwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "reserve_total",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "CheckinRecorded",
       "type": {
@@ -1130,6 +1671,102 @@
       }
     },
     {
+      "name": "EconomicsConfigured",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "freeze_price",
+            "type": "u64"
+          },
+          {
+            "name": "carryover_vault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeeCollected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FreezeBought",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FreezeUsed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "member",
+            "type": "pubkey"
+          },
+          {
+            "name": "day_index",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HeldSwept",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "Keeper",
       "type": {
         "kind": "struct",
@@ -1168,6 +1805,18 @@
               "array": [
                 "u8",
                 8
+              ]
+            }
+          },
+          {
+            "name": "reserved",
+            "docs": [
+              "Reserved to keep the V4 account allocation stable for future fields."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                57
               ]
             }
           }
@@ -1356,6 +2005,62 @@
           {
             "name": "fee",
             "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OathSettledV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "slashed",
+            "type": "u64"
+          },
+          {
+            "name": "to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "carryover",
+            "type": "u64"
+          },
+          {
+            "name": "dust",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OathSettledV3",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "oath",
+            "type": "pubkey"
+          },
+          {
+            "name": "to_treasury",
+            "type": "u64"
+          },
+          {
+            "name": "held",
+            "type": "u64"
+          },
+          {
+            "name": "broke_day_plus_one",
+            "type": "u8"
+          },
+          {
+            "name": "hp",
+            "type": "u8"
           }
         ]
       }

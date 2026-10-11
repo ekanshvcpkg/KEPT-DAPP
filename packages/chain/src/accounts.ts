@@ -81,3 +81,37 @@ export function decodeConfig(data: Uint8Array): ConfigAccount {
 export const oathDiscriminator = (): Uint8Array => accountsCoder.accountDiscriminator("Oath");
 /** Byte offset of member slot i's wallet inside an Oath account (for memcmp filters). */
 export const memberSlotOffset = (i: number) => 139 + 44 * i;
+
+/** Size of the `Oath` struct with its discriminator. An account of exactly this size predates the terms region (rules v1). */
+export const OATH_BASE_LEN = 316;
+const TERMS_TAG = "KEPTTRM1";
+
+/** The rules an Oath was created under, from the region appended after the Oath struct (economics.rs `OathTerms`). */
+export interface OathTerms {
+  /** 1 = legacy (no terms region), 2 = fee + freezes (never activated on Devnet), 3 = the owner's model (D-91). */
+  rulesVersion: 1 | 2 | 3;
+  /** Rules v3: cost of one miss in basis points of the original stake; 0 otherwise. */
+  missBps: number;
+  /** Rules v3: held after a break (base units), swept to the treasury after `heldReleaseTs`. */
+  heldTotal: bigint;
+  heldReleaseTs: number;
+  heldSwept: boolean;
+  /** Rules v3: 0-based day the HP reached 0, or null. */
+  brokeDay: number | null;
+  /** Sent to the treasury at settlement (v2 / v3). */
+  treasuryPaid: bigint;
+}
+
+/** Null when the terms region is present but malformed (the program rejects such accounts too). */
+export function decodeOathTerms(data: Uint8Array): OathTerms | null {
+  const b = Buffer.from(data);
+  if (b.length === OATH_BASE_LEN) return { rulesVersion: 1, missBps: 0, heldTotal: 0n, heldReleaseTs: 0, heldSwept: false, brokeDay: null, treasuryPaid: 0n };
+  const t = b.subarray(OATH_BASE_LEN);
+  if (t.length < 110 || t.subarray(0, 8).toString("latin1") !== TERMS_TAG) return null;
+  const v = t[8];
+  if (v !== 1 && v !== 2 && v !== 3) return null;
+  return {
+    rulesVersion: v, missBps: t.readUInt16LE(78), heldTotal: t.readBigUInt64LE(80), heldReleaseTs: Number(t.readBigInt64LE(88)), heldSwept: t[96] === 1,
+    brokeDay: t[97] === 0 ? null : (t[97] ?? 1) - 1, treasuryPaid: t.readBigUInt64LE(53),
+  };
+}

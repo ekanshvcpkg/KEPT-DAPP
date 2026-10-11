@@ -334,7 +334,7 @@ export function F5() {
       {view ? <DayStrip n={view.facts.numDays} done={day} today={day} labels={Array.from({ length: view.facts.numDays }, (_, i) => t("additions.core.dayShort", { n: i + 1 }))} /> : null}
       <ChipRow justify="center">
         {view ? <Chip text={t("screens.F5.b3.chip.0", { hp: view.hp })} icon="heart-pulse" tone="lime" tilt={-2} /> : null}
-        {me ? <Chip text={t("screens.F5.b3.chip.1", { amount: skrWhole(me.balance) })} icon="sack" tone="lime" tilt={2} /> : null}
+        {me ? <Chip text={t("screens.F5.b3.chip.1", { amount: skrWhole(me.inPlay) })} icon="sack" tone="lime" tilt={2} /> : null}
       </ChipRow>
       {pending.length && view ? <RowList label={t("screens.F5.b4.label")} rows={pending.map((m) => ({
         title: memberName(m), sub: t("screens.F5.b4.r0.s"), value: t("screens.F5.b4.r0.r"),

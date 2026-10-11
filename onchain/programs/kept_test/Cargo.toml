@@ -27,3 +27,6 @@ anchor-spl = { version = "1.2.0", features = ["token", "token_2022"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
+[dev-dependencies]
+serde_json = "1.0.151"

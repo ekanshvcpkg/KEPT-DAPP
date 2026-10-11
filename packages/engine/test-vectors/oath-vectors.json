@@ -1,19 +1,497 @@
 {
   "$meta": {
-    "about": "KEPT Oath rule vectors (design/rules.md + docs/DECISIONS.md amendments). Amounts are SKR base units (6 decimals) as strings.",
+    "about": "KEPT Oath rule vectors (design/rules.md + docs/DECISIONS.md amendments, money model D-91). Amounts are SKR base units (6 decimals) as strings.",
+    "moneyRule": "Each miss costs missBps/10000 of the ORIGINAL stake (floor), capped at the member's balance. Each missed member's forfeiture is split on its own into k + 1 equal shares (k = that day's keepers, one more for KEPT); each share floors and the dust goes to KEPT. A missed member gets no share. No entry fee. A day with no keepers sends all of its forfeitures to the treasury (owner-confirmed; see nobody-keeps-day and the solo vectors). A broken Oath (HP 0) sends half of every start-of-day balance to the treasury and holds half for the 7-day Rematch window, after which the program sweeps it to the treasury (`held`). `fee` is KEPT's shares including dust; `toTreasury` is money outside the split.",
     "generatedBy": "packages/engine/scripts/write-vectors.ts",
     "marks": "one string per finished day, one char per member: k = kept, m = missed"
   },
   "vectors": [
     {
-      "name": "worked-example",
-      "description": "rules.md §3: 4 × 1,000 SKR, 3 days. Day 1 B and D miss; day 2 all keep; day 3 D misses.",
+      "name": "all-keep-7",
+      "description": "Everyone keeps every day: no money moves, everyone gets their full stake back, HP stays 100.",
+      "terms": {
+        "stake": "1000000000",
+        "days": 7,
+        "members": 3,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kkk",
+        "kkk",
+        "kkk",
+        "kkk",
+        "kkk",
+        "kkk",
+        "kkk"
+      ],
+      "expected": {
+        "hp": 100,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "1000000000",
+          "1000000000",
+          "1000000000"
+        ],
+        "lost": [
+          "0",
+          "0",
+          "0"
+        ],
+        "won": [
+          "0",
+          "0",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "0",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 3,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 4,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 5,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 6,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "owner-example-one-miss",
+      "description": "D-91: 4 × 100 SKR, one member misses once. The miss costs 10 SKR, split between the 3 keepers and KEPT: 2.5 each.",
+      "terms": {
+        "stake": "100000000",
+        "days": 3,
+        "members": 4,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kkkm",
+        "kkkk",
+        "kkkk"
+      ],
+      "expected": {
+        "hp": 100,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "102500000",
+          "102500000",
+          "102500000",
+          "90000000"
+        ],
+        "lost": [
+          "0",
+          "0",
+          "0",
+          "10000000"
+        ],
+        "won": [
+          "2500000",
+          "2500000",
+          "2500000",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "2500000",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 20,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "10000000"
+            ],
+            "won": [
+              "2500000",
+              "2500000",
+              "2500000",
+              "0"
+            ],
+            "fee": "2500000",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 90,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "two-misses-one-day",
+      "description": "D-91: 4 × 1,000 SKR, two members miss the same day: 200 SKR split 3 ways (2 keepers + KEPT). Not divisible: 66.666666 each, the dust goes to KEPT.",
       "terms": {
         "stake": "1000000000",
         "days": 3,
         "members": 4,
         "solo": false,
-        "feeBps": 1000
+        "missBps": 1000
+      },
+      "marks": [
+        "kkmm",
+        "kkkk",
+        "kkkk"
+      ],
+      "expected": {
+        "hp": 90,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "1066666666",
+          "1066666666",
+          "900000000",
+          "900000000"
+        ],
+        "lost": [
+          "0",
+          "0",
+          "100000000",
+          "100000000"
+        ],
+        "won": [
+          "66666666",
+          "66666666",
+          "0",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "66666668",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 40,
+            "hpAfter": 70,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "100000000",
+              "100000000"
+            ],
+            "won": [
+              "66666666",
+              "66666666",
+              "0",
+              "0"
+            ],
+            "fee": "66666668",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 70,
+            "damage": 0,
+            "hpAfter": 80,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 80,
+            "damage": 0,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "worked-example",
+      "description": "D-91 version of the rules.md §3 example: 4 × 1,000 SKR, 3 days. Day 1 B and D miss (200 split 3 ways); day 2 all keep; day 3 D misses again (100 split 4 ways, still 100: no escalation).",
+      "terms": {
+        "stake": "1000000000",
+        "days": 3,
+        "members": 4,
+        "solo": false,
+        "missBps": 1000
       },
       "marks": [
         "kmkm",
@@ -25,21 +503,21 @@
         "broken": false,
         "brokeOnDay": null,
         "balances": [
-          "1468750000",
-          "779166667",
-          "1468750000",
-          "166666667"
+          "1091666666",
+          "925000000",
+          "1091666666",
+          "800000000"
         ],
         "lost": [
           "0",
-          "333333333",
+          "100000000",
           "0",
-          "833333333"
+          "200000000"
         ],
         "won": [
-          "468750000",
-          "112500000",
-          "468750000",
+          "91666666",
+          "25000000",
+          "91666666",
           "0"
         ],
         "held": [
@@ -48,7 +526,7 @@
           "0",
           "0"
         ],
-        "fee": "116666666",
+        "fee": "91666668",
         "toTreasury": "0",
         "days": [
           {
@@ -59,17 +537,17 @@
             "broken": false,
             "lost": [
               "0",
-              "333333333",
+              "100000000",
               "0",
-              "333333333"
+              "100000000"
             ],
             "won": [
-              "300000000",
+              "66666666",
               "0",
-              "300000000",
+              "66666666",
               "0"
             ],
-            "fee": "66666666",
+            "fee": "66666668",
             "toTreasury": "0",
             "held": [
               "0",
@@ -115,15 +593,15 @@
               "0",
               "0",
               "0",
-              "500000000"
+              "100000000"
             ],
             "won": [
-              "168750000",
-              "112500000",
-              "168750000",
+              "25000000",
+              "25000000",
+              "25000000",
               "0"
             ],
-            "fee": "50000000",
+            "fee": "25000000",
             "toTreasury": "0",
             "held": [
               "0",
@@ -136,231 +614,14 @@
       }
     },
     {
-      "name": "all-keep-7",
-      "description": "Everyone keeps every day: no money moves, HP stays 100.",
-      "terms": {
-        "stake": "1000000000",
-        "days": 7,
-        "members": 3,
-        "solo": false,
-        "feeBps": 1000
-      },
-      "marks": [
-        "kkk",
-        "kkk",
-        "kkk",
-        "kkk",
-        "kkk",
-        "kkk",
-        "kkk"
-      ],
-      "expected": {
-        "hp": 100,
-        "broken": false,
-        "brokeOnDay": null,
-        "balances": [
-          "1000000000",
-          "1000000000",
-          "1000000000"
-        ],
-        "lost": [
-          "0",
-          "0",
-          "0"
-        ],
-        "won": [
-          "0",
-          "0",
-          "0"
-        ],
-        "held": [
-          "0",
-          "0",
-          "0"
-        ],
-        "fee": "0",
-        "toTreasury": "0",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 3,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 4,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 5,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 6,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0",
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "miss-cost-sequence-7",
-      "description": "1,000 / 7 days: one member misses three times (143, 214, 321 rounded) while HP survives.",
+      "name": "repeated-misses-7",
+      "description": "D-91: 1,000 SKR / 7 days. One member misses three times and pays 100 SKR each time (flat, not 143 / 214 / 321); the others split each 100 four ways.",
       "terms": {
         "stake": "1000000000",
         "days": 7,
         "members": 4,
         "solo": false,
-        "feeBps": 1000
+        "missBps": 1000
       },
       "marks": [
         "kkkm",
@@ -376,21 +637,21 @@
         "broken": false,
         "brokeOnDay": null,
         "balances": [
-          "1203571427",
-          "1203571427",
-          "1203571427",
-          "321428573"
+          "1075000000",
+          "1075000000",
+          "1075000000",
+          "700000000"
         ],
         "lost": [
           "0",
           "0",
           "0",
-          "678571427"
+          "300000000"
         ],
         "won": [
-          "203571427",
-          "203571427",
-          "203571427",
+          "75000000",
+          "75000000",
+          "75000000",
           "0"
         ],
         "held": [
@@ -399,7 +660,7 @@
           "0",
           "0"
         ],
-        "fee": "67857146",
+        "fee": "75000000",
         "toTreasury": "0",
         "days": [
           {
@@ -412,15 +673,15 @@
               "0",
               "0",
               "0",
-              "142857142"
+              "100000000"
             ],
             "won": [
-              "42857142",
-              "42857142",
-              "42857142",
+              "25000000",
+              "25000000",
+              "25000000",
               "0"
             ],
-            "fee": "14285716",
+            "fee": "25000000",
             "toTreasury": "0",
             "held": [
               "0",
@@ -466,15 +727,15 @@
               "0",
               "0",
               "0",
-              "214285714"
+              "100000000"
             ],
             "won": [
-              "64285714",
-              "64285714",
-              "64285714",
+              "25000000",
+              "25000000",
+              "25000000",
               "0"
             ],
-            "fee": "21428572",
+            "fee": "25000000",
             "toTreasury": "0",
             "held": [
               "0",
@@ -520,15 +781,15 @@
               "0",
               "0",
               "0",
-              "321428571"
+              "100000000"
             ],
             "won": [
-              "96428571",
-              "96428571",
-              "96428571",
+              "25000000",
+              "25000000",
+              "25000000",
               "0"
             ],
-            "fee": "32142858",
+            "fee": "25000000",
             "toTreasury": "0",
             "held": [
               "0",
@@ -595,708 +856,26 @@
       }
     },
     {
-      "name": "cap-at-balance",
-      "description": "D-3: 3-day, 2 members; B misses every day so the 3rd miss (750) is capped at B's remaining balance (166.67).",
-      "terms": {
-        "stake": "1000000000",
-        "days": 3,
-        "members": 2,
-        "solo": false,
-        "feeBps": 1000
-      },
-      "marks": [
-        "km",
-        "km",
-        "km"
-      ],
-      "expected": {
-        "hp": 70,
-        "broken": false,
-        "brokeOnDay": null,
-        "balances": [
-          "1900000001",
-          "0"
-        ],
-        "lost": [
-          "0",
-          "1000000000"
-        ],
-        "won": [
-          "900000001",
-          "0"
-        ],
-        "held": [
-          "0",
-          "0"
-        ],
-        "fee": "99999999",
-        "toTreasury": "0",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 20,
-            "hpAfter": 90,
-            "broken": false,
-            "lost": [
-              "0",
-              "333333333"
-            ],
-            "won": [
-              "300000000",
-              "0"
-            ],
-            "fee": "33333333",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 90,
-            "damage": 20,
-            "hpAfter": 80,
-            "broken": false,
-            "lost": [
-              "0",
-              "500000000"
-            ],
-            "won": [
-              "450000000",
-              "0"
-            ],
-            "fee": "50000000",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 80,
-            "damage": 20,
-            "hpAfter": 70,
-            "broken": false,
-            "lost": [
-              "0",
-              "166666667"
-            ],
-            "won": [
-              "150000001",
-              "0"
-            ],
-            "fee": "16666666",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "nobody-keeps-day",
-      "description": "D-15: everyone misses day 1: the lost money goes to the treasury with no fee.",
-      "terms": {
-        "stake": "500000000",
-        "days": 3,
-        "members": 2,
-        "solo": false,
-        "feeBps": 1000
-      },
-      "marks": [
-        "mm",
-        "kk",
-        "kk"
-      ],
-      "expected": {
-        "hp": 90,
-        "broken": false,
-        "brokeOnDay": null,
-        "balances": [
-          "333333334",
-          "333333334"
-        ],
-        "lost": [
-          "166666666",
-          "166666666"
-        ],
-        "won": [
-          "0",
-          "0"
-        ],
-        "held": [
-          "0",
-          "0"
-        ],
-        "fee": "0",
-        "toTreasury": "333333332",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 40,
-            "hpAfter": 70,
-            "broken": false,
-            "lost": [
-              "166666666",
-              "166666666"
-            ],
-            "won": [
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "333333332",
-            "held": [
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 70,
-            "damage": 0,
-            "hpAfter": 80,
-            "broken": false,
-            "lost": [
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 80,
-            "damage": 0,
-            "hpAfter": 90,
-            "broken": false,
-            "lost": [
-              "0",
-              "0"
-            ],
-            "won": [
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "solo-kept",
-      "description": "Solo, kept every day.",
-      "terms": {
-        "stake": "2500000000",
-        "days": 3,
-        "members": 1,
-        "solo": true,
-        "feeBps": 1000
-      },
-      "marks": [
-        "k",
-        "k",
-        "k"
-      ],
-      "expected": {
-        "hp": 100,
-        "broken": false,
-        "brokeOnDay": null,
-        "balances": [
-          "2500000000"
-        ],
-        "lost": [
-          "0"
-        ],
-        "won": [
-          "0"
-        ],
-        "held": [
-          "0"
-        ],
-        "fee": "0",
-        "toTreasury": "0",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "solo-missed-some",
-      "description": "D-1: solo misses go to the treasury, −35 HP each.",
-      "terms": {
-        "stake": "1000000000",
-        "days": 7,
-        "members": 1,
-        "solo": true,
-        "feeBps": 1000
-      },
-      "marks": [
-        "k",
-        "m",
-        "k",
-        "k",
-        "m",
-        "k",
-        "k"
-      ],
-      "expected": {
-        "hp": 90,
-        "broken": false,
-        "brokeOnDay": null,
-        "balances": [
-          "642857144"
-        ],
-        "lost": [
-          "357142856"
-        ],
-        "won": [
-          "0"
-        ],
-        "held": [
-          "0"
-        ],
-        "fee": "0",
-        "toTreasury": "357142856",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 0,
-            "hpAfter": 100,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 100,
-            "damage": 35,
-            "hpAfter": 75,
-            "broken": false,
-            "lost": [
-              "142857142"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "142857142",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 75,
-            "damage": 0,
-            "hpAfter": 85,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 3,
-            "hpBefore": 85,
-            "damage": 0,
-            "hpAfter": 95,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 4,
-            "hpBefore": 95,
-            "damage": 35,
-            "hpAfter": 70,
-            "broken": false,
-            "lost": [
-              "214285714"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "214285714",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 5,
-            "hpBefore": 70,
-            "damage": 0,
-            "hpAfter": 80,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 6,
-            "hpBefore": 80,
-            "damage": 0,
-            "hpAfter": 90,
-            "broken": false,
-            "lost": [
-              "0"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "0",
-            "held": [
-              "0"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "solo-break",
-      "description": "Solo misses every day: 100→75→50→25→break on day 4 (−35 from 25). Half the remaining balance held for the Rematch.",
-      "terms": {
-        "stake": "1000000000",
-        "days": 7,
-        "members": 1,
-        "solo": true,
-        "feeBps": 1000
-      },
-      "marks": [
-        "m",
-        "m",
-        "m",
-        "m",
-        "k",
-        "k",
-        "k"
-      ],
-      "expected": {
-        "hp": 0,
-        "broken": true,
-        "brokeOnDay": 3,
-        "balances": [
-          "0"
-        ],
-        "lost": [
-          "1000000000"
-        ],
-        "won": [
-          "0"
-        ],
-        "held": [
-          "160714286"
-        ],
-        "fee": "0",
-        "toTreasury": "839285714",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 35,
-            "hpAfter": 75,
-            "broken": false,
-            "lost": [
-              "142857142"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "142857142",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 75,
-            "damage": 35,
-            "hpAfter": 50,
-            "broken": false,
-            "lost": [
-              "214285714"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "214285714",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 2,
-            "hpBefore": 50,
-            "damage": 35,
-            "hpAfter": 25,
-            "broken": false,
-            "lost": [
-              "321428571"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "321428571",
-            "held": [
-              "0"
-            ]
-          },
-          {
-            "day": 3,
-            "hpBefore": 25,
-            "damage": 35,
-            "hpAfter": 0,
-            "broken": true,
-            "lost": [
-              "321428573"
-            ],
-            "won": [
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "160714287",
-            "held": [
-              "160714286"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "group-break",
-      "description": "Amendment 2: 4 members, 3 miss on day 1 and day 2: 100−60+10=50, 50−60 ≤ 0 → break on day 2: no heal, no payout, no fee.",
-      "terms": {
-        "stake": "1000000000",
-        "days": 7,
-        "members": 4,
-        "solo": false,
-        "feeBps": 1000
-      },
-      "marks": [
-        "kmmm",
-        "kmmm",
-        "kkkk"
-      ],
-      "expected": {
-        "hp": 0,
-        "broken": true,
-        "brokeOnDay": 1,
-        "balances": [
-          "0",
-          "0",
-          "0",
-          "0"
-        ],
-        "lost": [
-          "1385714284",
-          "1000000000",
-          "1000000000",
-          "1000000000"
-        ],
-        "won": [
-          "385714284",
-          "0",
-          "0",
-          "0"
-        ],
-        "held": [
-          "692857142",
-          "428571429",
-          "428571429",
-          "428571429"
-        ],
-        "fee": "42857142",
-        "toTreasury": "1978571429",
-        "days": [
-          {
-            "day": 0,
-            "hpBefore": 100,
-            "damage": 60,
-            "hpAfter": 50,
-            "broken": false,
-            "lost": [
-              "0",
-              "142857142",
-              "142857142",
-              "142857142"
-            ],
-            "won": [
-              "385714284",
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "42857142",
-            "toTreasury": "0",
-            "held": [
-              "0",
-              "0",
-              "0",
-              "0"
-            ]
-          },
-          {
-            "day": 1,
-            "hpBefore": 50,
-            "damage": 60,
-            "hpAfter": 0,
-            "broken": true,
-            "lost": [
-              "0",
-              "214285714",
-              "214285714",
-              "214285714"
-            ],
-            "won": [
-              "0",
-              "0",
-              "0",
-              "0"
-            ],
-            "fee": "0",
-            "toTreasury": "1978571429",
-            "held": [
-              "692857142",
-              "428571429",
-              "428571429",
-              "428571429"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "name": "fourteen-days",
-      "description": "14-day Oath with scattered misses (weights by days kept so far).",
+      "name": "miss-cost-ignores-length-14",
+      "description": "D-91: a 14-day Oath costs the same per miss as a 3-day one (10% of 2,500 = 250 SKR); the 250 is split 3 ways (2 keepers + KEPT).",
       "terms": {
         "stake": "2500000000",
         "days": 14,
         "members": 3,
         "solo": false,
-        "feeBps": 1000
+        "missBps": 1000
       },
       "marks": [
         "kkk",
         "kmk",
         "kkk",
-        "kkm",
         "kkk",
         "kkk",
-        "mkk",
         "kkk",
         "kkk",
-        "kmk",
+        "kkk",
+        "kkk",
+        "kkk",
         "kkk",
         "kkk",
         "kkk",
@@ -1307,26 +886,26 @@
         "broken": false,
         "brokeOnDay": null,
         "balances": [
-          "2614158163",
-          "2202806124",
-          "2602678572"
+          "2583333333",
+          "2250000000",
+          "2583333333"
         ],
         "lost": [
-          "178571428",
-          "446428570",
-          "178571428"
+          "0",
+          "250000000",
+          "0"
         ],
         "won": [
-          "292729591",
-          "149234694",
-          "281250000"
+          "83333333",
+          "0",
+          "83333333"
         ],
         "held": [
           "0",
           "0",
           "0"
         ],
-        "fee": "80357141",
+        "fee": "83333334",
         "toTreasury": "0",
         "days": [
           {
@@ -1361,15 +940,15 @@
             "broken": false,
             "lost": [
               "0",
-              "178571428",
+              "250000000",
               "0"
             ],
             "won": [
-              "80357143",
+              "83333333",
               "0",
-              "80357143"
+              "83333333"
             ],
-            "fee": "17857142",
+            "fee": "83333334",
             "toTreasury": "0",
             "held": [
               "0",
@@ -1404,20 +983,20 @@
           {
             "day": 3,
             "hpBefore": 100,
-            "damage": 20,
-            "hpAfter": 90,
+            "damage": 0,
+            "hpAfter": 100,
             "broken": false,
             "lost": [
               "0",
               "0",
-              "178571428"
-            ],
-            "won": [
-              "91836734",
-              "68877551",
               "0"
             ],
-            "fee": "17857143",
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
             "toTreasury": "0",
             "held": [
               "0",
@@ -1427,7 +1006,7 @@
           },
           {
             "day": 4,
-            "hpBefore": 90,
+            "hpBefore": 100,
             "damage": 0,
             "hpAfter": 100,
             "broken": false,
@@ -1476,20 +1055,20 @@
           {
             "day": 6,
             "hpBefore": 100,
-            "damage": 20,
-            "hpAfter": 90,
+            "damage": 0,
+            "hpAfter": 100,
             "broken": false,
             "lost": [
-              "178571428",
+              "0",
               "0",
               "0"
             ],
             "won": [
               "0",
-              "80357143",
-              "80357143"
+              "0",
+              "0"
             ],
-            "fee": "17857142",
+            "fee": "0",
             "toTreasury": "0",
             "held": [
               "0",
@@ -1499,7 +1078,7 @@
           },
           {
             "day": 7,
-            "hpBefore": 90,
+            "hpBefore": 100,
             "damage": 0,
             "hpAfter": 100,
             "broken": false,
@@ -1548,20 +1127,20 @@
           {
             "day": 9,
             "hpBefore": 100,
-            "damage": 20,
-            "hpAfter": 90,
+            "damage": 0,
+            "hpAfter": 100,
             "broken": false,
             "lost": [
               "0",
-              "267857142",
+              "0",
               "0"
             ],
             "won": [
-              "120535714",
               "0",
-              "120535714"
+              "0",
+              "0"
             ],
-            "fee": "26785714",
+            "fee": "0",
             "toTreasury": "0",
             "held": [
               "0",
@@ -1571,7 +1150,7 @@
           },
           {
             "day": 10,
-            "hpBefore": 90,
+            "hpBefore": 100,
             "damage": 0,
             "hpAfter": 100,
             "broken": false,
@@ -1663,6 +1242,948 @@
               "0",
               "0",
               "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "nobody-keeps-day",
+      "description": "D-91 (owner-confirmed): everyone misses day 1, so there are no keepers. All of the lost money (2 × 50 SKR) goes to KEPT.",
+      "terms": {
+        "stake": "500000000",
+        "days": 3,
+        "members": 2,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "mm",
+        "kk",
+        "kk"
+      ],
+      "expected": {
+        "hp": 90,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "450000000",
+          "450000000"
+        ],
+        "lost": [
+          "50000000",
+          "50000000"
+        ],
+        "won": [
+          "0",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0"
+        ],
+        "fee": "0",
+        "toTreasury": "100000000",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 40,
+            "hpAfter": 70,
+            "broken": false,
+            "lost": [
+              "50000000",
+              "50000000"
+            ],
+            "won": [
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 70,
+            "damage": 0,
+            "hpAfter": 80,
+            "broken": false,
+            "lost": [
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 80,
+            "damage": 0,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rounding-dust",
+      "description": "D-91: stake 1,000.000007 SKR, so a miss is floor(10%) = 100.000000 SKR; split 3 ways (2 keepers + KEPT) = 33.333333 each, the 1 dust unit goes to KEPT.",
+      "terms": {
+        "stake": "1000000007",
+        "days": 3,
+        "members": 3,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kkm",
+        "kkk",
+        "kkk"
+      ],
+      "expected": {
+        "hp": 100,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "1033333340",
+          "1033333340",
+          "900000007"
+        ],
+        "lost": [
+          "0",
+          "0",
+          "100000000"
+        ],
+        "won": [
+          "33333333",
+          "33333333",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "33333334",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 20,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "100000000"
+            ],
+            "won": [
+              "33333333",
+              "33333333",
+              "0"
+            ],
+            "fee": "33333334",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 90,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "owner-example-two-misses",
+      "description": "D-91: 4 × 100 SKR, two members miss: each forfeits 10 SKR; each forfeiture is split 3 ways (2 keepers + KEPT). Keepers get 6.666666 each over both, KEPT 6.666668.",
+      "terms": {
+        "stake": "100000000",
+        "days": 3,
+        "members": 4,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kkmm",
+        "kkkk",
+        "kkkk"
+      ],
+      "expected": {
+        "hp": 90,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "106666666",
+          "106666666",
+          "90000000",
+          "90000000"
+        ],
+        "lost": [
+          "0",
+          "0",
+          "10000000",
+          "10000000"
+        ],
+        "won": [
+          "6666666",
+          "6666666",
+          "0",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "6666668",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 40,
+            "hpAfter": 70,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "10000000",
+              "10000000"
+            ],
+            "won": [
+              "6666666",
+              "6666666",
+              "0",
+              "0"
+            ],
+            "fee": "6666668",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 70,
+            "damage": 0,
+            "hpAfter": 80,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 80,
+            "damage": 0,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rounding-per-forfeiture",
+      "description": "D-91: stake 30 base units (a miss is 3), 3 members, two miss: each 3-unit forfeiture is split 2 ways (1 keeper + KEPT) = 1 + 2, so the keeper gets 2 and KEPT 4 (not 3 and 3 from splitting the 6 once).",
+      "terms": {
+        "stake": "30",
+        "days": 3,
+        "members": 3,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kmm",
+        "kkk",
+        "kkk"
+      ],
+      "expected": {
+        "hp": 90,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "32",
+          "27",
+          "27"
+        ],
+        "lost": [
+          "0",
+          "3",
+          "3"
+        ],
+        "won": [
+          "2",
+          "0",
+          "0"
+        ],
+        "held": [
+          "0",
+          "0",
+          "0"
+        ],
+        "fee": "4",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 40,
+            "hpAfter": 70,
+            "broken": false,
+            "lost": [
+              "0",
+              "3",
+              "3"
+            ],
+            "won": [
+              "2",
+              "0",
+              "0"
+            ],
+            "fee": "4",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 70,
+            "damage": 0,
+            "hpAfter": 80,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 80,
+            "damage": 0,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0",
+              "0",
+              "0"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "solo-kept",
+      "description": "Solo, kept every day.",
+      "terms": {
+        "stake": "2500000000",
+        "days": 3,
+        "members": 1,
+        "solo": true,
+        "missBps": 1000
+      },
+      "marks": [
+        "k",
+        "k",
+        "k"
+      ],
+      "expected": {
+        "hp": 100,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "2500000000"
+        ],
+        "lost": [
+          "0"
+        ],
+        "won": [
+          "0"
+        ],
+        "held": [
+          "0"
+        ],
+        "fee": "0",
+        "toTreasury": "0",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "solo-missed-some",
+      "description": "D-1 / D-91: solo misses cost 10% each (flat) and go to KEPT, −35 HP each.",
+      "terms": {
+        "stake": "1000000000",
+        "days": 7,
+        "members": 1,
+        "solo": true,
+        "missBps": 1000
+      },
+      "marks": [
+        "k",
+        "m",
+        "k",
+        "k",
+        "m",
+        "k",
+        "k"
+      ],
+      "expected": {
+        "hp": 90,
+        "broken": false,
+        "brokeOnDay": null,
+        "balances": [
+          "800000000"
+        ],
+        "lost": [
+          "200000000"
+        ],
+        "won": [
+          "0"
+        ],
+        "held": [
+          "0"
+        ],
+        "fee": "0",
+        "toTreasury": "200000000",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 0,
+            "hpAfter": 100,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 100,
+            "damage": 35,
+            "hpAfter": 75,
+            "broken": false,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 75,
+            "damage": 0,
+            "hpAfter": 85,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 3,
+            "hpBefore": 85,
+            "damage": 0,
+            "hpAfter": 95,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 4,
+            "hpBefore": 95,
+            "damage": 35,
+            "hpAfter": 70,
+            "broken": false,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 5,
+            "hpBefore": 70,
+            "damage": 0,
+            "hpAfter": 80,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 6,
+            "hpBefore": 80,
+            "damage": 0,
+            "hpAfter": 90,
+            "broken": false,
+            "lost": [
+              "0"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "0",
+            "held": [
+              "0"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "solo-break",
+      "description": "Solo misses every day: 100→75→50→25→break on day 4 (−35 from 25). Half the remaining balance held for the Rematch.",
+      "terms": {
+        "stake": "1000000000",
+        "days": 7,
+        "members": 1,
+        "solo": true,
+        "missBps": 1000
+      },
+      "marks": [
+        "m",
+        "m",
+        "m",
+        "m",
+        "k",
+        "k",
+        "k"
+      ],
+      "expected": {
+        "hp": 0,
+        "broken": true,
+        "brokeOnDay": 3,
+        "balances": [
+          "0"
+        ],
+        "lost": [
+          "1000000000"
+        ],
+        "won": [
+          "0"
+        ],
+        "held": [
+          "350000000"
+        ],
+        "fee": "0",
+        "toTreasury": "650000000",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 35,
+            "hpAfter": 75,
+            "broken": false,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 75,
+            "damage": 35,
+            "hpAfter": 50,
+            "broken": false,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 2,
+            "hpBefore": 50,
+            "damage": 35,
+            "hpAfter": 25,
+            "broken": false,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "100000000",
+            "held": [
+              "0"
+            ]
+          },
+          {
+            "day": 3,
+            "hpBefore": 25,
+            "damage": 35,
+            "hpAfter": 0,
+            "broken": true,
+            "lost": [
+              "100000000"
+            ],
+            "won": [
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "350000000",
+            "held": [
+              "350000000"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "group-break",
+      "description": "Amendment 2: 4 members, 3 miss on day 1 and day 2: 100−60+10=50, 50−60 ≤ 0 → break on day 2: no heal, no payout, no KEPT share.",
+      "terms": {
+        "stake": "1000000000",
+        "days": 7,
+        "members": 4,
+        "solo": false,
+        "missBps": 1000
+      },
+      "marks": [
+        "kmmm",
+        "kmmm",
+        "kkkk"
+      ],
+      "expected": {
+        "hp": 0,
+        "broken": true,
+        "brokeOnDay": 1,
+        "balances": [
+          "0",
+          "0",
+          "0",
+          "0"
+        ],
+        "lost": [
+          "1150000000",
+          "1000000000",
+          "1000000000",
+          "1000000000"
+        ],
+        "won": [
+          "150000000",
+          "0",
+          "0",
+          "0"
+        ],
+        "held": [
+          "575000000",
+          "450000000",
+          "450000000",
+          "450000000"
+        ],
+        "fee": "150000000",
+        "toTreasury": "1925000000",
+        "days": [
+          {
+            "day": 0,
+            "hpBefore": 100,
+            "damage": 60,
+            "hpAfter": 50,
+            "broken": false,
+            "lost": [
+              "0",
+              "100000000",
+              "100000000",
+              "100000000"
+            ],
+            "won": [
+              "150000000",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "150000000",
+            "toTreasury": "0",
+            "held": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          {
+            "day": 1,
+            "hpBefore": 50,
+            "damage": 60,
+            "hpAfter": 0,
+            "broken": true,
+            "lost": [
+              "0",
+              "100000000",
+              "100000000",
+              "100000000"
+            ],
+            "won": [
+              "0",
+              "0",
+              "0",
+              "0"
+            ],
+            "fee": "0",
+            "toTreasury": "1925000000",
+            "held": [
+              "575000000",
+              "450000000",
+              "450000000",
+              "450000000"
             ]
           }
         ]

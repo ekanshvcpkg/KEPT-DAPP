@@ -104,6 +104,8 @@
   "core": {
     "$source": "phase 3: cases the design shows only one sample of (DECISIONS › Copy additions)",
     "and": "and",
+    "estimate": "estimate",
+    "estimateAfter": "{text} · estimate",
     "dayList": "day {list}",
     "daysList": "days {list}",
     "cancelAlone": "You get your {amount} SKR back. This can't be undone.",

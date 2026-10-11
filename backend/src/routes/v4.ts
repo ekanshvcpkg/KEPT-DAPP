@@ -7,9 +7,9 @@ import { createAssociatedTokenAccountInstruction, createTransferInstruction, get
 import { prisma } from "../db.js";
 import { config } from "../config.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
-import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, settleDecision } from "../v4/jobs.js";
-import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, oathEconomics, type OathTerms } from "../v4/terms.js";
-import { RULES_V2, settleAt, SLASH_BPS } from "../shared/payout.js";
+import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
+import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
+import { BREAK_HOLD_BPS, HELD_WINDOW_DAYS, MISS_BPS, replayV3, RULES_V2, RULES_V3 } from "../shared/payout.js";
 import { CHALLENGE_UPLOAD_GRACE_MS, GESTURE_TEXT, OBJECT_IDS, OBJECT_TEXT, nudgeRejection, nudgeTargets, proofRequestKind, REVIEW_PHOTO_TTL_MS, reviewPhotoExpired, reviewRequestRejection, type ChallengeGesture, proofRejection, reviewOutcome } from "../v4/rules.js";
 import { currentChallenge, dayChallenge, findSession, startSession } from "../v4/challenges.js";
 import { combinedProofHash, sessionPhase, validMinMinutes } from "../v4/session.js";
@@ -159,9 +159,12 @@ get("/api/oaths/:oath/details", async (req: AuthedRequest, res) => {
 get("/api/economics", async (_req, res) => {
   const c = await readConfigEconomics();
   if (!c) return res.status(503).json({ error: "Program config is not readable" });
-  if (!c.economics) return res.json({ rulesVersion: 1, feeBps: 0, freezePrice: null, slashBps: null, carryoverReserve: null, legacyMissFeeBps: c.legacyFeeBps });
-  return res.json({ rulesVersion: RULES_V2, feeBps: c.economics.feeBps, freezePrice: c.economics.freezePrice, slashBps: Number(SLASH_BPS), freezesPerMember: 1,
-    carryoverReserve: { address: c.economics.carryoverVault, total: c.economics.carryoverTotal } });
+  // Every new Oath records rules v3 (DECISIONS D-91): stake only, no entry fee, no freezes.
+  return res.json({
+    rulesVersion: RULES_V3, entryFee: false, feeBps: 0, feeAmount: "0", freezePrice: null,
+    missBps: MISS_BPS, forfeitureSplit: "equal shares between that day's keepers and KEPT; remainders to KEPT; a day nobody kept goes to KEPT",
+    breakHoldBps: Number(BREAK_HOLD_BPS), heldWindowDays: HELD_WINDOW_DAYS,
+  });
 });
 
 post("/api/proof/challenge", async (req: AuthedRequest, res) => {
@@ -434,6 +437,7 @@ export type JobReport = {
   missedMarked: number;
   settled: Array<{ oath: string; signature: string }>;
   carryoverSwept: Array<{ oath: string; signature: string; amount: string }>;
+  heldSwept: Array<{ oath: string; signature: string; amount: string }>;
   finished: string[];
   reviewPhotosDeleted: number;
   errors: Array<{ oath: string; error: string }>;
@@ -458,7 +462,7 @@ export function startV4Scheduler() {
 }
 
 async function runJobsOnce(): Promise<JobReport> {
-  const report: JobReport = { startedAt: new Date().toISOString(), finishedAt: "", oaths: 0, missedMarked: 0, settled: [], carryoverSwept: [], finished: [], errors: [], bounties: [], reviewPhotosDeleted: 0 };
+  const report: JobReport = { startedAt: new Date().toISOString(), finishedAt: "", oaths: 0, missedMarked: 0, settled: [], carryoverSwept: [], heldSwept: [], finished: [], errors: [], bounties: [], reviewPhotosDeleted: 0 };
   const watches = await prisma.oathWatch.findMany({ where: { finishedAt: null } });
   report.oaths = watches.length;
   for (const w of watches) {
@@ -482,7 +486,10 @@ async function runOathJobs(w: { id: number; oath: string; missedThrough: number 
 
   // Record misses once each day closes. Settled Oaths have final day bits for every day.
   if (oath.status === 1 || oath.status === 2) {
-    const through = oath.status === 2 ? oath.numDays - 1 : lastClosedDay(oath, now);
+    let through = oath.status === 2 ? oath.numDays - 1 : lastClosedDay(oath, now);
+    // A broken rules v3 Oath ends on the breaking day: later days were never played.
+    const broke = oath.rulesVersion === RULES_V3 ? replayV3(BigInt(oath.stakeAmount), oath.terms.missBps || MISS_BPS, oath.isSolo, oath.members.map((m) => oath.daysKept[m] ?? 0), oath.numDays)?.brokeDay ?? null : null;
+    if (broke !== null) through = Math.min(through, broke);
     if (through > w.missedThrough) {
       const misses = missedDays(oath.daysKept, w.missedThrough, through);
       const created = misses.length ? await prisma.missedDay.createMany({ data: misses.map((m) => ({ oath: w.oath, ...m })), skipDuplicates: true }) : { count: 0 };
@@ -508,7 +515,7 @@ async function runOathJobs(w: { id: number; oath: string; missedThrough: number 
         } catch { /* already reminded or delivery unavailable */ }
       }
     }
-    if (now >= settleAt(oath)) {
+    if (now >= settleDueAt(oath)) {
       // Reminders and miss marking above take time, and a member may settle from their wallet meanwhile:
       // re-read the account right before settling and skip if it is no longer Active.
       const fresh = await readOath(w.oath);
@@ -526,10 +533,11 @@ async function runOathJobs(w: { id: number; oath: string; missedThrough: number 
     }
   }
 
-  // Rules v2: copy the settlement accounting from chain, then move any carryover to the reserve.
-  // Both steps re-read the account first, so retries and restarts neither double-record nor double-send.
+  // Rules v2 and v3: copy the settlement accounting from chain. v2 then moves any carryover to the reserve; v3 releases the
+  // held half of a broken Oath to the treasury once its window has passed. Each step re-reads the account first, so retries
+  // and restarts neither double-record nor double-send (the program refuses a second sweep).
   let sweepPending = false;
-  if (status === 2 && oath.rulesVersion === RULES_V2) {
+  if (status === 2 && (oath.rulesVersion === RULES_V2 || oath.rulesVersion === RULES_V3)) {
     let settled = await readOath(w.oath);
     if (settled?.status === 2) await recordSettlement(w.oath, settled);
     if (needsCarryoverSweep(settled)) {
@@ -538,7 +546,13 @@ async function runOathJobs(w: { id: number; oath: string; missedThrough: number 
       settled = await readOath(w.oath);
       if (settled?.status === 2) await recordSettlement(w.oath, settled);
     }
-    sweepPending = needsCarryoverSweep(settled);
+    if (needsHeldSweep(settled, Math.floor(Date.now() / 1000))) {
+      const signature = await sweepHeldOnChain(w.oath, settled!, async (sig) => { await prisma.oathWatch.update({ where: { id: w.id }, data: { sweepSignature: sig } }); });
+      report.heldSwept.push({ oath: w.oath, signature, amount: settled!.terms.heldTotal });
+      settled = await readOath(w.oath);
+      if (settled?.status === 2) await recordSettlement(w.oath, settled);
+    }
+    sweepPending = needsCarryoverSweep(settled) || heldSweepPending(settled);
   }
 
   // Settled (by this job or a member's wallet) or cancelled: delete photos once and stop watching.
@@ -604,13 +618,40 @@ async function sweepCarryoverOnChain(address: string, oath: OathRead, onSubmitte
   return sig;
 }
 
+/** The treasury token account the program is configured with (Config.treasury); settle and sweep_held must pass exactly it. */
+async function configuredTreasury(): Promise<PublicKey> {
+  const account = await connection.getAccountInfo(configPda, "confirmed");
+  if (account && account.owner.equals(programId) && account.data.length >= CONFIG_BASE_LEN) return new PublicKey(account.data.subarray(72, 104));
+  if (!config.treasuryTokenAccount) throw new Error("TREASURY_TOKEN_ACCOUNT is not configured");
+  return new PublicKey(config.treasuryTokenAccount);
+}
+
+/** Sends sweep_held (rules v3): the held half of a broken Oath goes to the treasury after its window. The program refuses a second sweep. */
+async function sweepHeldOnChain(address: string, oath: OathRead, onSubmitted: (signature: string) => Promise<void>) {
+  if (!config.verifierSecretKey || !config.stakeMint) throw new Error("Sweep signer/mint is not configured");
+  const signer = keypairFromEnv(config.verifierSecretKey);
+  const oathPk = new PublicKey(address), mint = new PublicKey(config.stakeMint);
+  const vault = PublicKey.findProgramAddressSync([Buffer.from("vault"), oathPk.toBuffer()], programId)[0];
+  const tokenProgram = await tokenProgramForMint(mint);
+  const keys = [
+    { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },
+    { pubkey: vault, isSigner: false, isWritable: true }, { pubkey: await configuredTreasury(), isSigner: false, isWritable: true },
+    { pubkey: mint, isSigner: false, isWritable: false }, { pubkey: tokenProgram, isSigner: false, isWritable: false },
+  ];
+  const data = createHash("sha256").update("global:sweep_held").digest().subarray(0, 8);
+  const sig = await connection.sendTransaction(new Transaction().add(new TransactionInstruction({ programId, keys, data })), [signer]);
+  await onSubmitted(sig);
+  const confirmed = await connection.confirmTransaction(sig, "confirmed");
+  if (confirmed.value.err) throw new Error(`sweep_held failed: ${JSON.stringify(confirmed.value.err)} (held ${oath.terms.heldTotal})`);
+  return sig;
+}
+
 async function settleOnChain(address: string, oath: OathRead) {
   if (!config.verifierSecretKey || !config.stakeMint) throw new Error("Settlement signer/mint is not configured");
   const signer = keypairFromEnv(config.verifierSecretKey);
   const oathPk = new PublicKey(address), mint = new PublicKey(config.stakeMint);
   const vault = PublicKey.findProgramAddressSync([Buffer.from("vault"), oathPk.toBuffer()], programId)[0];
-  if (!config.treasuryTokenAccount) throw new Error("TREASURY_TOKEN_ACCOUNT is not configured");
-  const treasury = new PublicKey(config.treasuryTokenAccount);
+  const treasury = await configuredTreasury();
   const tokenProgram = await tokenProgramForMint(mint);
   const keys = [
     { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },

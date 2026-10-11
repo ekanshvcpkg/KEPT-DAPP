@@ -27,7 +27,7 @@ Live (D-80) uses only `frontend/src/api/http/*`. Where the backend lacks somethi
 |---|---|---|---|
 | P0-1 / P0-2 proof | Two photos with sessions: `POST /api/proof/challenge` → `/proof/verify` (the **phone** submits a model verdict + image hash) → `/api/proof/start` → wait `minMinutes` → `/api/proof`. The server no longer looks at photos. | Wired to the local MediaPipe + Gemma Android module; the Live entry flow blocks wallet use until the models are installed. Photo 1 waits for backend `endAllowedAt` before enabling photo 2. Needs a physical Seeker validation pass; emulator inference is unsupported. | No backend route gap identified for the basic Oath proof flow. Bounty proof still needs a separate Live implementation; see P1-10. The design has no explicit screen for the backend `minMinutes` wait. |
 | P0-3 gestures | `Thumb_Up` / `Victory` / `Open_Palm`, never the same twice in a row | Mapped 1:1 to the design's three | — (done) |
-| P0-4, P0-5, P0-6 days, HP, settlement | Program: 24 h windows from Start; **rules v1** (all-or-nothing, 10 % of missed stakes) on Devnet. **Rules v2** is coded (fee on top of the stake, one 50 % slash, a buyable freeze, settle a day late) but not switched on (Config is 139 bytes). Neither has HP or 1.5^k costs. `GET /api/oaths/:oath/details` now returns `economics` (estimated payouts, missed days, on-track). | Engine numbers labelled as estimates, the chain's payout once settled (D-14). | **Decision** (Q2): which numbers Live shows. If v2 is switched on, C6 / E2 must show and check stake + fee. |
+| P0-4, P0-5, P0-6 days, HP, settlement | Program: 24 h windows from Start; **rules v1** (all-or-nothing, 10 % of missed stakes) on Devnet. **Rules v2** is coded (fee on top of the stake, one 50 % slash, a buyable freeze, settle a day late) but not switched on (Config is 139 bytes). Neither has HP, the day-by-day settlement or the owner's money model (P0-12). `GET /api/oaths/:oath/details` now returns `economics` (estimated payouts, missed days, on-track). | Engine numbers labelled as estimates, the chain's payout once settled (D-14). | **Decision** (Q2): which numbers Live shows. If v2 is switched on, C6 / E2 must show and check stake + fee. |
 | P0-7 solo stake | Still `InvalidStake` for a solo stake > 0 | Live solo Oaths are on chain with no stake (D-30) | As before |
 | P0-8 Genesis gate | `requireGenesis` covers **all of `/api`**, incl. `/api/inbox`, `/api/price` and invite previews | A non-Seeker's inbox is empty (403 mapped); price shows no ≈ $ | Move inbox, price and invite preview outside the gate (P1-13, P1-15) |
 | P0-10 my Oaths | No index route | RPC member index (4 × `getProgramAccounts`) | `GET /api/me/oaths` |
@@ -46,7 +46,7 @@ The checklist for the backend developer. Each line points to the full item below
 
 **Fix (program)**
 - [ ] **Day 1 at the first local midnight after Start**, not at Start (P0-4). The app's real Oaths currently follow the program's 24 h windows from Start.
-- [ ] **Day-by-day settlement** with 1.5× miss costs, a 10 % fee and weighted keeper shares instead of all-or-nothing (P0-6). Test vectors: `packages/engine/test-vectors/oath-vectors.json`.
+- [ ] **Day-by-day settlement by the owner's money model** (flat 10 % of the original stake per miss, split equally between that day's keepers and KEPT; **P0-12, supersedes P0-6's 1.5× and 10 % fee**) instead of all-or-nothing. Test vectors: `packages/engine/test-vectors/oath-vectors.json`.
 - [ ] **HP and a Broken status** with an early settle at 0 HP (P0-5).
 - [ ] **Solo Oaths with a stake** (`InvalidStake` today, P0-7).
 - [ ] **Cancel and leave refund in the same transaction**, plus a `leave_oath` instruction (P1-3, P1-4).
@@ -122,7 +122,9 @@ The checklist for the backend developer. Each line points to the full item below
 - **Change:** HP is deterministic from the `days_kept` bitmasks (`state.rs:33`), so it doesn't need storing. But the program needs a **Broken** status and an early settle path that proves HP reached 0 on a past day and settles at that point. The backend's daily job has to detect it, and the API must expose HP, `hpLostToday` and the break day. The engine (`packages/engine`) is the reference implementation.
 - **Breaking day (decided, DECISIONS D-10):** on the day HP reaches 0 there's **no heal, no keeper payout and no fee**. The whole remaining pot (every member's balance, including that day's miss costs) splits **50 % held for the Rematch** (per member, P1-2) and **50 % to the KEPT treasury**. Held money that isn't recovered is also released to the treasury.
 
-### P0-6. Settlement math · CONFIRMED
+### P0-6. Settlement math · CONFIRMED (money rules superseded by P0-12, 2026-10-11)
+> The owner changed the money model after this item was written (DECISIONS D-91). The 1.5× cost, the 10 % fee and the days-kept weighting below are **no longer the target**; build P0-12. The "Now" description of the program and the replay-from-bitmasks approach still apply.
+
 - **Now:** all-or-nothing. A member "succeeded" only if `days_kept == full` (`lib.rs:159-160`). `calculate_payouts` (`lib.rs:227-250`) gives failed members 0, splits their **whole** stakes equally among full keepers after the fee, and if **nobody** kept every day, refunds everyone 90 % (`lib.rs:236-239`). Members who missed one day are treated like members who missed all of them. There's also a dead branch for 16-day Oaths (`lib.rs:159`).
 - **Design** (rules.md §3):
   - **Cost of a miss:** `stake / days × 1.5^k` for that member's k-th miss, capped at their remaining balance
@@ -136,6 +138,27 @@ The checklist for the backend developer. Each line points to the full item below
 - **Claims:** the app shows **exactly what the chain pays** on J1, D4 and L1–L6 (D-14). Until this item lands, a settled real Oath will show all-or-nothing numbers there, and only D2/B1/B5 show engine estimates.
 
 - **App today (Phase 3):** live balances on B1/D2 are engine estimates; J1, D4 and L1–L4 show the chain's `member.payout` for settled real Oaths (D-14). With today's program, a member who missed one day sees 0 on J1 even though D2 showed a balance.
+### P0-12. Owner money model: flat 10 % per miss, shared with the keepers and KEPT · IMPLEMENTED IN SOURCE, NOT YET DEPLOYED (2026-10-11)
+Authorised by the owner for frontend, backend and program. **Source:** `onchain/programs/kept_test/src/economics.rs` (`replay_v3`, `OathTerms`), `lib.rs` (`create_oath`, `settle_oath`, `sweep_held`), `backend/src/shared/payout.ts` (`replayV3`), `backend/src/v4/{terms,jobs}.ts` and the scheduler in `backend/src/routes/v4.ts`, `packages/engine`, `packages/chain`.
+**Deployment:** the Devnet upgrade (`6iXXBq…uMUh`, authority `FFAZ…GkJ`) has **not** run yet: the build is 442 KB against 347 KB deployed and the authority wallet lacked the roughly 2.75 SOL the buffer and the program-account extension need (the faucet was rate-limited). Until it runs, Devnet still settles by rules v1 and Live shows engine numbers only as estimates. When it runs, record the upgrade transaction and the `onchain/scripts/e2e_devnet_v3.ts` report here.
+
+**Rule version for new Oaths: 3** (`OathTerms.rules_version = 3`, `miss_bps = 1000`, recorded in the Oath account when it is created; Oaths created earlier keep v1, and v2 was never activated on Devnet).
+
+**Rule (confirmed by the owner):**
+- `miss_cost = floor(stake × 1000 / 10000)`, `stake` = the member's **original** stake. Same for every miss and every Oath length. Per miss: `paid = min(miss_cost, balance)`.
+- **No entry fee** for new Oaths: create and join transfer the stake only; a member who never misses is paid exactly their stake. (Rules v2's 15 % entry fee, freezes and 50 % slash stay in the program only to settle v2 Oaths, none of which exist.)
+- Per finished day `d`, from the `days_kept` bitmasks: each member without bit `d` pays `paid`. HP: −20 per missed member (−35 solo), +10 heal up to 100. At ≤ 0 the Oath breaks that day, with no heal and no split.
+- Not broken, with `k` = members who kept day `d`: for **each missed member's `paid`** separately, `each = floor(paid / (k + 1))` to every keeper and the rest (KEPT's share plus that forfeiture's remainder) to the treasury. A member who missed gets nothing from it. **`k = 0`** (everyone missed, or a solo Oath): all of it to the treasury (owner-confirmed).
+- **Break (owner-confirmed):** from the balances at the start of the breaking day, 50 % to the treasury at settlement and 50 % **held** in the Oath vault; after 7 Oath days `sweep_held` (permissionless, once) sends the held amount to the treasury. Rematch recovery is not built on chain, so held money always ends with KEPT. All payouts are 0.
+- `settle_oath` (permissionless) replays only the **closed** days; it needs every day closed, or a break among them (early settle). KEPT's share is transferred to `Config.treasury` (the token account `HWSfx9…`, owned by `52eWtt…`), and no other account is accepted.
+- Final payout = balance after the last played day. Conservation: `Σ payouts + treasury + held = stake × members`. Integer base units, all divisions floor.
+
+**Tests:** `packages/engine/test-vectors/oath-vectors.json` (14 scenarios) is read by the Rust tests (`v3_matches_the_shared_engine_vectors`), the LiteSVM suite (settles every 3-day group vector on chain), the backend (`replayV3`) and the app's engine. Plus owner examples, repeated misses, cap, rounding per forfeiture, no keepers, break + held sweep, wrong treasury, early-settle rejection and conservation for every 3-member pattern.
+
+**Backend:** the scheduler settles a v3 Oath as soon as its breaking day has closed, stops recording misses after the break, and runs `sweep_held` once the window has passed (the watch stays open until then); settle and sweep read the treasury from `Config`. `GET /api/economics` returns `rulesVersion: 3, entryFee: false, missBps: 1000`. `OathSettlement` rows keep `treasuryPaid`; the held amount is read from the chain (no new column).
+
+**Still open:** the Devnet upgrade and its end-to-end run; the Rematch recovery instruction (held money cannot be claimed back yet); `MAX_MEMBERS` stays 4 (raising it touches `[Member; 4]` in `state.rs`, the account size, `frozen_days`, the join check, the backend's checks, `packages/config` `MAX_MEMBERS` and the app's slot queries); `record_checkin` still accepts proofs for days after a break until the Oath settles (the replay ignores them).
+
 ### P0-7. Solo Oaths need a stake · CONFIRMED
 - **Now:** `require!((!is_solo && stake_amount > 0) || (is_solo && stake_amount == 0))` (`lib.rs:63`), and the zero-stake path skips escrow (`lib.rs:82-84`).
 - **Design:** solo Oaths stake 500 / 1,000 / 2,500 SKR and have an HP bar (−35 per miss) (rules.md §1–2, C4).
@@ -225,7 +248,7 @@ The checklist for the backend developer. Each line points to the full item below
 ### P1-5. Max members · CONFIRMED (decision)
 - **Now:** `MAX_MEMBERS = 4` (`state.rs:3`); error text "Oath has four members already" (`lib.rs:381`).
 - **Design:** "2+"; D1 shows four seats and the demo uses four members.
-- **Decision:** DECISIONS D-11 (assume 4).
+- **Decision:** DECISIONS D-11 (assume 4); the owner confirmed 4 again on 2026-10-11 (D-91). Raising it is listed in P0-12.
 
 ### P1-6. Goal length · CONFIRMED
 - **Now:** 1–120 characters (`v4.ts:120-121`).

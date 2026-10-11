@@ -2,13 +2,6 @@
  "$meta": {
   "note": "Data-bearing copy keys mapped to templates. `sample` holds the values that, interpolated into `template`, must reproduce design/copy.json exactly (enforced by copy.test.ts)."
  },
- "screens.D2.b1.text": {
-  "template": "{timeLeft} left today · first miss −{cost} SKR",
-  "sample": {
-   "timeLeft": "9h 18m",
-   "cost": "143"
-  }
- },
  "screens.D2.b0.note": {
   "template": "{name} missed day {day}: −{damage}, then +{heal} heal.",
   "sample": {
@@ -195,19 +188,6 @@
    "date": "Wed 15 Oct"
   }
  },
- "screens.C4.b4.title": {
-  "template": "First miss costs {cost} SKR",
-  "sample": {
-   "cost": "143"
-  }
- },
- "screens.C4.b4.sub": {
-  "template": "Then {second}, then {third}. Each miss costs 1.5× the last.",
-  "sample": {
-   "second": "214",
-   "third": "321"
-  }
- },
  "screens.C6.b1.row0.v": {
   "template": "Every day I will {goal}",
   "sample": {
@@ -224,13 +204,6 @@
   "template": "One miss costs {cost} SKR",
   "sample": {
    "cost": "143"
-  }
- },
- "screens.C6.b2.r2.s": {
-  "template": "Then {second}, {third}… paid to whoever kept.",
-  "sample": {
-   "second": "214",
-   "third": "321"
   }
  },
  "screens.C7.b2.sub": {
@@ -458,13 +431,6 @@
    "name": "Arjun"
   }
  },
- "screens.D2.b7.sub": {
-  "template": "{shares} · fee {fee} SKR",
-  "sample": {
-   "shares": "You +43 · Riya +43 · Dev +43",
-   "fee": "14"
-  }
- },
  "screens.D2.pin.1": {
   "template": "Nudge {name}",
   "sample": {
@@ -594,12 +560,6 @@
   "template": "{n} days",
   "sample": {
    "n": "71"
-  }
- },
- "screens.E2.b3.row1.v": {
-  "template": "−{cost} SKR, then 1.5×",
-  "sample": {
-   "cost": "143"
   }
  },
  "screens.E2.pin.0": {

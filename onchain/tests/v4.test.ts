@@ -96,9 +96,10 @@ describe("KEPT V4 Anchor security",()=>{
     const lateJoin=await h.joinAfterStart();expect(lateJoin).to.be.instanceOf(FailedTransactionMetadata);expect((lateJoin as FailedTransactionMetadata).meta().logs().join("\n")).to.contain("NotOpen");
     const oath=Buffer.from(h.svm.getAccount(h.oath).data);oath[139+33]=7;oath[183+33]=0;h.put(h.oath,oath);h.setTime(10_000n+3n*DAY);
     const settled=await h.settle();expect(settled).not.to.be.instanceOf(FailedTransactionMetadata);
-    expect(h.readToken(h.treasury)).to.equal(125n,"10% of the broken stake is sent to treasury");
-    expect(h.readToken(h.vault)).to.equal(2_375n,"vault only holds the keeper payout");
-    const claimed=await h.claim(h.alice,h.aliceToken);expect(claimed).not.to.be.instanceOf(FailedTransactionMetadata);expect(h.readToken(h.aliceToken)).to.equal(11_125n);
+    // Rules v3: bob misses all 3 days, 125 (10% of 1,250) each. Each forfeiture splits two ways (alice, KEPT): 62 + 63.
+    expect(h.readToken(h.treasury)).to.equal(189n,"KEPT's three equal shares of the forfeitures, incl. remainders, go to the treasury");
+    expect(h.readToken(h.vault)).to.equal(2_311n,"vault holds alice's 1,436 and bob's remaining 875");
+    const claimed=await h.claim(h.alice,h.aliceToken);expect(claimed).not.to.be.instanceOf(FailedTransactionMetadata);expect(h.readToken(h.aliceToken)).to.equal(10_186n);
     const twice=await h.claim(h.alice,h.aliceToken);expect(twice).to.be.instanceOf(FailedTransactionMetadata);expect((twice as FailedTransactionMetadata).meta().logs().join("\n")).to.contain("AlreadyClaimed");
   });
   it("cancels an Open group and returns the creator's stake through claim",async()=>{

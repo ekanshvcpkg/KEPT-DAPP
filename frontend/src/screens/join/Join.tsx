@@ -133,7 +133,7 @@ export function E2() {
   const f = view.facts;
   const creator = view.members.find((m) => m.facts.wallet === f.creator) ?? view.members[0]!;
   const cName = memberName(creator);
-  const firstMiss = skrWhole(missCost(f.stake, f.numDays, 0));
+  const firstMiss = skrWhole(missCost(f.stake));
   return (
     <Screen bar={<NavBar onBack={back} title={t("screens.E2.nav.title")} />} bottomInset={pinned(1)}
       pinned={<Button kind="l" icon="draw-pen" label={t("screens.E2.pin.0", { amount: skrWhole(f.stake) })} onPress={() => go("E2·s", { id, code })} />}>
