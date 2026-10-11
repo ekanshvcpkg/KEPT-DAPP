@@ -103,13 +103,8 @@ const SAMPLE_BOUNTY = { name: "Dawn Pages", message: "Read before your phone. 14
 const SAMPLE_AVATAR = "13050010";
 const SAMPLE_DRAFT = { goal: "lift for 20 minutes", objectId: 0, numDays: 7 as const, isSolo: false, stakeSkr: 1000, reviewMode: "ai_group" as const };
 
-/** Handles `kept://dev/open/…` and `kept://dev/keeper/<page>[/<anim>]`. Returns false for any other URL. */
+/** Handles `kept://dev/open/…`. Returns false for any other URL. */
 function openDevLink(url: string): boolean {
-  const kc = url.match(/^kept:\/\/dev\/keeper\/([a-z]+)(?:\/([a-z]+))?/);
-  if (kc) {
-    if (navigationRef.isReady()) navigationRef.dispatch(CommonActions.navigate({ name: "KeeperCompare", params: { page: kc[1], ...(kc[2] ? { anim: kc[2] } : {}) } }));
-    return true;
-  }
   const m = url.match(/^kept:\/\/dev\/open\/([^?#]+)(?:\?([^#]*))?/);
   if (!m) return false;
   const raw = decodeURIComponent(m[1]!);

@@ -198,16 +198,15 @@ describe("slices by mode", () => {
 });
 
 describe("saved Dev menu settings", () => {
-  it("keep the scenario and the Keeper renderer only: overrides and the mock wallet are never saved, and older saves are ignored", async () => {
+  it("keep the scenario only: overrides and the mock wallet are never saved, and older saves are ignored", async () => {
     await AsyncStorage.setItem("kept.dev", JSON.stringify({ state: { overrides: { auth: "mock" }, mockWallet: true, scenario: "fresh" }, version: 0 }));
     await useDev.persist.rehydrate();
     expect(useDev.getState()).toMatchObject({ overrides: {}, mockWallet: false, scenario: "fresh" });
 
-    useDev.setState({ overrides: { auth: "mock" }, mockWallet: true, scenario: "broken", keeper: "SVG" });
+    useDev.setState({ overrides: { auth: "mock" }, mockWallet: true, scenario: "broken" });
     await settle();
     const saved = JSON.parse((await AsyncStorage.getItem("kept.dev"))!) as { state: Record<string, unknown> };
-    expect(saved.state).toEqual({ scenario: "broken", keeper: "SVG" });
-    useDev.setState({ keeper: "Skia" });
+    expect(saved.state).toEqual({ scenario: "broken" });
   });
 
   it("a saved scenario that no longer exists falls back to the default", async () => {

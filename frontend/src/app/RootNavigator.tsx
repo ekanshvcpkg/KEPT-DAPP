@@ -40,8 +40,6 @@ const Stack = createNativeStackNavigator();
 /** The dev Gallery: development builds only (Metro drops the require from release bundles). */
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- a static import would ship it in release
 const Gallery = __DEV__ ? (require("@/dev/Gallery") as typeof import("@/dev/Gallery")).Gallery : null;
-// eslint-disable-next-line @typescript-eslint/no-require-imports -- dev only, like the Gallery
-const KeeperCompare = __DEV__ ? (require("@/dev/KeeperCompare") as typeof import("@/dev/KeeperCompare")).KeeperCompare : null;
 const Tab = createBottomTabNavigator();
 
 type StackId = Exclude<DesignId, "B1" | "D0" | "H1" | "I1" | "B2" | "B3" | "B4">;
@@ -169,7 +167,6 @@ export function RootNavigator({ onReady }: { onReady?: () => void }) {
           {sheetIds.map((r) => <Stack.Screen key={r.id} name={routeName(r.id)} component={componentOf(r.id)} />)}
         </Stack.Group>
         {Gallery ? <Stack.Screen name="Gallery" component={Gallery} /> : null}
-        {KeeperCompare ? <Stack.Screen name="KeeperCompare" component={KeeperCompare} /> : null}
       </Stack.Navigator>
     </NavigationContainer>
   );

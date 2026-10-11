@@ -80,7 +80,6 @@ export function DevMenu() {
           onPress: () => { dev.setSlice(s, f[s] === "http" ? "mock" : "http"); refresh(); },
         }))} />
         <RowList rows={[{ title: "Mock wallet", sub: "Instead of MWA until a mode is chosen. Not saved.", toggle: { on: dev.mockWallet, onChange: dev.setMockWallet } }]} />
-      <RowList rows={[{ title: "Keeper: Skia", sub: "Off: the previous react-native-svg Keeper, to compare (release: EXPO_PUBLIC_KEEPER=svg).", toggle: { on: dev.keeper === "Skia", onChange: (on: boolean) => dev.setKeeper(on ? "Skia" : "SVG") } }]} />
       </> : (
         <Text variant="caption" color={color.text.tertiary}>
           {mode === "live"

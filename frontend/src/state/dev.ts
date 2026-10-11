@@ -17,26 +17,19 @@ export function defaultFlags(mode: AppMode | null): Record<Slice, SliceMode> {
   return Object.fromEntries(SLICES.map((s) => [s, mode === "demo" ? "mock" : "http"])) as Record<Slice, SliceMode>;
 }
 
-export type KeeperRenderer = "Skia" | "SVG";
-/** Release builds use EXPO_PUBLIC_KEEPER (=SVG for the previous Keeper); Skia otherwise. */
-export const DEFAULT_KEEPER: KeeperRenderer = process.env.EXPO_PUBLIC_KEEPER?.toUpperCase() === "SVG" ? "SVG" : "Skia";
-
 export interface DevState {
   overrides: Partial<Record<Slice, SliceMode>>;
   scenario: Scenario;
   /** Mock wallet instead of MWA, while no app mode is chosen. Never applies to Live. */
   mockWallet: boolean;
-  /** Which Keeper renderer draws (motion rework): Skia, or the previous react-native-svg one to compare. */
-  keeper: KeeperRenderer;
-  setKeeper(k: KeeperRenderer): void;
   setSlice(slice: Slice, mode: SliceMode | null): void;
   setAll(mode: SliceMode): void;
   setScenario(s: Scenario): void;
   setMockWallet(on: boolean): void;
 }
 
-export const useDev = create<DevState>()(persist<DevState, [], [], { scenario: Scenario; keeper: KeeperRenderer }>((set) => ({
-  overrides: {}, scenario: DEFAULT_SCENARIO, mockWallet: false, keeper: DEFAULT_KEEPER,
+export const useDev = create<DevState>()(persist<DevState, [], [], { scenario: Scenario }>((set) => ({
+  overrides: {}, scenario: DEFAULT_SCENARIO, mockWallet: false,
   setSlice: (slice, mode) => set((s) => {
     const overrides = { ...s.overrides };
     if (mode) overrides[slice] = mode; else delete overrides[slice];
@@ -45,21 +38,16 @@ export const useDev = create<DevState>()(persist<DevState, [], [], { scenario: S
   setAll: (mode) => set({ overrides: Object.fromEntries(SLICES.map((sl) => [sl, mode])), mockWallet: mode === "mock" }),
   setScenario: (scenario) => set({ scenario }),
   setMockWallet: (mockWallet) => set({ mockWallet }),
-  setKeeper: (keeper) => set({ keeper }),
 }), {
   name: "kept.dev",
-  storage: persistStorage as PersistOptions<DevState, { scenario: Scenario; keeper: KeeperRenderer }>["storage"],
+  storage: persistStorage as PersistOptions<DevState, { scenario: Scenario }>["storage"],
   // Only the scenario survives a restart. Overrides and the mock wallet are per-run on purpose: a saved
   // one (the dev deep link used to save both) left every later Live sign-in on the mock.
-  partialize: (s) => ({ scenario: s.scenario, keeper: s.keeper }),
+  partialize: (s) => ({ scenario: s.scenario }),
   // Older builds also saved `overrides` and `mockWallet`: read the scenario and nothing else.
   merge: (saved, current) => {
-    const { scenario, keeper } = (saved as { scenario?: Scenario; keeper?: KeeperRenderer } | undefined) ?? {};
-    return {
-      ...current,
-      scenario: scenario && (SCENARIOS as readonly string[]).includes(scenario) ? scenario : current.scenario,
-      keeper: keeper === "SVG" || keeper === "Skia" ? keeper : current.keeper,
-    };
+    const scenario = (saved as { scenario?: Scenario } | undefined)?.scenario;
+    return { ...current, scenario: scenario && (SCENARIOS as readonly string[]).includes(scenario) ? scenario : current.scenario };
   },
 }));
 

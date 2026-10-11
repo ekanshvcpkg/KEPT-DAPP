@@ -13,8 +13,7 @@ jest.mock("react-native-reanimated", () => {
 // Native modules the Phase 2 shell touches.
 jest.mock("@react-native-async-storage/async-storage", () => require("@react-native-async-storage/async-storage/jest/async-storage-mock"));
 jest.mock("@solana-mobile/mobile-wallet-adapter-protocol-web3js", () => ({ transact: jest.fn(() => Promise.reject(new Error("MWA is not available in tests"))) }));
-// Skia: the canvas is a plain View and drawing nodes render nothing (no test reads Keeper pixels; the
-// device comparison in docs/notes/MOTION_REWORK.md does).
+// Skia: the canvas is a plain View and drawing nodes render nothing (no test reads Keeper pixels).
 jest.mock("@shopify/react-native-skia", () => {
   const React = require("react");
   const { View } = require("react-native");

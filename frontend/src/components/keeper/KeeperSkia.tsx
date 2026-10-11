@@ -1,12 +1,12 @@
-// The parametric Keeper (design/reference/Keeper.dc.html) drawn with Skia (motion rework). Same shapes,
-// colours and rig as KeeperSvg: the still parts are recorded once; the moving parts (bob, blink, head
+// The parametric Keeper (design/reference/Keeper.dc.html) drawn with Skia (motion rework). The still
+// parts are recorded once; the moving parts (bob, blink, head
 // tilt, glints, hands, sleeves, the flipped coin) read one UI-thread frame (rig.ts › keeperFrame) through
 // shared values, so a frame is one canvas redraw on the UI thread with no React render and no SVG prop
 // updates. Reduce Motion, `animate={false}` or an unfocused screen hold the still pose (t = 0).
 //
-// The SVG is `overflow: visible` (the coin flies above his head, `jump` lifts him, `peek` drops him below
-// the box). A canvas clips to its bounds, so it's drawn larger than the layout box, by the room each anim
-// needs, and positioned so the box lands where the SVG's was.
+// The prototype's SVG is `overflow: visible` (the coin flies above his head, `jump` lifts him, `peek`
+// drops him below the box). A canvas clips to its bounds, so it's drawn larger than the layout box, by the
+// room each anim needs, and positioned so the box lands where the prototype's does.
 import { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef } from "react";
 import { View } from "react-native";
 import { Canvas, Circle, DashPathEffect, Group, Oval, Paint, Path, Picture, RoundedRect, Text as SkText, drawAsPicture, rect, useFont, vec } from "@shopify/react-native-skia";
@@ -17,8 +17,20 @@ import type { SharedValue } from "react-native-reanimated";
 import { useScreenFocused } from "@/lib/focus";
 import { keeperRig as K } from "@/theme";
 import { keeperFace, keeperFrame, rotAbout } from "./rig";
-import type { KeeperAnimName } from "./rig";
-import type { KeeperSvgProps } from "./KeeperSvg";
+import type { HandPose, KeeperAnimName, KeeperPropName } from "./rig";
+import type { KeeperMood } from "@/copy";
+
+export interface KeeperDrawingProps {
+  mood: KeeperMood;
+  prop?: KeeperPropName;
+  anim?: KeeperAnimName;
+  /** Hold the right hand in one pose (the prototype's `hand` prop). */
+  hand?: HandPose;
+  /** Width in dp; full body is size × 180/160 high, the bust is square. */
+  size: number;
+  bust?: boolean;
+  animate?: boolean;
+}
 
 /** SVG matrix(a b c d e f) → Skia's row-major 3 × 3. */
 function sk(m: number[]): number[] {
@@ -27,7 +39,7 @@ function sk(m: number[]): number[] {
 }
 const deg = (d: number) => (d * Math.PI) / 180;
 
-/** A stable pseudo-random phase in [0, 3) s per Keeper instance (as KeeperSvg). */
+/** A stable pseudo-random phase in [0, 3) s per Keeper instance, so two Keepers never blink together. */
 function phaseOf(key: string): number {
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
@@ -103,8 +115,8 @@ function usePiece(key: string, element: ReactElement | null, ready = true): Reac
   return p ? <Picture picture={p} /> : element;
 }
 
-/** The rig advances on every display frame (the 30 fps cap of D-84 was for the SVG renderer). */
-export const KeeperSkia = memo(function KeeperSkia({ mood, prop = "none", anim = "idle", hand, size, bust = false, animate = true }: KeeperSvgProps) {
+/** The rig advances on every display frame. */
+export const KeeperSkia = memo(function KeeperSkia({ mood, prop = "none", anim = "idle", hand, size, bust = false, animate = true }: KeeperDrawingProps) {
   const reduce = useReducedMotion();
   const rid = useId();
   const face = useMemo(() => keeperFace(mood, prop, bust), [mood, prop, bust]);
