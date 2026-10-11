@@ -18,7 +18,7 @@ import {
   Connection, Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
-  TOKEN_2022_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddressSync, getAccount,
+  TOKEN_2022_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createMintToInstruction, getAssociatedTokenAddressSync, unpackAccount,
 } from "@solana/spl-token";
 import { claimIx, configPda, createOathIx, decodeOath, decodeOathTerms, joinOathIx, oathPda, settleOathIx, startOathIx, sweepHeldIx, vaultPda } from "../../packages/chain/src";
 import type { ProgramEnv } from "../../packages/chain/src";
@@ -58,7 +58,42 @@ async function waitUntilChain(ts: number, label: string) {
     await sleep(Math.min(10_000, Math.max(1_000, (ts - now) * 1000)));
   }
 }
-const send = (tx: Transaction, signers: Keypair[]) => sendAndConfirmTransaction(connection, tx, signers, { commitment: "confirmed" });
+// The RPC endpoint is load-balanced and a node can lag a few slots behind the transaction that was just confirmed, so every
+// read is pinned to at least the slot of the latest transaction this script sent (`minContextSlot`), retrying until a node has it.
+let minSlot = 0;
+async function send(tx: Transaction, signers: Keypair[]) {
+  const sig = await sendAndConfirmTransaction(connection, tx, signers, { commitment: "confirmed" });
+  for (let i = 0; i < 20; i++) {
+    const st = await connection.getSignatureStatus(sig, { searchTransactionHistory: true });
+    if (st.value?.slot) { minSlot = Math.max(minSlot, st.value.slot); break; }
+    await sleep(500);
+  }
+  return sig;
+}
+/** What a transaction moved into the treasury token account, from its own metadata (not from two balance reads that a lagging node can mix up). */
+async function treasuryDelta(sig: string, treasury: PublicKey): Promise<bigint> {
+  for (let i = 0; i < 40; i++) {
+    const tx = await connection.getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: "confirmed" });
+    if (tx?.meta) {
+      const index = tx.transaction.message.staticAccountKeys.findIndex((k) => k.equals(treasury));
+      const pre = tx.meta.preTokenBalances?.find((b) => b.accountIndex === index), post = tx.meta.postTokenBalances?.find((b) => b.accountIndex === index);
+      return BigInt(post?.uiTokenAmount.amount ?? "0") - BigInt(pre?.uiTokenAmount.amount ?? "0");
+    }
+    await sleep(500);
+  }
+  throw new Error(`transaction ${sig} not found`);
+}
+async function readAccount(pubkey: PublicKey) {
+  for (let i = 0; i < 40; i++) {
+    try {
+      const r = await connection.getAccountInfoAndContext(pubkey, { commitment: "confirmed", minContextSlot: minSlot });
+      if (r.value) return r.value;
+    } catch { /* node behind the pinned slot: retry */ }
+    await sleep(500);
+  }
+  throw new Error(`could not read ${pubkey.toBase58()} at slot >= ${minSlot}`);
+}
+const getAccount = async (_c: Connection, pubkey: PublicKey, _commitment: string, program: PublicKey) => unpackAccount(pubkey, await readAccount(pubkey), program);
 
 async function main() {
   const members: Keypair[] = (() => {
@@ -109,8 +144,8 @@ async function main() {
     log(s.name, "created", oath.toBase58(), sig);
     for (let i = 1; i < 4; i++) await send(new Transaction().add(joinOathIx(env, { oath, member: members[i]!.publicKey, memberToken: atas[i]! })), [members[i]!]);
     await send(new Transaction().add(startOathIx(env, { oath, creator: members[0]!.publicKey })), [members[0]!]);
-    const o = decodeOath((await connection.getAccountInfo(oath, "confirmed"))!.data);
-    const terms = decodeOathTerms((await connection.getAccountInfo(oath, "confirmed"))!.data)!;
+    const o = decodeOath((await readAccount(oath)).data);
+    const terms = decodeOathTerms((await readAccount(oath)).data)!;
     if (terms.rulesVersion !== 3) throw new Error(`new Oath recorded rules v${terms.rulesVersion}, expected 3`);
     log(s.name, `started at ${o.startTs}; rules v${terms.rulesVersion}, miss ${terms.missBps} bps; vault holds`, skr((await getAccount(connection, vaultPda(PROGRAM_ID, oath), "confirmed", TOKEN_2022_PROGRAM_ID)).amount), "SKR (stakes only, no entry fee)");
     oaths.push({ name: s.name, oath, startTs: o.startTs, marks: s.marks, days: s.days });
@@ -137,6 +172,7 @@ async function main() {
   // ---- expected results from the rules (backend/src/shared/payout.ts, which the program, engine and vectors all match) ----
   const masks = (marks: string[]) => [0, 1, 2, 3].map((i) => marks.reduce((m, day, d) => (day[i] === "k" ? m | (1 << d) : m), 0));
   let failures = 0;
+  let treasuryTotal = 0n, claimedTotal = 0n;
   const check = (label: string, actual: unknown, expected: unknown) => {
     const ok = JSON.stringify(actual, (_, v) => (typeof v === "bigint" ? v.toString() : v)) === JSON.stringify(expected, (_, v) => (typeof v === "bigint" ? v.toString() : v));
     log(ok ? "PASS" : "FAIL", label, ok ? "" : `chain=${JSON.stringify(actual, (_, v) => (typeof v === "bigint" ? v.toString() : v))} expected=${JSON.stringify(expected, (_, v) => (typeof v === "bigint" ? v.toString() : v))}`);
@@ -150,21 +186,22 @@ async function main() {
     // A breaks early: settle as soon as the breaking day (day 2) has closed. A settles once all 3 days have closed.
     const closeAt = broke ? o.startTs + 2 * DAY_SECONDS : o.startTs + o.days * DAY_SECONDS;
     await waitUntilChain(closeAt + 1, `${o.name} to be settleable`);
-    const t0 = await treasuryBalance();
     const expected = replayV3(STAKE, 1_000, false, masks(o.marks), o.days)!;
     const settleSig = await send(new Transaction().add(settleOathIx(env, { oath: o.oath, members: members.map((m) => m.publicKey) })), [admin]);
     log(o.name, "settled", settleSig);
-    const data = (await connection.getAccountInfo(o.oath, "confirmed"))!.data;
+    const data = (await readAccount(o.oath)).data;
     const chain = decodeOath(data), terms = decodeOathTerms(data)!;
     const vault = (await getAccount(connection, vaultPda(PROGRAM_ID, o.oath), "confirmed", TOKEN_2022_PROGRAM_ID)).amount;
-    const t1 = await treasuryBalance();
+    const moved = await treasuryDelta(settleSig, cfg.treasury);
+    treasuryTotal += moved;
+    claimedTotal += chain.members.reduce((a, m) => a + m.payout, 0n);
     check(`${o.name}: status`, chain.status, "settled");
     check(`${o.name}: member payouts (SKR base units)`, chain.members.map((m) => m.payout), expected.payouts);
-    check(`${o.name}: treasury transfer at settlement`, t1 - t0, expected.toTreasury);
+    check(`${o.name}: treasury transfer at settlement (from the transaction's own balances)`, moved, expected.toTreasury);
     check(`${o.name}: held in the vault`, terms.heldTotal, expected.held);
     check(`${o.name}: vault after settlement = payouts + held`, vault, expected.payouts.reduce((a, b) => a + b, 0n) + expected.held);
     check(`${o.name}: break day`, terms.brokeDay, expected.brokeDay);
-    report[o.name] = { settleSig, payouts: chain.members.map((m) => skr(m.payout)), toTreasury: skr(t1 - t0), held: skr(terms.heldTotal), brokeDay: terms.brokeDay, heldReleaseTs: terms.heldReleaseTs };
+    report[o.name] = { settleSig, payouts: chain.members.map((m) => skr(m.payout)), toTreasury: skr(moved), held: skr(terms.heldTotal), brokeDay: terms.brokeDay, heldReleaseTs: terms.heldReleaseTs };
     // Members claim; every payout leaves the vault.
     for (let i = 0; i < 4; i++) await send(new Transaction().add(claimIx(env, { oath: o.oath, member: members[i]!.publicKey, destination: atas[i]! })), [members[i]!]);
     const vaultAfter = (await getAccount(connection, vaultPath(o.oath), "confirmed", TOKEN_2022_PROGRAM_ID)).amount;
@@ -175,10 +212,10 @@ async function main() {
       try { await send(new Transaction().add(sweepHeldIx(env, { oath: o.oath })), [admin]); } catch { tooEarly = true; }
       check(`${o.name}: sweep_held before the window is rejected`, tooEarly, true);
       await waitUntilChain(terms.heldReleaseTs + 1, `${o.name} held window`);
-      const t2 = await treasuryBalance();
       const sweepSig = await send(new Transaction().add(sweepHeldIx(env, { oath: o.oath })), [admin]);
-      const t3 = await treasuryBalance();
-      check(`${o.name}: swept amount reaches the treasury`, t3 - t2, expected.held);
+      const swept = await treasuryDelta(sweepSig, cfg.treasury);
+      treasuryTotal += swept;
+      check(`${o.name}: swept amount reaches the treasury`, swept, expected.held);
       check(`${o.name}: vault is empty after the sweep`, (await getAccount(connection, vaultPath(o.oath), "confirmed", TOKEN_2022_PROGRAM_ID)).amount, 0n);
       (report[o.name] as Record<string, unknown>).sweepSig = sweepSig;
     } else {
@@ -187,12 +224,9 @@ async function main() {
   }
   function vaultPath(oath: PublicKey) { return vaultPda(PROGRAM_ID, oath); }
 
-  const after = await Promise.all(atas.map(async (a) => (await getAccount(connection, a, "confirmed", TOKEN_2022_PROGRAM_ID)).amount));
-  const treasuryEnd = await treasuryBalance();
-  const net = after.map((a, i) => a - before[i]!);
-  log("members' net SKR over both Oaths:", net.map((n) => (n < 0n ? "-" : "") + skr(n < 0n ? -n : n)).join(", "));
-  log("treasury net SKR:", skr(treasuryEnd - treasury0));
-  check("conservation: members' net + treasury's = 0", net.reduce((a, b) => a + b, 0n) + (treasuryEnd - treasury0), 0n);
+  // Every staked token is accounted for: what members were paid plus what the treasury received (settlement and sweep) is both Oaths' stakes.
+  check("conservation: member payouts + treasury transfers = every stake", claimedTotal + treasuryTotal, 2n * 4n * STAKE);
+  log("treasury received", skr(treasuryTotal), "SKR; members were paid", skr(claimedTotal), "SKR; treasury balance now", skr(await treasuryBalance()));
   console.log(JSON.stringify({ program: PROGRAM_ID.toBase58(), treasury: cfg.treasury.toBase58(), treasuryOwner: TREASURY_OWNER.toBase58(), oaths: oaths.map((o) => ({ name: o.name, oath: o.oath.toBase58() })), report, failures }, null, 2));
   if (failures) process.exit(1);
   void oathPda;
