@@ -172,6 +172,23 @@ cd frontend && node scripts/perf.mts android/app/build/outputs/apk/release/app-r
 3. Scroll the inbox, your activity and Oath history.
 4. Bounties scroll, the one number that moved the wrong way on the emulator.
 
+## Cleanup after approval (2026-10-11)
+
+One commit per group, each revertable:
+
+| Commit | Removed |
+|---|---|
+| b1f4c3a | `KeeperSvg.tsx` (343 lines), `dev/KeeperCompare.tsx` and its route and `kept://dev/keeper/…` link, the Dev menu row, `EXPO_PUBLIC_KEEPER` and the saved renderer setting; the icon font drops "matrix", which the icon scanner had picked up from KeeperSvg |
+| 7f58f90 | `export` from 6 values and 45 types nothing outside their file imports (knip) |
+| 9a76869 | `additions.placeholder` copy (the Phase 2 placeholder screen is long gone) and two test checks for it |
+| 7b911c9 | three comments describing code that no longer exists |
+| a8ececa | six theme metrics nothing reads |
+
+`frontend` + `packages` (ts/tsx/js/json source, generated files excluded): 228 → 226 files, 24,748 → 24,329
+lines. Release APK 27,846,171 → 27,824,523 bytes; JS bundle 6,081,860 → 6,060,316 bytes (both builds include
+the Skia patch and main's latest commits). After: typecheck, lint (0 warnings), 317 Jest tests and package
+tests pass, the release build runs, and all 117 screens shoot with 0 errors.
+
 ## Merge when you're happy
 
 ```bash
