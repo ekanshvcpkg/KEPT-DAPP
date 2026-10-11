@@ -184,7 +184,8 @@
   },
   "camera": {
     "$source": "Added 2026-10-10 (frontend fix): the shutter failed or timed out; Live never substitutes a photo, so it asks for a retake.",
-    "failed": "Couldn't take that photo. Try again."
+    "failed": "Couldn't take that photo. Try again.",
+    "openSettings": "Open settings"
   },
   "join": {
     "$source": "owner: E1 starts with a choice, the camera only after Scan is picked (DECISIONS D-91)",
@@ -197,7 +198,6 @@
     "notInvite": "That QR isn't a KEPT invite. Keep scanning.",
     "looking": "Looking up {code}…",
     "permTitle": "Camera access is off",
-    "permSub": "KEPT uses the camera only to read the invite's QR code. Turn it on in Settings, or type the code instead.",
-    "openSettings": "Open settings"
+    "permSub": "KEPT uses the camera only to read the invite's QR code. Turn it on in Settings, or type the code instead."
   }
 }

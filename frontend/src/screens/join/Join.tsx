@@ -163,7 +163,7 @@ export function E1scan() {
   if (perm && !perm.granted && perm.status === "denied") {
     return (
       <Screen bar={bar} bottomInset={pinned(2)} pinned={<>
-        <Button kind="p" icon="cog-outline" label={t("additions.join.openSettings")} onPress={() => { void Linking.openSettings(); }} />
+        <Button kind="p" icon="cog-outline" label={t("additions.camera.openSettings")} onPress={() => { void Linking.openSettings(); }} />
         {insteadButton}
       </>}>
         <ProofCamera state="off" object="camera-off-outline" label={t("screens.E1.b1.label")} height={metrics.join.permCamera} />

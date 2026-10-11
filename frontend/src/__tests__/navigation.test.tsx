@@ -325,7 +325,7 @@ describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
     await openE1();
     await fireEvent.press(await screen.findByLabelText(t("additions.join.scan")));
     expect(await screen.findByText(t("additions.join.permTitle"))).toBeTruthy();
-    expect(screen.getByRole("button", { name: t("additions.join.openSettings") })).toBeTruthy();
+    expect(screen.getByRole("button", { name: t("additions.camera.openSettings") })).toBeTruthy();
     expect(preview()).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: t("additions.join.codeInstead") }));
     expect(await screen.findByLabelText(t("additions.join.codeLabel"))).toBeTruthy();
@@ -350,6 +350,18 @@ describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
     expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) })).toBeTruthy();
     expect(rootStack().slice(-2)).toEqual(["E1", "E2"]);
     expect(camera.asked).toBe(0);
+    expect(preview()).toBeNull();
+  });
+
+  it("proof with camera access denied for good: F1·perm offers Settings instead of a prompt that can't show", async () => {
+    camera.granted = false;
+    useDev.setState({ scenario: "activeGroup" });
+    useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
+    await render(<App />);
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    await act(async () => { navigateTo("F1", { id: "mock-oath-1" }); });
+    expect(await screen.findByRole("button", { name: t("additions.camera.openSettings") })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t("screens.F1·perm.pin.0") })).toBeNull();
     expect(preview()).toBeNull();
   });
 

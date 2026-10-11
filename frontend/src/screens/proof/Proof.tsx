@@ -1,7 +1,8 @@
 // F · Daily proof (screens.md F1–F5). Two live photos a day, no gallery: F1/F4 shoot with the
 // back camera, F2/F4·chk check, then pass / fail / unavailable / expired. Photo 1 is mocked on chain
 // Oaths and photo 2 goes to POST /api/proof (DECISIONS D-23, BACKEND_GAPS P0-2).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState, Linking } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { create } from "zustand";
 import { keeperLines, t } from "@/copy";
@@ -74,10 +75,20 @@ function useChallenge(v: OathView | null, photo: 1 | 2, fresh = false) {
 export function F1perm() {
   const { back, replace } = useGo();
   const { id, photo } = useProofScreen();
-  const [, request] = useCameraPermissions();
+  const [perm, request, getPerm] = useCameraPermissions();
+  const shoot = useCallback(() => replace(photo === 2 ? "F4" : "F1", { id, photo }), [replace, photo, id]);
+  // Back from Settings with the camera allowed: on to the camera.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (s) => { if (s === "active") void getPerm().then((r) => { if (r.granted) shoot(); }); });
+    return () => sub.remove();
+  }, [getPerm, shoot]);
+  // Android won't ask again once access is denied for good: the way to allow it is Settings (D-91).
+  const blocked = !!perm && !perm.granted && !perm.canAskAgain;
   return (
     <Screen bar={<NavBar onBack={back} close />} bottomInset={pinned(2)} pinned={<>
-      <Button kind="p" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void request().then((r) => { if (r.granted) replace(photo === 2 ? "F4" : "F1", { id, photo }); }); }} />
+      {blocked
+        ? <Button kind="p" icon="cog-outline" label={t("additions.camera.openSettings")} onPress={() => { void Linking.openSettings(); }} />
+        : <Button kind="p" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void request().then((r) => { if (r.granted) shoot(); }); }} />}
       <Button kind="t" label={t("screens.F1·perm.pin.1")} onPress={back} />
     </>}>
       <ProofCamera state="off" object="camera-off-outline" label={t("screens.F1·perm.b1.label")} height={260} />
