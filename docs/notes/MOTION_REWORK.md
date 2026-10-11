@@ -189,6 +189,24 @@ lines. Release APK 27,846,171 → 27,824,523 bytes; JS bundle 6,081,860 → 6,06
 the Skia patch and main's latest commits). After: typecheck, lint (0 warnings), 317 Jest tests and package
 tests pass, the release build runs, and all 117 screens shoot with 0 errors.
 
+## Before merging (2026-10-11): what was and wasn't checked
+
+All on the **Android emulator** (sdk_gphone64_arm64, 60 Hz); no phone was connected.
+
+- **The two perf runs that stopped early with KEPT closed (check 1).** Their logcat wasn't kept, so the
+  cause can't be read from them. The emulator's crash dropbox has no KEPT entry of any kind (no
+  `data_app_crash`, native tombstone or ANR); its only tombstone is the Google app's WebView. A re-run
+  stopped once more, this time with KEPT in front: uiautomator never finds Today idle (its countdown
+  ticks every second), so the bell couldn't be located. `perf.mts` now computes the bell from the status
+  bar and density when that happens (bbd5f42). The 20 clean runs in a row were **not** done (owner: skip
+  the runs and move on), so a real crash isn't ruled out.
+- **Bounties scroll, main vs branch (check 2): not measured** (same decision). APK sizes: main
+  37,568,003 bytes, this branch 42,707,167 (+5.14 MB, Skia; both include main's on-device gesture model
+  libraries).
+- **Checked:** typecheck, lint (0 warnings), 361 Jest tests and the package tests pass after merging main
+  (one Jest run of three had a single failing test that passed on the next two runs: flaky, not
+  identified). The release build runs. The 117-screen shoot was not re-run after the last changes.
+
 ## Merge when you're happy
 
 ```bash
