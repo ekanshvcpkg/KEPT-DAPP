@@ -219,7 +219,8 @@ export function QRCard({ code, link }: { code: string; link: string }) {
         <Text variant="caption">{t("common.code")}</Text>
         <Text variant="monoCode" style={{ marginTop: space[2] }} selectable>{code}</Text>
         <Text variant="caption" style={{ marginTop: space[12] }}>{t("common.link")}</Text>
-        <Text variant="monoValue" numberOfLines={1} style={{ marginTop: space[2] }} selectable>{link}</Text>
+        {/* Shown without the scheme and cut in the middle so it stays on one line; `selectable` made Android wrap it and clip the second line. */}
+        <Text variant="monoValue" numberOfLines={1} ellipsizeMode="middle" style={{ marginTop: space[2] }}>{link.replace(/^https?:\/\//, "")}</Text>
       </View>
     </View>
   );

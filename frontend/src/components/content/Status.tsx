@@ -128,7 +128,7 @@ export function DayStrip({ n, done, today, labels }: { n: number; done: number; 
           </View>
         );
         return (
-          <View key={i} style={{ flex: 1, alignItems: "stretch", gap: space[5] }} accessibilityLabel={labels[i]}>
+          <View key={i} style={{ flex: 1, alignItems: "stretch", gap: space[8] }} accessibilityLabel={labels[i]}>
             {cell}
             <Text variant="monoMicro" align="center" color={isToday ? color.text.primary : color.text.tertiary}>{labels[i]}</Text>
           </View>

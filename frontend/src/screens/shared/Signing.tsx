@@ -28,6 +28,8 @@ import { useIsDemo } from "@/state/mode";
 interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
 
 function failureOutcome(e: unknown, r: FailRoutes): SignOutcome {
+  // The screen says only "failed"; the cause (simulation logs, RPC or wallet error) goes to the dev log.
+  if (__DEV__) console.warn("[kept] signing failed:", e instanceof Error ? e.message : String(e));
   if (isApiError(e)) {
     const params = { ...r.params, retry: r.retry, edit: r.edit };
     if (e.code === "OFFLINE") return { to: "M2" };

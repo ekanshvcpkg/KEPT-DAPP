@@ -195,6 +195,13 @@ describe("content", () => {
     for (const [, x, y, w] of d.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) for (let i = 0; i < +w!; i++) drawn[+y! * size + +x! + i] = 1;
     expect([...drawn]).toEqual([...data].map((v) => (v ? 1 : 0)));
   });
+  it("QRCard shows the invite link on one line without its scheme, cut in the middle if it is long", async () => {
+    await render(<QRCard code="IRON-7K2Q" link="https://keptdapp.vercel.app/o/IRON-7K2Q" />);
+    const shown = screen.getByText("keptdapp.vercel.app/o/IRON-7K2Q");
+    expect(shown.props.numberOfLines).toBe(1);
+    expect(shown.props.ellipsizeMode).toBe("middle");
+    expect(screen.queryByText(/^https:/)).toBeNull();
+  });
   it("OathCard shows its tags and button", async () => {
     const onBtn = jest.fn();
     await render(<OathCard icon="dumbbell" name="Iron Week" meta="Day 3/7" tags={[{ text: "1,043 SKR" }]} hp={90} button={{ label: "Take photo 2", onPress: onBtn }} />);

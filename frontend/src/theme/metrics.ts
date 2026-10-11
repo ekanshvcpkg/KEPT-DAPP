@@ -60,7 +60,7 @@ export const metrics = {
   profile: { radius: 28, banner: 96, avatar: 84, avatarRadius: 26, avatarTop: 50, actionsTop: 108, chipH: 34, socialH: 32, bodyTop: 48, bannerIcon: 140 },
   ring: { size: 118, inset: 11, tilt: -8, pad: 16, radius: 26, gap: 18, stroke: 11 },
   identity: { tile: 68, radius: 22, tilt: -4, chipH: 26 },
-  dayStrip: { h: 36, radius: 10, gap: 5, icon: 16, tilt: 2, todayTilt: -6 },
+  dayStrip: { h: 36, radius: 10, gap: 12, icon: 16, tilt: 2, todayTilt: -6 },
   sign: { size: 150, inset: 10, icon: 60, chipX: 96, chipY: -8, chipTilt: 7, arc: 0.22 },
   bars: { pad: 16, radius: 24, height: 120, gap: 6, barRadius: 7, minH: 4, labelSpace: 32 },
   upload: { h: 150, radius: 24, ring: 2, icon: 34, stripe: 10 },

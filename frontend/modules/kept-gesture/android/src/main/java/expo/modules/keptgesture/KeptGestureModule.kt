@@ -48,6 +48,8 @@ private const val LOG_TAG = "KeptProof"
 private const val GESTURE_SCORE_FLOOR = 0.15f
 private const val HAND_CONFIDENCE_FLOOR = 0.25f
 private const val VISION_IMAGE_MAX_EDGE = 768
+/** The model's whole context: the photo alone is about 280 tokens, then the prompt and the JSON answer. 64 left no room for the photo. */
+private const val MODEL_CONTEXT_TOKENS = 768
 private const val UNSUPPORTED_DEVICE = "On-device proof recognition requires a physical Android device"
 
 /** A model the app needs: where it comes from, and the exact size and digest it must have. */
@@ -313,7 +315,7 @@ class KeptGestureModule : Module() {
     val cacheDir = File(context.cacheDir, "litert-lm").apply { mkdirs() }.absolutePath
     if (shouldUseCpuBackend()) {
       Log.i(LOG_TAG, "Using CPU backend fingerprint=${Build.FINGERPRINT} hardware=${Build.HARDWARE}")
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = 64, cacheDir = cacheDir))
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = MODEL_CONTEXT_TOKENS, cacheDir = cacheDir))
       loaded.initialize()
       engineBackend = "CPU"
       engine = loaded
@@ -321,7 +323,7 @@ class KeptGestureModule : Module() {
     }
 
     try {
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.GPU(), visionBackend = Backend.GPU(), maxNumTokens = 64, cacheDir = cacheDir))
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.GPU(), visionBackend = Backend.GPU(), maxNumTokens = MODEL_CONTEXT_TOKENS, cacheDir = cacheDir))
       try { loaded.initialize() } catch (e: Exception) { runCatching { loaded.close() }; throw e }
       engineBackend = "GPU"
       engine = loaded
@@ -329,7 +331,7 @@ class KeptGestureModule : Module() {
     } catch (e: Exception) {
       Log.w(LOG_TAG, "GPU initialization failed; using CPU", e)
       engineBackend = "CPU"
-      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = 64, cacheDir = cacheDir))
+      val loaded = Engine(EngineConfig(modelPath = gemmaFile.absolutePath, backend = Backend.CPU(), visionBackend = Backend.CPU(), maxNumTokens = MODEL_CONTEXT_TOKENS, cacheDir = cacheDir))
       loaded.initialize()
       engine = loaded
       return loaded
@@ -427,6 +429,9 @@ class KeptGestureModule : Module() {
         conversation.sendMessage(Contents.of(Content.ImageFile(visionImage.absolutePath), Content.Text(prompt)))
           .contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }
       } finally { conversation.close() }
+    } catch (e: Exception) {
+      Log.e(LOG_TAG, "model check failed backend=$engineBackend", e)
+      throw e
     } finally { visionImage.delete() }
     val inferenceAt = SystemClock.elapsedRealtime()
     Log.i(LOG_TAG, "backend=$engineBackend hash=${hashedAt - started}ms gesture=${gestureAt - hashedAt}ms engine=${engineAt - gestureAt}ms inference=${inferenceAt - engineAt}ms answerChars=${response.length}")

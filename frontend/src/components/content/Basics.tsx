@@ -89,8 +89,9 @@ export function Breakdown({ rows, label }: { rows: BreakdownRow[]; label?: strin
       <View style={{ paddingHorizontal: metrics.breakdown.padX, paddingVertical: metrics.breakdown.padY, borderRadius: metrics.breakdown.radius, backgroundColor: color.surface[1], boxShadow: `inset 0 0 0 1px ${color.line.hairline}` }}>
         {rows.map((r, i) => (
           <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space[12], minHeight: r.total ? metrics.breakdown.totalH : metrics.breakdown.rowH, ...(i ? { borderTopWidth: 1, borderTopColor: color.line.hairline2 } : {}) }}>
-            <Text variant="label" color={color.text.secondary}>{r.label}</Text>
-            <Text style={{ fontFamily: fontFamily("sans", r.total ? 700 : 600), fontSize: r.total ? 18 : 14, color: r.color ?? color.text.primary, fontVariant: ["tabular-nums"], textAlign: "right", flexShrink: 1 }}>{r.value}</Text>
+            {/* One line, never shrunk: Android measured "You pay" a pixel too narrow beside the bigger total and wrapped it. */}
+            <Text variant="label" color={color.text.secondary} numberOfLines={1} style={{ flexShrink: 0 }}>{r.label}</Text>
+            <Text style={{ fontFamily: fontFamily("sans", r.total ? 700 : 600), fontSize: r.total ? 18 : 14, color: r.color ?? color.text.primary, fontVariant: ["tabular-nums"], textAlign: "right", flex: 1 }}>{r.value}</Text>
           </View>
         ))}
       </View>
