@@ -160,8 +160,6 @@
   },
   "deck": {
     "$source": "owner: Today's Oaths as a swipeable stack (DECISIONS D-85)",
-    "hint": "Swipe for your next one",
-    "position": "{k} / {n}",
     "positionA11y": "Card {k} of {n}",
     "next": "Next card",
     "previous": "Previous card"

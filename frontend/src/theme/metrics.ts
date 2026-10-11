@@ -33,7 +33,7 @@ export const metrics = {
     stack1: { inset: 11, top: -10, radius: 25 }, stack2: { inset: 22, top: -20, radius: 24 },
     float: { h: 34, right: 14, top: -22, padL: 4, padR: 13, radius: 17, avatar: 26, avatarRadius: 8, tilt: 4 }, dimOpacity: 0.55 },
   /** Today's card stack pager (D-85). */
-  deck: { arrow: 36, icon: 20, dot: 6, dotOn: 16, dotGap: 5, maxDots: 7 },
+  deck: { dot: 6, dotOn: 16, dotSmall: 4, dotGap: 5, maxDots: 5 },
   hpBar: { segments: 20, gap: 2, height: 8, radius: 2 },
   hpPanel: { pad: 16, radius: 24, gap: 3, height: 18, segRadius: 4, lostRing: 1.5, mt: 10 },
   grid: { pad: 14, radius: 24, nameCol: 64, nameColBig: 26, gap: 4, gapBig: 3, cell: 26, cellBig: 18, cellRadius: 7, cellRadiusBig: 5,

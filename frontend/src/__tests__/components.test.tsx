@@ -11,7 +11,9 @@ import { Banner, Segmented } from "@/components/content/Basics";
 import { DayMemberGrid, HPPanel, OathCard, gridToday } from "@/components/content/Oath";
 import { Toggle } from "@/components/content/Rows";
 import { QRCard } from "@/components/content/Inputs";
-import { CardDeck } from "@/components/content/Deck";
+import { CardDeck, dotWindow } from "@/components/content/Deck";
+import { State } from "react-native-gesture-handler";
+import { fireGestureHandler, getByGestureTestId } from "react-native-gesture-handler/jest-utils";
 import { useSettings } from "@/state/settings";
 import { create as createQr } from "qrcode/lib/core/qrcode";
 import { SignStatus } from "@/components/content/Status";
@@ -101,26 +103,86 @@ describe("chrome", () => {
 });
 
 describe("content", () => {
-  it("CardDeck: a stack with a pager that steps both ways; the hint goes once it's used (D-85)", async () => {
+  /** Lays the deck out: its width, then every card's natural height (the test renderer runs no layout). */
+  const layDeck = async (heights: Record<string, number>, width = 360) => {
+    await fireEvent(screen.getByTestId("deck"), "layout", { nativeEvent: { layout: { x: 0, y: 0, width, height: 0 } } });
+    for (const [key, height] of Object.entries(heights)) {
+      await fireEvent(screen.getByTestId(`deck-measure-${key}`, { includeHiddenElements: true }), "layout", { nativeEvent: { layout: { x: 0, y: 0, width, height } } });
+    }
+  };
+  const position = (k: number, n: number) => screen.getByRole("adjustable", { name: t("additions.deck.positionA11y", { k, n }) });
+
+  it("CardDeck: dots only; screen readers step both ways through the stack's actions (D-85)", async () => {
     useSettings.setState({ deckHintSeen: false });
     const cards = ["Iron Week", "Hydrate Week", "Read 20 pages"].map((name) => ({ key: name, node: <Text>{name}</Text> }));
     await render(<CardDeck cards={cards} />);
-    expect(screen.getByText(t("additions.deck.position", { k: 1, n: 3 }))).toBeTruthy();
-    expect(screen.getByText(t("additions.deck.hint"))).toBeTruthy();
+    // Nothing shows until every card is measured.
+    expect(screen.queryByRole("adjustable")).toBeNull();
+    await layDeck({ "Iron Week": 300, "Hydrate Week": 240, "Read 20 pages": 180 });
+    expect(position(1, 3)).toBeTruthy();
+    // No arrows, number or hint text: dots alone.
+    expect(screen.queryByRole("button", { name: t("additions.deck.next") })).toBeNull();
+    expect(screen.queryByText("1 / 3")).toBeNull();
     // The top three are drawn (the ones behind are hidden from screen readers).
-    expect(screen.getByText("Hydrate Week", { includeHiddenElements: true })).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText(t("additions.deck.next")));
-    expect(screen.getByText(t("additions.deck.position", { k: 2, n: 3 }))).toBeTruthy();
+    expect(screen.getAllByText("Hydrate Week", { includeHiddenElements: true }).length).toBeGreaterThan(0);
+    await fireEvent(position(1, 3), "accessibilityAction", { nativeEvent: { actionName: "increment" } });
+    expect(position(2, 3)).toBeTruthy();
     expect(useSettings.getState().deckHintSeen).toBe(true);
-    expect(screen.queryByText(t("additions.deck.hint"))).toBeNull();
-    await fireEvent.press(screen.getByLabelText(t("additions.deck.previous")));
-    await fireEvent.press(screen.getByLabelText(t("additions.deck.previous")));
-    expect(screen.getByText(t("additions.deck.position", { k: 3, n: 3 }))).toBeTruthy();
+    await fireEvent(position(2, 3), "accessibilityAction", { nativeEvent: { actionName: "decrement" } });
+    await fireEvent(position(1, 3), "accessibilityAction", { nativeEvent: { actionName: "decrement" } });
+    expect(position(3, 3)).toBeTruthy();
+  });
+
+  it("CardDeck: every card takes the tallest card's height, counting cards that aren't mounted", async () => {
+    const cards = ["a", "b", "c", "d", "e"].map((key) => ({ key, node: <Text>{key}</Text> }));
+    await render(<CardDeck cards={cards} />);
+    // "e" is fifth, so never one of the three drawn, and it's the tallest.
+    await layDeck({ a: 200, b: 150, c: 260, d: 180, e: 420 });
+    expect(screen.getByTestId("deck")).toHaveStyle({ height: 420 });
+    for (const depth of [0, 1, 2]) expect(screen.getByTestId(`deck-slot-${depth}`, { includeHiddenElements: true })).toHaveStyle({ height: 420 });
+  });
+
+  it("CardDeck: swipe left goes to the next card, swipe right back to the previous one", async () => {
+    const cards = ["a", "b", "c", "d"].map((key) => ({ key, node: <Text>{key}</Text> }));
+    await render(<CardDeck cards={cards} />);
+    await layDeck({ a: 200, b: 200, c: 200, d: 200 });
+    const swipe = async (dx: number) => {
+      await act(async () => {
+        fireGestureHandler(getByGestureTestId("deck-pan-0"), [
+          { state: State.BEGAN, translationX: 0, velocityX: 0 },
+          { state: State.ACTIVE, translationX: dx / 2, velocityX: 0 },
+          { state: State.ACTIVE, translationX: dx, velocityX: 0 },
+          { state: State.END, translationX: dx, velocityX: 0 },
+        ]);
+      });
+    };
+    await swipe(-250);
+    expect(position(2, 4)).toBeTruthy();
+    await swipe(-250);
+    expect(position(3, 4)).toBeTruthy();
+    await swipe(250);
+    expect(position(2, 4)).toBeTruthy();
+    await swipe(250);
+    await swipe(250);
+    expect(position(4, 4)).toBeTruthy();
+    // A short drag springs back.
+    await swipe(-60);
+    expect(position(4, 4)).toBeTruthy();
+  });
+
+  it("CardDeck dots: up to 5; a longer stack shows a window of 5 whose edge dots shrink", () => {
+    const show = (i: number, n: number) => dotWindow(i, n).map((d) => `${d.index}${d.on ? "*" : ""}${d.small ? "s" : ""}`).join(" ");
+    expect(show(1, 2)).toBe("0 1*");
+    expect(show(4, 5)).toBe("0 1 2 3 4*");
+    expect(show(0, 8)).toBe("0* 1 2 3 4s");
+    expect(show(4, 8)).toBe("2s 3 4* 5 6s");
+    expect(show(7, 8)).toBe("3s 4 5 6 7*");
+    for (let n = 1; n <= 12; n++) for (let i = 0; i < n; i++) expect(dotWindow(i, n).length).toBe(Math.min(n, 5));
   });
   it("CardDeck: one card is just the card", async () => {
     await render(<CardDeck cards={[{ key: "a", node: <Text>Solo</Text> }]} />);
     expect(screen.getByText("Solo")).toBeTruthy();
-    expect(screen.queryByLabelText(t("additions.deck.next"))).toBeNull();
+    expect(screen.queryByRole("adjustable")).toBeNull();
   });
   it("QRCard draws exactly the encoder's modules", async () => {
     const link = "kept://join/H4R9-K2";

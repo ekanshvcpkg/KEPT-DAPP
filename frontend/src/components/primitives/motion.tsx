@@ -6,7 +6,7 @@
 // - PressScale: pressed scale with a 48 dp hit area
 import { Children, Fragment, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 import type { LayoutChangeEvent, PressableProps, StyleProp, TextStyle, ViewStyle } from "react-native";
 import Animated, {
   Easing, cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming,
@@ -52,8 +52,18 @@ export function useAnimationLifecycle(values: SharedValue<number>[], start: () =
   return undefined;
 }
 
+/**
+ * Inside a MotionStill provider, Pop and Loop (and the button Shine) draw their end pose and run nothing: for
+ * copies that are only laid out to be measured (CardDeck, D-85), never seen.
+ */
+export const MotionStill = createContext(false);
+
+type PopProps = { children: ReactNode; delay?: number; ms?: number; ease?: EasingName; style?: StyleProp<ViewStyle> };
 /** kPop: scale .4 → 1.08 (65 %) → 1, opacity 0 → 1 (65 %). `ease`: spring (default) or springHard. */
-export function Pop({ children, delay = 0, ms = duration.pop, ease = "spring", style }: { children: ReactNode; delay?: number; ms?: number; ease?: EasingName; style?: StyleProp<ViewStyle> }) {
+export function Pop(props: PopProps) {
+  return useContext(MotionStill) ? <View style={props.style}>{props.children}</View> : <PopLive {...props} />;
+}
+function PopLive({ children, delay = 0, ms = duration.pop, ease = "spring", style }: PopProps) {
   const reduce = useReducedMotion();
   const p = useSharedValue(reduce ? 1 : 0);
   const onLayout = useAnimationLifecycle([p], () => {
@@ -220,7 +230,11 @@ type LoopKind = "beat" | "breath" | "float" | "spin" | "ping" | "glow";
  * Ambient loops: beat (opacity 1 → .4), breath (−4 dp), float (−9 dp), spin (360°),
  * ping (scale 1 → 1.7, opacity .7 → 0), glow (scale out, fading). All but spin stop after LOOP_BUDGET_MS.
  */
-export function Loop({ kind, period, delay = 0, children, style, paused }: { kind: LoopKind; period?: number; delay?: number; children?: ReactNode; style?: StyleProp<ViewStyle>; paused?: boolean }) {
+type LoopProps = { kind: LoopKind; period?: number; delay?: number; children?: ReactNode; style?: StyleProp<ViewStyle>; paused?: boolean };
+export function Loop(props: LoopProps) {
+  return useContext(MotionStill) ? <View style={props.style}>{props.children}</View> : <LoopLive {...props} />;
+}
+function LoopLive({ kind, period, delay = 0, children, style, paused }: LoopProps) {
   const reduce = useReducedMotion();
   const v = useSharedValue(0);
   const ms = period ?? { beat: duration.beat, breath: duration.breath, float: duration.float, spin: duration.spin, ping: duration.ping, glow: duration.glow }[kind];

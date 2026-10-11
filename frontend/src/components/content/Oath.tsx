@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useContext, useEffect } from "react";
 import { View } from "react-native";
 import { hpFilledSegments } from "@kept/engine";
 import { t } from "@/copy";
@@ -9,6 +9,7 @@ import { Icon, InitialTile, Loop, Pop, PressScale, Surface, Text, Tile, CountTex
 import type { IconName } from "../primitives";
 import { Tag } from "./Basics";
 import type { ChipTone } from "./Basics";
+import { CardFill } from "./cardFill";
 import { haptic } from "@/lib/haptics";
 
 // ── HPBar (mini) ── 20 segments, gap 2, h 8, radius 2; pop in left → right.
@@ -104,7 +105,8 @@ interface OathCardProps {
 
 export function OathCard(p: OathCardProps) {
   const v = p.variant ?? "default";
-  const fill = v === "lime" ? { bg: color.lime.tint07 } : v === "sm" ? { bg: color.surface[1] } : { gradient: gradient("card") };
+  const fill = useContext(CardFill);
+  const bg = v === "lime" ? { bg: color.lime.tint07 } : v === "sm" ? { bg: color.surface[1] } : { gradient: gradient("card") };
   const sh = v === "lime" ? `inset 0 0 0 1.5px ${color.lime.ring45}` : v === "sm" ? `inset 0 0 0 1px ${color.line.hairline2}` : shadow("card").boxShadow;
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: metrics.card.gap }}>
@@ -117,7 +119,7 @@ export function OathCard(p: OathCardProps) {
     </View>
   );
   const card = (
-    <Surface radius={metrics.card.radius} {...fill} shadow={sh} {...(v === "default" ? { overlay: gradient("cardSheen") } : {})} style={{ padding: metrics.card.pad }}>
+    <Surface radius={metrics.card.radius} {...bg} shadow={sh} {...(v === "default" ? { overlay: gradient("cardSheen") } : {})} style={[{ padding: metrics.card.pad }, fill ? { flex: 1 } : null]}>
       {p.onPress ? <PressScale onPress={p.onPress} accessibilityLabel={p.name} scale={1}>{header}</PressScale> : header}
       {p.line ? <Text variant="cardLine" style={{ marginTop: metrics.card.sectionGap }}>{p.line}</Text> : null}
       {p.tags?.length ? (
@@ -135,12 +137,13 @@ export function OathCard(p: OathCardProps) {
         </View>
       ) : null}
       {p.warn ? <Warn text={p.warn} bg={color.red.tint12} /> : null}
+      {fill && p.button ? <View style={{ flexGrow: 1 }} /> : null}
       {p.button ? <View style={{ marginTop: metrics.card.sectionGap }}><Button {...p.button} size="card" /></View> : null}
     </Surface>
   );
   return (
-    <View style={{ opacity: p.dim ? metrics.card.dimOpacity : 1, transform: [{ rotate: `${p.tilt ?? 0}deg` }] }}>
-      {v === "default" ? <Loop kind="breath">{card}</Loop> : card}
+    <View style={[{ opacity: p.dim ? metrics.card.dimOpacity : 1, transform: [{ rotate: `${p.tilt ?? 0}deg` }] }, fill ? { flex: 1 } : null]}>
+      {v === "default" ? <Loop kind="breath" {...(fill ? { style: { flex: 1 } } : {})}>{card}</Loop> : card}
       {p.float ? (
         <Pop delay={600} ms={550} style={{ position: "absolute", right: metrics.card.float.right, top: metrics.card.float.top }}>
           <View style={{ height: metrics.card.float.h, paddingLeft: metrics.card.float.padL, paddingRight: metrics.card.float.padR, borderRadius: metrics.card.float.radius, backgroundColor: color.text.primary, flexDirection: "row", alignItems: "center", gap: space[6], transform: [{ rotate: `${metrics.card.float.tilt}deg` }], ...shadow("float") }}>
