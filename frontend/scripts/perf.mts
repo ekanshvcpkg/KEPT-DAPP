@@ -81,6 +81,18 @@ async function locate(q: string, timeoutMs = 45000): Promise<[number, number]> {
   }
 }
 
+/**
+ * Where the header's bell is, from the status bar height and screen density: its centre is 54 dp below the
+ * status bar and 38 dp from the right edge (AppHeader: screen padding 20, bell 36). For when Today's
+ * once-a-second countdown keeps uiautomator from ever finding the screen idle, so `locate` can't read it.
+ */
+function bellFromInsets(): [number, number] {
+  const top = Number(adb("shell", "dumpsys", "window").match(/type=statusBars frame=\[0,0\]\[\d+,(\d+)\]/)?.[1] ?? 63);
+  const dp = Number(adb("shell", "wm", "density").match(/(\d+)\s*$/m)?.[1] ?? 420) / 160;
+  const w = Number(adb("shell", "wm", "size").match(/(\d+)x\d+/)![1]);
+  return [Math.round(w - 38 * dp), Math.round(top + 54 * dp)];
+}
+
 async function tap(q: string, at?: [number, number], timeoutMs = 15000) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -199,7 +211,7 @@ async function main() {
   await tab(0);
   await sleep(2000);
   // The bell, found by its label: Inbox always opens over Today, so the Back after it can't leave the app.
-  const bell = await locate("Inbox");
+  const bell = await locate("Inbox", 15000).catch(() => bellFromInsets());
   const push = await measure("push / back ×4", async () => {
     for (let i = 0; i < 4; i++) {
       input("tap", String(bell[0]), String(bell[1]));
