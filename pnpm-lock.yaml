@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@shopify/react-native-skia@2.6.2': 205bf6a87502637cc1eb62a0ae498778da98e67bf5fb1a05c73a483c9fef6a27
   react-native-reanimated@4.5.1: 0ac14283a24c683f32be5c6398a9e004c53f05ed3f9309376d66d5546c93ba14
 
 importers:
@@ -98,7 +99,7 @@ importers:
         version: 7.20.0(b91fe878098f277075eb826172cf9014)
       '@shopify/react-native-skia':
         specifier: 2.6.2
-        version: 2.6.2(feddc2909d670f1a9bd069d582017ceb)
+        version: 2.6.2(patch_hash=205bf6a87502637cc1eb62a0ae498778da98e67bf5fb1a05c73a483c9fef6a27)(feddc2909d670f1a9bd069d582017ceb)
       '@solana-mobile/mobile-wallet-adapter-protocol-web3js':
         specifier: 3.0.0
         version: 3.0.0(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@6.0.3))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(react-native@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.87.1(@babel/core@7.29.7(supports-color@8.1.1))(bufferutil@4.1.0)(supports-color@8.1.1))(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.3)(supports-color@8.1.1))(typescript@6.0.3)
@@ -7949,7 +7950,7 @@ snapshots:
 
   '@rtsao/scc@1.1.0': {}
 
-  '@shopify/react-native-skia@2.6.2(feddc2909d670f1a9bd069d582017ceb)':
+  '@shopify/react-native-skia@2.6.2(patch_hash=205bf6a87502637cc1eb62a0ae498778da98e67bf5fb1a05c73a483c9fef6a27)(feddc2909d670f1a9bd069d582017ceb)':
     dependencies:
       canvaskit-wasm: 0.41.0
       react: 19.2.3
