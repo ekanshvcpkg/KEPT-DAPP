@@ -16,6 +16,7 @@ import { DayStrip, SignStatus } from "@/components/content/Status";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
 import { clock as hms } from "@/lib/format";
+import { useScreenFocused } from "@/lib/focus";
 import { color, metrics } from "@/theme";
 import { getApi, isApiError } from "@/api";
 import type { Challenge, ProofOutcome } from "@/api";
@@ -120,6 +121,8 @@ function Shoot({ photo }: { photo: 1 | 2 }) {
   // Only a mock Oath (Demo) takes a stand-in photo: its proof goes to the mock, which never reads the image.
   const mock = view?.facts.source === "mock";
   const [perm] = useCameraPermissions();
+  // The camera runs only while this screen is in front: checking, a failed check or anything else on top releases it.
+  const focused = useScreenFocused();
   const c = useChallenge(view, photo);
   const cam = useRef<CameraView>(null);
   const [facing, setFacing] = useState<"back" | "front">("back");
@@ -145,7 +148,7 @@ function Shoot({ photo }: { photo: 1 | 2 }) {
   return (
     <Screen bar={<NavBar onBack={back} close title={navTitle(view, photo)} />} scroll={false}>
       <ProofCamera photo={photo} state="idle" object={view ? objectIcon(view.facts.objectId) : "camera"} label={challengeLabel(c)} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})}>
-        {perm?.granted ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
+        {perm?.granted && focused ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
       </ProofCamera>
       <ChipRow justify="center">
         <Chip text={t("screens.F1.b1.chip.0", { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` })} tone={left < 60 ? "red" : "grey"} icon="timer-outline" />

@@ -207,8 +207,12 @@ describe("onboarding on mocks", () => {
     expect(screen.getByText(t("screens.D2.nav.right", { day: 3, length: 7 }))).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: t("screens.D2.pin.1", { name: "Arjun" }) }));
     expect(await screen.findByText(t("toasts.3", { name: "Arjun" }))).toBeTruthy();
+    // No camera until the user picks Prove (D-91); it's on in F4 and off once the photo goes to checking.
+    expect(screen.queryByTestId("camera-preview")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: t("screens.D2.pin.0") }));
+    expect(await screen.findByTestId("camera-preview")).toBeTruthy();
     await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
+    await waitFor(() => expect(screen.queryByTestId("camera-preview")).toBeNull());
     expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 3 }), {}, slow)).length).toBeGreaterThan(0); // title + FX pill
   }, 30000);
 
