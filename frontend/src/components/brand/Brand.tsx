@@ -14,8 +14,8 @@ const SPLASH = { check: 350, stem: 600, leg: 750, word: 900, tagline: 1050, inMs
 
 /**
  * The ink Check-K drawn in: check stroke `draw` 320 ms, then the stem and leg fade in (motion.md §1). Skia
- * (motion rework): the check is the stroke trimmed to `draw` of its length, the same reveal as the SVG's
- * dash offset, without animating SVG props.
+ * (motion rework): the check is the stroke trimmed to `draw` of its length, the same reveal as the
+ * prototype's SVG dash offset, without animating SVG props.
  */
 function CheckKReveal({ size }: { size: number }) {
   const reduce = useReducedMotion();
