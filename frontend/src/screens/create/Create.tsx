@@ -1,6 +1,6 @@
 // C · Create an Oath (screens.md C1–C8). The draft lives in state/drafts; C7 signs through the
 // TxService for the mode: the program in Live (solo with stake 0, D-30), the mock in Demo.
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Share } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
 import { formatUsd } from "@/lib/format";
 import { color, metrics } from "@/theme";
-import { useApi } from "@/api";
+import { getApi, useApi } from "@/api";
 import { qk } from "@/api/queries";
 import { useGo, useParams } from "@/app/nav";
 import { oathActions, useOath } from "@/features/oaths/hooks";
@@ -27,6 +27,8 @@ import { memberColor, memberInitial, memberName, objectName, reviewText, skrWhol
 import { screenFor } from "@/features/oaths/route";
 import { oathName } from "@/features/oaths/names";
 import { useDraft } from "@/state/drafts";
+import { useDeviceOaths } from "@/features/oaths/device";
+import { inviteUrl } from "@/config/env";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
@@ -198,8 +200,36 @@ export function C8() {
   const toast = useToast();
   const p = useParams<{ id: string; code: string }>();
   const { view } = useOath(p.id);
-  const code = p.code ?? view?.facts.inviteCode ?? "";
-  const deepLink = `kept://join/${code}`;
+  const facts = view?.facts;
+  const factsRef = useRef(facts);
+  useEffect(() => { factsRef.current = facts; }, [facts]);
+  const factsId = facts?.id;
+  const [recoveredCode, setRecoveredCode] = useState<string | null>(null);
+  const attemptedFor = useRef<string | null>(null);
+  const code = p.code ?? recoveredCode ?? view?.facts.inviteCode ?? "";
+  useEffect(() => {
+    const current = factsRef.current;
+    if (!current || current.isSolo || code || attemptedFor.current === current.id) return;
+    attemptedFor.current = current.id;
+    let active = true;
+    const recover = async () => {
+      try {
+        const api = getApi();
+        const next = current.goal
+          ? await api.oaths.register(current, current.goal)
+          : (await api.invites.create(current.id)).code;
+        if (next && active) {
+          useDeviceOaths.getState().remember(current.id, { code: next });
+          setRecoveredCode(next);
+        }
+      } catch {
+        // The Oath is already created. Keep this screen usable and let the user retry by reopening it.
+      }
+    };
+    void recover();
+    return () => { active = false; };
+  }, [factsId, code]);
+  const deepLink = inviteUrl(code);
   const seats: Seat[] = view ? [
     ...view.members.map((m): Seat => ({ kind: "member", name: memberName(m), initial: memberInitial(m), color: memberColor(m), ...(m.facts.avatar ? { avatar: m.facts.avatar } : {}), status: t("screens.C8.b4.seat0") })),
     ...Array.from({ length: Math.max(0, MAX_MEMBERS - view.members.length) }, (): Seat => ({ kind: "open" })),
@@ -209,10 +239,10 @@ export function C8() {
       pinned={<Button kind="p" label={t("screens.C8.pin.0")} onPress={() => replace("D1", { id: p.id! })} />}>
       <Title heading={t("screens.C8.b0.title")} sub={view ? t("screens.C8.b0.sub", { amount: skrWhole(view.facts.stake) }) : undefined} />
       {code ? <QRCard code={code} link={deepLink} /> : null}
-      <ButtonRow>
+      {code ? <ButtonRow>
         <Button kind="s" size="row" icon="content-copy" label={t("screens.C8.b2.btn.0")} onPress={() => { void Clipboard.setStringAsync(deepLink).then(() => toast(t("toasts.0"))); }} />
         <Button kind="s" size="row" icon="share-variant" label={t("screens.C8.b2.btn.1")} onPress={() => { void Share.share({ message: deepLink }); }} />
-      </ButtonRow>
+      </ButtonRow> : null}
       <BodyText mono text={t("screens.C8.b3.text", { n: view?.members.length ?? 1 })} />
       <SeatSlots seats={seats} />
     </Screen>

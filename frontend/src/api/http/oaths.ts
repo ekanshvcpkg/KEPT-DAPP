@@ -2,7 +2,7 @@
 // can't store yet from the device (names, review mode). Nothing here reads the mock (Live, D-80).
 import { PublicKey } from "@solana/web3.js";
 import { oathPda } from "@kept/chain";
-import { DetailsResponse, GoalResponse, InviteCreateResponse, InviteResolveResponse, ProofChallengeResponse } from "@kept/shared";
+import { DetailsResponse, GoalResponse, InviteCreateResponse, InviteResolveResponse, OathInviteResponse, ProofChallengeResponse } from "@kept/shared";
 import { PROGRAM_ID, listOathsOf, readOath } from "@/chain/program";
 import type { ChainOath } from "@/chain/program";
 import { useDeviceOaths } from "@/features/oaths/device";
@@ -57,6 +57,18 @@ function toFacts(o: ChainOath, goal: string | null): OathFacts {
   };
 }
 
+async function restoreInvite(c: HttpClient, oath: string): Promise<string | null> {
+  try {
+    const r = await c.get(`/api/oaths/${encodeURIComponent(oath)}/invite`, OathInviteResponse);
+    if (!r.invite) return null;
+    useDeviceOaths.getState().remember(oath, { ...(r.goalText ? { goal: r.goalText } : {}), code: r.invite.code });
+    return r.invite.code;
+  } catch {
+    // Invite restoration is an optional detail. Keep Oath reads usable if this route is unavailable.
+    return null;
+  }
+}
+
 export const httpOaths = (c: HttpClient): OathsApi => ({
   list: async (wallet) => {
     const found = await listOathsOf(wallet).catch((e: unknown) => { throw fromRpcError(e); });
@@ -76,7 +88,11 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     }
     const o = await readOath(id).catch((e: unknown) => { throw fromRpcError(e); });
     if (!o) throw new ApiError("NOT_FOUND", `Oath ${id} not found`, 404);
-    return toFacts(o, await goalOf(c, id));
+    const facts = toFacts(o, await goalOf(c, id));
+    if (!facts.inviteCode && !facts.isSolo && facts.status === "open") {
+      facts.inviteCode = await restoreInvite(c, id);
+    }
+    return facts;
   },
   byInvite: async (code) => {
     let r;
@@ -92,7 +108,8 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
   },
   register: async (oath, goal) => {
     await c.post("/api/oaths/details", { oath: oath.id, goalText: goal }, DetailsResponse);
-    const code = oath.isSolo ? null : (await c.post("/api/invites", { oath: oath.id }, InviteCreateResponse)).code;
+    let code = oath.isSolo ? null : await restoreInvite(c, oath.id);
+    if (!oath.isSolo && !code) code = (await c.post("/api/invites", { oath: oath.id }, InviteCreateResponse)).code;
     await c.send("/api/oaths/watch", { oath: oath.id });
     useDeviceOaths.getState().remember(oath.id, { goal, ...(code ? { code } : {}) });
     return code;

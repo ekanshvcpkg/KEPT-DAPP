@@ -4,7 +4,7 @@ Each phase ends with: `pnpm typecheck && pnpm lint && pnpm test` green, exact st
 
 **Your machine (checked):** Node 26.7, pnpm 12.6, Java 17, Android SDK + `adb`, Docker. **Not installed:** Rust / Solana CLI / Anchor (DECISIONS D-24), Postgres (I'll use Docker), Maestro (needed in Phase 5).
 
-**How the phone reaches the dev servers (all phases):** USB debugging on, then `adb reverse tcp:8081 tcp:8081` (Metro) and `adb reverse tcp:3000 tcp:3000` (API), so the app uses `http://localhost:3000` with no LAN setup.
+**How the phone reaches the dev servers (all phases):** USB debugging on, then `adb reverse tcp:8082 tcp:8082` (mobile Metro; kept separate from the legacy app's 8081) and `adb reverse tcp:3000 tcp:3000` (API), so the app uses `http://localhost:3000` with no LAN setup.
 
 ---
 

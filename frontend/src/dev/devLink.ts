@@ -116,16 +116,17 @@ function openDevLink(url: string): boolean {
 
   // `quiet=1` (the shoot script): no LogBox toasts over the screenshot; errors still go to logcat.
   if (q.quiet === "1") LogBox.ignoreAllLogs(true);
-  // A clean mock world on the scenario, in Demo (its own storage scope; every store is set below).
-  useMode.setState({ mode: "demo" });
-  setStorageScope("demo");
+  // Use Live mode unless explicitly requesting a demo scenario
+  const isDemo = q.demo === "1" || (!!q.scenario && q.scenario !== "live");
+  const targetMode = isDemo ? "demo" : "live";
+  useMode.setState({ mode: targetMode });
+  setStorageScope(targetMode);
   useDevHold.setState({ hold: q.hold === "1", still: q.still === "1" });
-  // Demo already means the mock for every slice, with the mock wallet; nothing else to switch on.
   useDev.setState({ scenario, overrides: {}, mockWallet: false });
   clock.reset();
   mockOaths.reset();
   mockReviews.reset();
-  resetMockApi();
+  if (isDemo) resetMockApi();
   queryClient.clear();
   useUi.setState({ fx: null, devMenu: false });
   __resetSeenKeeperLines();
@@ -134,9 +135,11 @@ function openDevLink(url: string): boolean {
   useBountyDraft.getState().reset();
   if (id.startsWith("K")) useBountyDraft.getState().set(SAMPLE_BOUNTY);
   const signedOut = ONBOARDING.has(id);
-  useSession.setState(signedOut
-    ? { token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null }
-    : { token: `mock.${W}`, wallet: W, genesis: scenario !== "notEligible", onboarded: true, avatar: SAMPLE_AVATAR, invite: null });
+  if (signedOut) {
+    useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
+  } else if (isDemo) {
+    useSession.setState({ token: `mock.${W}`, wallet: W, genesis: scenario !== "notEligible", onboarded: true, avatar: SAMPLE_AVATAR, invite: null });
+  }
   mockOaths.ensureSeeded(scenario, W);
   shot.setup?.();
   // Results and the recap are moments shown once: mark them seen so they don't open over the target.

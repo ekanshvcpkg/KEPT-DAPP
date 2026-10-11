@@ -15,11 +15,17 @@ let warned = false;
 
 function load(): Native | null {
   if (native !== undefined) return native;
-  // Asked first, so a missing module is a quiet null here instead of a thrown (and logged) error at import.
-  if (requireOptionalNativeModule("ExpoSecureStore")) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- a static import throws at startup without the native module
-    native = require("expo-secure-store") as Native;
-    return native;
+  try {
+    if (requireOptionalNativeModule("ExpoSecureStore")) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- a static import throws at startup without the native module
+      const mod = require("expo-secure-store") as Native;
+      if (mod && typeof mod.getItemAsync === "function") {
+        native = mod;
+        return native;
+      }
+    }
+  } catch {
+    // Native module not linked into this build
   }
   if (!__DEV__) throw new Error("Cannot find native module 'ExpoSecureStore'");
   native = null;

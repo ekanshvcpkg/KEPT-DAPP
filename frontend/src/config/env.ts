@@ -28,3 +28,6 @@ export const liveConfigured = (url: string = env.apiUrl, dev: boolean = __DEV__)
   dev || !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10\.0\.2\.2)(:|\/|$)/.test(url);
 
 export const walletChain = `solana:${env.cluster}` as const;
+
+/** HTTPS invite URL uses the app identity host so Android can verify and open it as an App Link. */
+export const inviteUrl = (code: string): string => `${env.identity.uri.replace(/\/$/, "")}/o/${encodeURIComponent(code)}`;

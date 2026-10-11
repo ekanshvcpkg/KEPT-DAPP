@@ -9,6 +9,7 @@ import { getTx } from "@/chain";
 import { SKR_UNIT } from "@kept/config";
 import { flags, useDev } from "@/state/dev";
 import { useSession } from "@/state/session";
+import { useDraft } from "@/state/drafts";
 import type { OathDraft } from "@/state/drafts";
 import { useNow } from "../time";
 import { useDeviceOaths } from "./device";
@@ -73,16 +74,28 @@ export const oathActions = {
   async create(d: OathDraft): Promise<{ id: string; code: string | null }> {
     const source = createSource();
     const goal = d.goal.trim();
+    let oathId: bigint | undefined;
+    if (source === "chain") {
+      const stableId = d.chainOathId ?? `${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`;
+      oathId = BigInt(stableId);
+      if (!d.chainOathId) useDraft.getState().set({ chainOathId: stableId });
+    }
     const { oath, started } = await getTx(source).createOath({
-      objectId: d.objectId, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal, tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode,
+      objectId: d.objectId, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal, tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
     });
     // flows.md: a solo Oath goes C7·ok → D2, with no Start step. On chain it already started in the create
     // transaction; the mock starts it here.
     if (d.isSolo && !started) await getTx(source).startOath(oath);
     useDeviceOaths.getState().remember(oath, { name: oathName(d.objectId, d.numDays), reviewMode: d.reviewMode, goal });
     const api = getApi();
-    const facts = await api.oaths.get(oath);
-    const code = await api.oaths.register(facts, goal).catch(() => facts.inviteCode);
+    let code: string | null = null;
+    try {
+      const facts = await api.oaths.get(oath);
+      code = await api.oaths.register(facts, goal);
+    } catch {
+      // The chain create is already confirmed. Keep the success path; C8 can recover the invite and
+      // retry the backend follow-ups without asking the wallet to create another Oath.
+    }
     await refreshOaths();
     return { id: oath, code };
   },

@@ -15,7 +15,7 @@ const arg = (name: string, d: string) => { const i = process.argv.indexOf(`--${n
 const out = path.resolve(arg("out", path.join(root, "artifacts/screens")));
 const settle = Number(arg("settle", "3500"));
 const PKG = "app.kept.mobile";
-const DEV_CLIENT = "exp+kept://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081";
+const DEV_CLIENT = "exp+kept://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082";
 const sdk = process.env.ANDROID_HOME ?? path.join(process.env.HOME!, "Library/Android/sdk");
 const ADB = path.join(sdk, "platform-tools/adb");
 
@@ -47,7 +47,7 @@ async function main() {
     spawnSync(ADB, ["shell", "pm", perm, PKG, "android.permission.CAMERA"]);
     if (!pidOf() || !appOnTop()) {
       // The dev client needs the bundle URL first; a kept:// link alone opens its launcher.
-      adb("reverse", "tcp:8081", "tcp:8081");
+      adb("reverse", "tcp:8082", "tcp:8082");
       adb("reverse", "tcp:3000", "tcp:3000");
       adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", `'${DEV_CLIENT}'`, PKG);
       await sleep(12000);

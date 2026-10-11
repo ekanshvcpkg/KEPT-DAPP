@@ -22,8 +22,9 @@ export const realTx: TxService = {
   async createOath(i) {
     const e = await programEnv();
     const creator = me();
+    const oathId = i.oathId ?? newOathId();
     const { ix, oath } = createOathIx(e, {
-      creator, creatorToken: tokenAccount(e, creator), oathId: newOathId(), goalText: i.goalText, objectId: i.objectId,
+      creator, creatorToken: tokenAccount(e, creator), oathId, goalText: i.goalText, objectId: i.objectId,
       numDays: i.numDays, daySeconds: env.daySeconds, tzOffsetMinutes: i.tzOffsetMinutes,
       // The program requires a solo stake of 0 today (BACKEND_GAPS P0-7, DECISIONS D-30).
       stake: i.isSolo ? 0n : i.stake, isSolo: i.isSolo,
@@ -31,7 +32,17 @@ export const realTx: TxService = {
     // A solo Oath has no one to wait for, so it starts in the same transaction: one wallet approval, not two
     // (the program accepts start_oath right after create_oath for a solo Oath; BACKEND_GAPS P1-18).
     const ixs = i.isSolo ? [ix, startOathIx(e, { oath, creator })] : [ix];
-    return { signature: await signAndSend(creator, ixs), oath: oath.toBase58(), started: i.isSolo };
+    try {
+      return { signature: await signAndSend(creator, ixs), oath: oath.toBase58(), started: i.isSolo };
+    } catch (error) {
+      // A wallet/RPC timeout can happen after the program accepted the transaction. On retry, recognize
+      // the same PDA and return success instead of making the user stake into a second Oath.
+      const existing = await readOath(oath.toBase58()).catch(() => null);
+      if (existing?.creator === creator.toBase58() && existing.oathId === oathId) {
+        return { signature: "previously-confirmed", oath: oath.toBase58(), started: existing.status !== "open" };
+      }
+      throw error;
+    }
   },
   async joinOath(oath) {
     const e = await programEnv();

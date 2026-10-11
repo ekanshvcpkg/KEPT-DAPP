@@ -12,6 +12,8 @@ export interface OathDraft {
   /** Whole SKR per member: 500 | 1000 | 2500. */
   stakeSkr: number;
   reviewMode: ReviewMode;
+  /** Stable chain ID across retries, so a delayed confirmation cannot create a second Oath. */
+  chainOathId?: string;
 }
 
 const EMPTY_DRAFT: OathDraft = { goal: "", objectId: 0, numDays: 7, isSolo: false, stakeSkr: 1000, reviewMode: "ai_group" };

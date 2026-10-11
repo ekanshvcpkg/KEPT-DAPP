@@ -53,6 +53,7 @@ Comprehensive test execution report across the monorepo packages, backend, on-ch
   3. Launched development build on Android emulator via:
      `adb shell am start -a android.intent.action.VIEW -d "exp+kept://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8082"`
   4. Bundler successfully served 2,333 modules to `app.kept.mobile`.
+  5. The `@kept/mobile` `start` and `android` scripts now default to 8082, preventing the standard launch commands from selecting the mainbackend legacy renderer on 8081.
 
 ---
 

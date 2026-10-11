@@ -30,8 +30,8 @@ Live → A2 → `transact` (MWA `authorize`) → `POST /api/auth/nonce` → seco
    Render default and the fixes. **No native rebuild is needed** for a development build: `EXPO_PUBLIC_*` is
    inlined by Metro. A release APK embeds it and would need a rebuild.
 4. **Two Metro servers on port 8081**: this workspace's (`*:8081`) and the `kept-example` app's (`[::1]:8081`).
-   `adb reverse tcp:8081` reaches one or the other depending on how the host resolves `localhost`. Not touched;
-   use a separate port (see `frontend/README.md`).
+   `adb reverse tcp:8081` reached the legacy app's renderer. The mobile `start` and `android` scripts now reserve
+   port 8082 and the README / screenshot runner use it too.
 5. Smaller: `env.ts` used `??`, so an empty `EXPO_PUBLIC_API_URL=` line left Live with no server (now `||`);
    `.env.example` still had a dead `EXPO_PUBLIC_API_MODE=hybrid` (removed).
 
@@ -74,7 +74,9 @@ Demo's Today with the DEMO badge before Live was tested.
 - Render: single instance (nonces are in memory); a Seeker's wallet on `SGT_MOCK_ALLOWLIST` (or a devnet
   `GENESIS_GROUP`) if it should see A3 rather than A3·no (BACKEND_GAPS P2-12). Nothing for `SESSION_SECRET` or the DB:
   both proven by the login above.
-- Restart Metro with `--clear` on a free port (the one on 8081 is stale). No native rebuild for a dev build.
+- `pnpm mobile:start` now uses 8082 and the current native manifest declares the HTTPS App Link. Android reports the
+  `keptdapp.vercel.app` association verified; Phantom still displays its identity warning and declines silent
+  reauthorization, so a fresh authorization is required. A Seeker Seed Vault check remains necessary.
 
 ## Manual Seeker check (needs the device)
 

@@ -30,8 +30,14 @@ import { missCost } from "@kept/engine";
 import { SigningScreen } from "../shared/Signing";
 
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
-const CODE = /(?:join\/)?([A-Za-z]+-[A-Za-z0-9]{4})\b/;
-const codeFrom = (s: string) => s.match(CODE)?.[1]?.toUpperCase() ?? s.trim().toUpperCase();
+const URL_CODE = /(?:[a-z]+:\/\/(?:[^/]+\/)?(?:join|o)\/|(?:join|o)\/)([^/?#\s]+)/i;
+const WORD_CODE = /\b([A-Za-z]+-[A-Za-z0-9]{4})\b/;
+export const codeFrom = (s: string) => {
+  const m = s.match(URL_CODE)?.[1] ?? s.match(WORD_CODE)?.[1] ?? s.trim();
+  // Current backend codes are case-sensitive base64url strings. Keep the exact case from links,
+  // QR scans, clipboard text, and manual entry so the API can resolve what it issued.
+  return m;
+};
 
 // ── E1 Enter invite ──
 export function E1() {
@@ -72,9 +78,11 @@ export function E1() {
     }
   }, [go, toast]);
 
-  // A deep link arrives with the code: look it up straight away.
+  // A deep link arrives with the code: look it up straight away (only once per unique code).
+  const autoChecked = useRef<string | null>(null);
   useEffect(() => {
-    if (!p.code) return;
+    if (!p.code || autoChecked.current === p.code) return;
+    autoChecked.current = p.code;
     const timer = setTimeout(() => { void find(p.code!); }, 0);
     return () => clearTimeout(timer);
   }, [p.code, find]);
@@ -96,7 +104,7 @@ export function E1() {
         ) : undefined}
       </ProofCamera>
       {!live ? <Button kind="s" size="row" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void requestPerm(); }} /> : null}
-      <SentenceInput label={t("screens.E1.b2.label")} value={code} onChange={(v) => setCode(v.toUpperCase())} mono max={16} suggestions={[]} placeholder={t("screens.E1.b2.sug.0")} />
+      <SentenceInput label={t("screens.E1.b2.label")} value={code} onChange={setCode} mono max={16} suggestions={[]} placeholder={t("screens.E1.b2.sug.0")} />
       <ButtonRow>
         <Button kind="s" size="row" icon="content-paste" label={t("screens.E1.b3.btn.0")} onPress={() => {
           void Clipboard.getStringAsync().then((s) => {

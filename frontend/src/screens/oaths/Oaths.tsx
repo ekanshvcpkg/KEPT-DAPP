@@ -33,6 +33,7 @@ import { useLastSeenHp } from "@/features/oaths/device";
 import { useFeature } from "@/features/availability";
 import { historyOf, historyTotals } from "@/features/oaths/history";
 import type { HistoryRow } from "@/features/oaths/history";
+import { inviteUrl } from "@/config/env";
 
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
 const rateText = (m: MemberView) => (m.facts.keptRate === null ? t("common.keptRateNew") : t("screens.D1.b3.seat0", { rate: Math.round(m.facts.keptRate * 100) }));
@@ -151,7 +152,7 @@ function OpenCreator({ v }: { v: OathView }) {
       <SeatSlots seats={seatsOf(v, true)} />
       {!f.isSolo && code ? (
         <RowList rows={[
-          { title: t("screens.D1.b4.r0.t"), sub: t("screens.D1.b4.r0.s", { code }), leading: { kind: "icon", icon: "link-variant" }, onPress: () => { void Clipboard.setStringAsync(`kept://join/${code}`).then(() => toast(t("toasts.0"))); } },
+          { title: t("screens.D1.b4.r0.t"), sub: t("screens.D1.b4.r0.s", { code }), leading: { kind: "icon", icon: "link-variant" }, onPress: () => { void Clipboard.setStringAsync(inviteUrl(code)).then(() => toast(t("toasts.0"))); } },
           { title: t("screens.D1.b4.r1.t"), sub: t("screens.D1.b4.r1.s"), leading: { kind: "icon", icon: "qrcode" }, chevron: true, onPress: () => go("C8", { id: f.id, code }) },
         ]} />
       ) : null}

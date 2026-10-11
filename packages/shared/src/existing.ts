@@ -46,6 +46,11 @@ export const GoalResponse = z.object({ goalText: z.string().nullable() });
 // POST /api/invites
 export const InviteCreateRequest = z.object({ oath: Address });
 export const InviteCreateResponse = z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/"), oath: OathRead });
+// GET /api/oaths/:oath/invite; lets the app recover a creator's current link after a reload.
+export const OathInviteResponse = z.object({
+  goalText: z.string().nullable(),
+  invite: z.object({ code: z.string().min(1), deepLink: z.string().startsWith("kept://join/") }).nullable(),
+});
 // GET /api/invites/:code
 export const InviteResolveResponse = z.object({ oath: OathRead, goalText: z.string().nullable(), alreadyStarted: z.boolean() });
 export type InviteResolve = z.infer<typeof InviteResolveResponse>;

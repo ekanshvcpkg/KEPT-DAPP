@@ -80,6 +80,7 @@ describe("kept://join/<code>", () => {
     await setAppMode("live");
     useSession.setState({ token: "t", onboarded: true, invite: null });
     expect(routeInvite("kept://join/IRON-7K2Q")).toBe("kept://join/IRON-7K2Q");
+    expect(routeInvite("https://keptdapp.vercel.app/o/Ab3dE9x")).toBe("kept://join/Ab3dE9x");
     expect(useSession.getState().invite).toBeNull();
     expect(routeInvite("kept://other")).toBe("kept://other");
   });

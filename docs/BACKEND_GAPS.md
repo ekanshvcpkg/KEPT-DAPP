@@ -60,7 +60,7 @@ The checklist for the backend developer. Each line points to the full item below
 - [ ] **`GET /api/invites/:code` returns the Oath address** (P1-15). The app recomputes it from creator + oath_id.
 - [ ] **`/api/oaths/details` also registers the watch, and details / invites / watch are idempotent** (P0-9).
 - [ ] **`/api/price` and the invite preview outside the Genesis gate** (P1-13, P1-15).
-- [ ] Serve `app.kept.mobile` in `/.well-known/assetlinks.json` (P2-7), or the wallet asks to reconnect on every transaction.
+- [x] The identity host lists `app.kept.mobile` and its debug/release certificates; Android verifies the App Link (P2-7). Phantom still shows an identity warning; see P2-7 below.
 
 **Add (API routes; shapes in `packages/shared/src/proposed.ts`)**
 - [ ] `GET /api/me/oaths`: my Oaths index (P0-10). The app scans the program with 4 `getProgramAccounts` calls every 30 s until this exists.
@@ -327,10 +327,10 @@ The checklist for the backend developer. Each line points to the full item below
 - **App until then:** since 2026-10-10 the app sends `create_oath` + `start_oath` as **one transaction** for a solo Oath (`chain/realTx.ts`), so it is one wallet approval. Checked by simulating that transaction on Devnet (no error, ~51k compute units, 545 bytes). No program change is needed for the approval count; starting inside `create_oath` would still save an instruction.
 - **Change:** start solo Oaths inside `create_oath` (day 1 at the creator's next midnight, D-6), or accept `start` as part of the same transaction.
 
-### P1-19. A web link for invites · NEW (Phase 4.5)
+### P1-19. A web link for invites · PARTLY DONE (Phase 4.5, checked 2026-10-10)
 - **Design:** C8 and D1 show the invite as `kept.app/o/IRON-7K2Q`.
-- **Now:** only `kept://join/<code>` exists, which opens nothing for someone without the app. The app shows and shares the `kept://` link until there's a web page.
-- **Change:** a page at `/o/<code>` that opens the app through Android App Links (assetlinks, see P2-7) and otherwise points to the install. Then the app switches the displayed and shared link.
+- **Now:** C8 and D1 share `https://keptdapp.vercel.app/o/<code>`. Android App Links route this into the installed app and the device reports the host as verified. The branded `kept.app` domain serves a domain-for-sale page, while the Vercel `/o/<code>` route returns 404 in a browser.
+- **Change:** publish an invite landing page with an install/preview fallback on a domain KEPT owns, move the identity URI and `assetlinks.json` there, then update the shared URL and Android App Link host.
 
 ### P1-20. Who survived a Bounty · NEW (Phase 4.5)
 - **Design:** H5 shows the survivors' avatars with their share.
@@ -341,6 +341,13 @@ The checklist for the backend developer. Each line points to the full item below
 - **Now:** `CHALLENGE_TTL_MS = 2 * 60_000` (`backend/src/v4/rules.ts:44`, plus a 60 s upload grace). A fresh challenge shows about 2:00 on F1, and F2c reads from the design's copy.
 - **Design:** F2c says "Challenges last 5 minutes, so nobody reuses old photos" (`design/copy.json`, F2c).
 - **Change:** set the TTL to 5 minutes, or decide the design copy should say 2 (the app shows whatever `expiresAt` the backend sends, so only the F2c sentence disagrees).
+
+### P1-22. Invite code casing and format mismatch · PARTLY DONE (2026-10-10, found on the emulator)
+- **Now:** `POST /api/invites` generates `randomBytes(5).toString("base64url")` (`backend/src/routes/v4.ts:101`), producing mixed-case strings with potential underscores. `GET /api/invites/:code` queries Postgres `prisma.oathInvite.findUnique({ where: { code: req.params.code } })` which is strictly case-sensitive.
+- **Design:** the design specifies uppercase codes like `IRON-7K2Q` (`design/copy.json`, "Check for typos. Codes look like IRON-7K2Q"). The app previously uppercased input; it now preserves the backend's issued casing.
+- **App workaround:** Live now preserves the exact case from typed text, links, pasted text and QR scans (`frontend/src/screens/join/Join.tsx`), so valid issued codes resolve when shared accurately.
+- **Remaining impact:** manually retyping a mixed-case code with the wrong case still fails with 404 `INVITE_NOT_FOUND`; underscores and the generated 7-character format also differ from the designed uppercase word-code.
+- **Backend change:** generate uppercase alphanumeric codes matching the design (or word-4alphanumeric like `IRON-7K2Q`), or provide a case-insensitive lookup that does not make distinct codes collide.
 
 ### Local setup note (Phase 4.5)
 Running `backend` locally needs `VERIFIER_SECRET_KEY` and `FAUCET_SECRET_KEY` for the **configured** Devnet verifier/admin (`FFAZTtBd…`, read from the on-chain Config). Without them sign-in, invites, nudges and price work, but the faucet has no SKR and real photo-2 check-ins are rejected on chain. A throwaway key was used for the shakedown.
@@ -355,9 +362,9 @@ Running `backend` locally needs `VERIFIER_SECRET_KEY` and `FAUCET_SECRET_KEY` fo
 4. **Debug day length is in the default build** · NEW. `default = ["debug-tools", "init-if-needed"]` (`programs/kept_test/Cargo.toml:12`) allows `day_seconds == 120` (`lib.rs:54-55`). Release and Devnet-for-testers builds must use `--no-default-features --features init-if-needed`. Also confirm what's actually deployed (BACKEND_PART_1 §6.12 says deployed ≠ source).
 5. **Legacy V3 surface** · CONFIRMED. `migrate_keeper` and the Keeper streak counters (`lib.rs:217-223`, `state.rs:18-27`), dead uncompiled V3 Rust files in `programs/kept_test/src/` (`constants.rs`, `day.rs`, `errors.rs`, `events.rs`, `instructions/`; `lib.rs:4` only declares `mod state`), V3 Prisma migrations for `Payment`, `User`, `AuraMint` that the schema no longer models, and a stale crate description "Keeper XP, streak and Soul" (`Cargo.toml:4`, copied into the IDL metadata). XP, levels, ranks and NFTs aren't in the app (rules.md §9).
 6. **Stale code in the harness chain folder** · NEW. `chain/idl.ts` embeds the old V3 IDL (`buy_soul`, `check_in`), `chain/errors.ts` only maps V3 errors, `constants.ts` is V3, and `chain/oaths.ts:4` imports `@noble/hashes` without declaring it. The JSON IDL `chain/idl/kept_test.json` **is** V4. The new `packages/chain` uses only the JSON IDL.
-7. **Android app identity drift** · NEW. Three package names in three places: `assetlinks.ts` serves `com.kept.backendtest`, `backend/assetlinks.json` lists `app.kept.mobile` and `com.kept.testharness`, and the harness `app.json` uses `com.kept.backendtest`. The new app's package name and debug and release fingerprints must be added (DECISIONS D-22).
-   **Phase 2 impact:** the new app (`app.kept.mobile`) now signs in through MWA with identity URI `EXPO_PUBLIC_APP_IDENTITY_URI`. Until the served `/.well-known/assetlinks.json` (`backend/src/routes/assetlinks.ts:10-18`) lists `app.kept.mobile` with the debug-keystore fingerprint (`FA:C6:17:45:…:3B:9C`, the same Expo debug key), wallets show "identity could not be verified" and may not re-authorize silently, so every transaction asks to connect again.
-   **Emulator check, 2026-10-10 (Android 15 emulator, Phantom in Testnet mode, debug build):** the public `https://keptdapp.vercel.app/.well-known/assetlinks.json` lists `app.kept.mobile` with the debug-keystore fingerprint, and it equals the installed APK's signing certificate (`apksigner`: `FA:C6:17:45:…:3B:9C`). Phantom still showed "This app's identity could not be verified" for `keptdapp.vercel.app`, and logged `Declining sol_mwa_reauthorize: dApp identity is not verified`. Effect on the app: the silent re-authorize before the message signature is declined, so the user taps **Connect** twice (once to connect, once more before the sign prompt); sign-in still works. The app falls back correctly and nothing in it needs to change. Needs a look on the Seeker's own wallet (Seed Vault) and on a release-signed build; if Phantom's check is not the file alone (the earlier attempt in BACKEND_PART_1 P40 saw the same), say what it needs.
+7. **Android app identity drift** · PARTLY DONE. The unrelated backend/harness identity files still use different package names (`assetlinks.ts` serves `com.kept.backendtest`; `backend/assetlinks.json` lists `app.kept.mobile` and `com.kept.testharness`; harness `app.json` uses `com.kept.backendtest`). The mobile app's configured Vercel identity host now lists `app.kept.mobile` plus its debug and release fingerprints.
+   **App Link fix:** the Android app declares an auto-verified HTTPS `/o/` intent filter. On the Android 15 emulator, `pm get-app-links app.kept.mobile` reports `keptdapp.vercel.app: verified` with the installed debug certificate (`FA:C6:17:…:3B:9C`).
+   **Remaining wallet observation:** Phantom still showed "This app's identity could not be verified" and logged `Declining sol_mwa_reauthorize: dApp identity is not verified`. The earlier emulator audit completed full sign-in after the extra Connect prompt; this warning affects silent re-authorization. Check again with Seed Vault on a Seeker and with a release-signed build. Android's app/domain association is verified, but Phantom's warning remains wallet-specific.
 8. **Thin tests** · NEW. `backend/test/v4.test.ts` has 3 tests, all on pure helpers (`auth`, `proofRejection`, `nudgeRejection`). No route, scheduler or decoder tests. The program has LiteSVM tests (`tests/v4.test.ts`, 14 cases) and 6 Rust unit tests for the payout function that will be replaced (`lib.rs:252-261`).
 9. **Duplicated hand-written decoders** · NEW. The Oath account layout is decoded by byte offset in the API (`v4.ts:362-376`) and the app (`oaths.ts:20-27`), with hand-hashed discriminators (`v4.ts:326, 379`). Any layout change (P0-5, P1-1, P1-2) breaks both silently. Use the IDL coder (`packages/chain`).
 10. **Odds:** display-only, computed in the app from the kept rate (rules.md §8). No backend work.
