@@ -6,7 +6,7 @@
 // Uses `am start -W` (TotalTime) and `dumpsys gfxinfo` (janky frames, frame-time percentiles).
 // Also watches logcat for the whole run (audit P-6): Reanimated's "synchronouslyUpdateUIProps failed"
 // lines (an animated-props update for a view that isn't mounted, logged with a stack trace on the UI
-// thread), Skia's per-frame "updateAndRelease() failed" line (removed by D-90's patch; it comes back if
+// thread), Skia's per-frame "updateAndRelease() failed" line (removed by D-92's patch; it comes back if
 // the patch stops applying) and ANRs. The run fails when there's an ANR, more sync failures than
 // --max-sync-failures (50) or more Skia lines than --max-skia-lines (0).
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -227,7 +227,7 @@ async function main() {
   writeFileSync(out, JSON.stringify(res, null, 1));
   console.log(`wrote ${out}`);
   if (anrs > 0 || syncFailures > MAX_SYNC_FAILURES || skiaLines > MAX_SKIA_LINES) {
-    console.error(`FAIL: ${anrs} ANR(s), ${syncFailures} sync-props failures (max ${MAX_SYNC_FAILURES}; FIDELITY_AUDIT.md › P-6), ${skiaLines} Skia log lines (max ${MAX_SKIA_LINES}; D-90)`);
+    console.error(`FAIL: ${anrs} ANR(s), ${syncFailures} sync-props failures (max ${MAX_SYNC_FAILURES}; FIDELITY_AUDIT.md › P-6), ${skiaLines} Skia log lines (max ${MAX_SKIA_LINES}; D-92)`);
     process.exitCode = 1;
   }
 }

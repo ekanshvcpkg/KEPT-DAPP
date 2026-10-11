@@ -133,19 +133,12 @@ Tool: `knip@5` per workspace, plus reference greps. Sizes from the release mock 
 
 ## 4. Questions for you
 
-**Q1 (stop: proof in Live).** The backend now expects the phone to run the photo check itself
-(MediaPipe + a 2.59 GB Gemma model) and report the verdict. The app has neither, and I won't send a made-up
-verdict. Options:
-- (a) I add the on-device check: a native module for MediaPipe's gesture task plus LiteRT-LM for Gemma, and a
-  "download the checker (2.6 GB)" step. This is a large piece of work with no design screens.
-- (b) Live ships without proof: F screens show "unavailable" until a checker exists. The core loop doesn't
-  work in Live.
-- (c) The backend developer brings back the server-side check (the old route, `OPEN_API_KEY`), and the app
-  uploads photos as the design says.
-
-  Also: the backend now waits `minMinutes` (default 30) between photo 1 and photo 2. The design has no wait
-  screen. OK to show the challenge screen's "come back at hh:mm" state (F1 with a timer) using existing
-  components?
+**Q1 (resolved 2026-10-11).** The actual mobile app now includes the Android MediaPipe + LiteRT-LM module from
+the example app, asks before its one-time model download, and blocks Live wallet entry until the models are
+installed. Captured Live photos are analyzed locally, then their verdict and hash go to the existing
+verification routes; the image is not uploaded for AI analysis. Photo 2 remains disabled until the backend's
+`endAllowedAt`. Demo remains independent. Physical Seeker validation is still required; Android emulators are
+unsupported by this model runtime.
 
 **Q2 (stop: money and HP in Live).** On chain, Oaths settle under rules v1 (all-or-nothing, 10 % of missed
 stakes), and rules v2 (fee on top, 50 % slash, freezes) is coded but not active. The design's HP,

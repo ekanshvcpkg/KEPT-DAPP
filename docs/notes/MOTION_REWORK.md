@@ -106,7 +106,7 @@ top of the Keeper, but A1 is a one-time screen, so there was nothing worth chang
   without feedback were fixed. Toggles, sheet scrims and the Keeper (which changes its line) respond with
   their own state change. A frame-by-frame timing needs the phone and a high-speed recording.
 
-## Skia's per-frame log line (D-90)
+## Skia's per-frame log line (D-92)
 
 A transparent Skia canvas on Android renders through a TextureView, and Skia 2.6.2 (still in 2.15.1) calls
 `SurfaceTexture.updateTexImage()` before every frame. The texture belongs to the TextureView, so the call
@@ -127,7 +127,7 @@ The frame-time difference is inside the emulator's noise (round 3 drifted for ev
 perf.mts runs agree: A1 at rest 21.5 fps / 67 % janky as shipped, 17.5 fps / 77 % patched; Today, tabs,
 push/back and embers within a point. So the cost per frame isn't measurable here, but the log flood is
 real, so the call and its log are removed by a pnpm patch at that one site
-(`patches/@shopify__react-native-skia@2.6.2.patch`, D-90). Drawing is unchanged. `perf.mts` now counts
+(`patches/@shopify__react-native-skia@2.6.2.patch`, D-92). Drawing is unchanged. `perf.mts` now counts
 the line and fails above `--max-skia-lines` (0): 1,537 lines on the shipped build, 0 patched.
 
 ## Comparisons recorded for you (`artifacts/motion/`, local, not in git)

@@ -33,8 +33,8 @@ import { haptic } from "@/lib/haptics";
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
 
 /** The proof in progress: today's challenge per photo and the last shot (kept for a retry on F2b). */
-const useProof = create<{ challenges: Record<string, Challenge>; image: string | null; set(p: Partial<{ challenges: Record<string, Challenge>; image: string | null }>): void }>()((set) => ({
-  challenges: {}, image: null, set: (p) => set(p),
+const useProof = create<{ challenges: Record<string, Challenge>; image: string | null; imageUri: string | null; photo2At: Record<string, number>; set(p: Partial<{ challenges: Record<string, Challenge>; image: string | null; imageUri: string | null; photo2At: Record<string, number> }>): void }>()((set) => ({
+  challenges: {}, image: null, imageUri: null, photo2At: {}, set: (p) => set(p),
 }));
 const key = (id: string, photo: 1 | 2) => `${id}:${photo}`;
 /** Tests: seed a challenge as if it was issued earlier. */
@@ -59,21 +59,30 @@ function useChallenge(v: OathView | null, photo: 1 | 2, fresh = false) {
   // sends an expired one to F2c, which is for a challenge that ran out while shooting.
   const [c, setC] = useState<Challenge | undefined>(() => (!fresh && stored && stored.expiresAt > nowSeconds() ? stored : undefined));
   const { replace } = useGo();
+  // F2c "Take a new photo" lands back on a Shoot that was never unmounted (history.ts goes back to it, same key), still
+  // holding the challenge that ran out. The fresh one F2c stored takes its place, or Shoot would bounce straight to F2c again.
+  const usable = (x: Challenge | undefined) => (x && x.expiresAt > nowSeconds() ? x : undefined);
+  const cur = usable(c) ?? (fresh ? undefined : usable(stored)) ?? c;
   useEffect(() => {
     if (!v || v.dayIndex === null) return;
-    if (c && c.dayIndex === v.dayIndex && c.expiresAt > nowSeconds()) return;
+    if (cur && cur.dayIndex === v.dayIndex && cur.expiresAt > nowSeconds()) return;
     const avoid = photo === 2 ? useProof.getState().challenges[key(v.facts.id, 1)]?.gesture : undefined;
     void getApi().proof.challenge(v.facts, photo, v.dayIndex, avoid).then((n) => {
       useProof.getState().set({ challenges: { ...useProof.getState().challenges, [key(v.facts.id, photo)]: n } });
+      if (n.waitUntil) {
+        useProof.getState().set({ photo2At: { ...useProof.getState().photo2At, [v.facts.id]: n.waitUntil } });
+        replace("F3", { id: v.facts.id });
+        return;
+      }
       setC(n);
     }, (e: unknown) => replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id: v.facts.id, photo }));
-  }, [v, photo, c, replace]);
-  return c;
+  }, [v, photo, cur, replace]);
+  return cur;
 }
 
 // ── F1·perm Camera permission ──
 export function F1perm() {
-  const { back, replace } = useGo();
+  const { back, replace, close } = useGo();
   const { id, photo } = useProofScreen();
   const [perm, request, getPerm] = useCameraPermissions();
   const shoot = useCallback(() => replace(photo === 2 ? "F4" : "F1", { id, photo }), [replace, photo, id]);
@@ -85,7 +94,7 @@ export function F1perm() {
   // Android won't ask again once access is denied for good: the way to allow it is Settings (D-91).
   const blocked = !!perm && !perm.granted && !perm.canAskAgain;
   return (
-    <Screen bar={<NavBar onBack={back} close />} bottomInset={pinned(2)} pinned={<>
+    <Screen bar={<NavBar onBack={() => close()} close />} bottomInset={pinned(2)} pinned={<>
       {blocked
         ? <Button kind="p" icon="cog-outline" label={t("additions.camera.openSettings")} onPress={() => { void Linking.openSettings(); }} />
         : <Button kind="p" icon="camera" label={t("screens.F1·perm.pin.0")} onPress={() => { void request().then((r) => { if (r.granted) shoot(); }); }} />}
@@ -109,6 +118,9 @@ export const photoToUse = (shot: string | null, mock: boolean): string | null =>
 
 /** The shot as base64, or null if the camera failed or didn't answer in time. */
 export async function capture(cam: CameraView | null, timeoutMs: number): Promise<string | null> {
+  return (await captureShot(cam, timeoutMs))?.base64 ?? null;
+}
+async function captureShot(cam: CameraView | null, timeoutMs: number): Promise<{ base64: string; uri: string } | null> {
   if (!cam) return null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -116,7 +128,7 @@ export async function capture(cam: CameraView | null, timeoutMs: number): Promis
       cam.takePictureAsync({ base64: true, quality: 0.5, skipProcessing: true }),
       new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); }),
     ]);
-    return pic?.base64 ?? null;
+    return pic?.base64 && pic.uri ? { base64: pic.base64, uri: pic.uri } : null;
   } catch {
     return null;
   } finally {
@@ -126,7 +138,7 @@ export async function capture(cam: CameraView | null, timeoutMs: number): Promis
 
 // ── F1 / F4 Shoot ──
 function Shoot({ photo }: { photo: 1 | 2 }) {
-  const { back, go, replace } = useGo();
+  const { go, replace, close } = useGo();
   const toast = useToast();
   const { id, view } = useProofScreen();
   // Only a mock Oath (Demo) takes a stand-in photo: its proof goes to the mock, which never reads the image.
@@ -148,16 +160,17 @@ function Shoot({ photo }: { photo: 1 | 2 }) {
     setBusy(true);
     try {
       // A chain Oath never gets an invented photo: if the camera fails the user retakes it (the timer keeps running).
-      const image = photoToUse(await capture(cam.current, mock ? DEMO_CAPTURE_TIMEOUT_MS : CAPTURE_TIMEOUT_MS), mock);
+      const shot = await captureShot(cam.current, mock ? DEMO_CAPTURE_TIMEOUT_MS : CAPTURE_TIMEOUT_MS);
+      const image = photoToUse(shot?.base64 ?? null, mock);
       if (!image) { toast(t("additions.camera.failed")); return; }
-      useProof.getState().set({ image });
+      useProof.getState().set({ image, imageUri: shot?.uri ?? null });
       go(photo === 2 ? "F4·chk" : "F2", { id, photo });
     } finally {
       setBusy(false);
     }
   };
   return (
-    <Screen bar={<NavBar onBack={back} close title={navTitle(view, photo)} />} scroll={false}>
+    <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, photo)} />} scroll={false}>
       <ProofCamera photo={photo} state="idle" object={view ? objectIcon(view.facts.objectId) : "camera"} label={challengeLabel(c)} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})}>
         {perm?.granted && focused ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
       </ProofCamera>
@@ -182,9 +195,12 @@ function Check({ photo }: { photo: 1 | 2 }) {
   useEffect(() => {
     if (!view || !c || started.current) return;
     started.current = true;
-    const image = useProof.getState().image ?? "";
-    void getApi().proof.submit(view.facts, c, image).then(
-      (r) => { void refreshOaths(); if (r.status === "pass" && photo === 1) haptic.success(); replace(next(r, view, photo), { id, photo }); },
+    const { image, imageUri } = useProof.getState();
+    void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined).then(
+      (r) => {
+        if (r.status === "pass" && photo === 1 && r.endAllowedAt) useProof.getState().set({ photo2At: { ...useProof.getState().photo2At, [id]: r.endAllowedAt } });
+        void refreshOaths(); if (r.status === "pass" && photo === 1) haptic.success(); replace(next(r, view, photo), { id, photo });
+      },
       (e: unknown) => replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id, photo }),
     );
   }, [view, c, replace, id, photo]);
@@ -210,12 +226,12 @@ export const F4chk = () => <Check photo={2} />;
 
 // ── F2a Failed ──
 export function F2a() {
-  const { back, replace } = useGo();
+  const { replace, close } = useGo();
   const { id, photo, view } = useProofScreen();
   const c = useProof((s) => s.challenges[key(id, photo)]);
   const k = keeperLines("F2a")[0]!;
   return (
-    <Screen bar={<NavBar onBack={back} close title={navTitle(view, photo)} />} bottomInset={pinned(1)}
+    <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, photo)} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="camera-retake-outline" label={t("screens.F2a.pin.0")} onPress={() => replace(photo === 2 ? "F4" : "F1", { id, photo })} />}>
       <ProofCamera photo={photo} state="fail" object={view ? objectIcon(view.facts.objectId) : "camera"} label={c ? t("screens.F2a.b0.label", { gesture: gestureText(c.gesture) }) : ""} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
       <ScreenKeeper id="F2a" lines={[k]} />
@@ -225,11 +241,11 @@ export function F2a() {
 
 // ── F2b Check unavailable ── the photo is kept; Retry re-submits it.
 export function F2b() {
-  const { back, replace } = useGo();
+  const { replace, close } = useGo();
   const { id, photo, view } = useProofScreen();
   const k = keeperLines("F2b")[0]!;
   return (
-    <Screen bar={<NavBar onBack={back} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
+    <Screen bar={<NavBar onBack={() => close()} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="refresh" label={t("screens.F2b.pin.0")} onPress={() => replace(photo === 2 ? "F4·chk" : "F2", { id, photo })} />}>
       <ScreenKeeper id="F2b" lines={[k]} />
       <Title heading={t("screens.F2b.b2.title")} sub={t("screens.F2b.b2.sub")} align="center" />
@@ -240,11 +256,11 @@ export function F2b() {
 
 // ── F2c Challenge expired ── a fresh challenge replaces the old one.
 export function F2c() {
-  const { back, replace } = useGo();
+  const { replace, close } = useGo();
   const { id, photo, view } = useProofScreen();
   const c = useChallenge(view, photo, true);
   return (
-    <Screen bar={<NavBar onBack={back} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
+    <Screen bar={<NavBar onBack={() => close()} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="refresh" label={t("screens.F2c.pin.0")} disabled={!c} onPress={() => replace(photo === 2 ? "F4" : "F1", { id, photo })} />}>
       <Title heading={t("screens.F2c.b0.title")} sub={t("screens.F2c.b0.sub")} />
       <ProofCamera photo={photo} state="idle" object={view ? objectIcon(view.facts.objectId) : "camera"} height={300}
@@ -255,11 +271,15 @@ export function F2c() {
 
 // ── F3 Photo 1 done ──
 export function F3() {
-  const { back, replace, go } = useGo();
+  const { replace, go, close } = useGo();
   const { id, view } = useProofScreen();
+  const photo2At = useProof((s) => s.photo2At[id] ?? 0);
+  const [now, setNow] = useState(nowSeconds);
+  useEffect(() => { const i = setInterval(() => setNow(nowSeconds()), 1000); return () => clearInterval(i); }, []);
+  const canTakeEnd = now >= photo2At;
   return (
-    <Screen bar={<NavBar onBack={back} close title={view?.facts.name ?? ""} />} bottomInset={pinned(2)} pinned={<>
-      <Button kind="p" icon="camera" label={t("screens.F3.pin.0")} onPress={() => replace("F4", { id, photo: 2 })} />
+    <Screen bar={<NavBar onBack={() => close()} close title={view?.facts.name ?? ""} />} bottomInset={pinned(2)} pinned={<>
+      <Button kind="p" icon="camera" label={t("screens.F3.pin.0")} disabled={!canTakeEnd} onPress={() => replace("F4", { id, photo: 2 })} />
       <Button kind="t" label={t("screens.F3.pin.1")} onPress={() => go("B1")} />
     </>}>
       <SignStatus state="success" chip={t("screens.F3.b1.chip")} />
@@ -272,11 +292,11 @@ export function F3() {
 
 // ── F4a 3 fails · AI only ──
 export function F4a() {
-  const { back, go } = useGo();
+  const { go, close } = useGo();
   const { view } = useProofScreen();
   const k = keeperLines("F4a")[0]!;
   return (
-    <Screen bar={<NavBar onBack={back} close title={view?.facts.name ?? ""} />} bottomInset={pinned(1)}
+    <Screen bar={<NavBar onBack={() => close()} close title={view?.facts.name ?? ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" label={t("screens.F4a.pin.0")} onPress={() => go("B1")} />}>
       <ScreenKeeper id="F4a" lines={[k]} />
       <Title heading={t("screens.F4a.b2.title")} sub={view ? t("screens.F4a.b2.sub", { name: view.facts.name }) : ""} align="center" />
@@ -291,13 +311,13 @@ export function F4a() {
 
 // ── F4a·g 3 fails · group review ── the vote itself is G2 (screens/review).
 export function F4ag() {
-  const { back, replace, go } = useGo();
+  const { replace, go, close } = useGo();
   const { id, view } = useProofScreen();
   const others = view ? view.members.filter((m) => !m.isMe).map(memberName) : [];
   const c = useProof((s) => s.challenges[key(id, 2)]);
   const gk = c ? gestureKey(c.gesture) : undefined;
   return (
-    <Screen bar={<NavBar onBack={back} close title={view?.facts.name ?? ""} />} bottomInset={pinned(2)} pinned={<>
+    <Screen bar={<NavBar onBack={() => close()} close title={view?.facts.name ?? ""} />} bottomInset={pinned(2)} pinned={<>
       <Button kind="p" icon="account-group-outline" label={t("screens.F4a·g.pin.0")} onPress={() => replace("G2", { id })} />
       <Button kind="t" label={t("screens.F4a·g.pin.1")} onPress={() => go("B1")} />
     </>}>
@@ -309,7 +329,7 @@ export function F4ag() {
 
 // ── F5 Day kept ──
 export function F5() {
-  const { back, go } = useGo();
+  const { go, close } = useGo();
   const toast = useToast();
   const { view } = useProofScreen();
   const playFx = useUi((s) => s.playFx);
@@ -321,7 +341,7 @@ export function F5() {
   useEffect(() => { playFx(undefined, "kept"); }, [playFx, day]);
   const time = new Date().toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
   return (
-    <Screen bar={<NavBar onBack={back} close />} bottomInset={pinned(1)}
+    <Screen bar={<NavBar onBack={() => close()} close />} bottomInset={pinned(1)}
       pinned={<><Button kind="p" label={t("screens.F5.pin.0")} onPress={() => go("B1")} /></>}>
       <ScreenKeeper id="F5" lines={[k]} />
       <Title heading={t("screens.F5.b1.title", { day })} align="center" fs={40} />
@@ -338,4 +358,3 @@ export function F5() {
     </Screen>
   );
 }
-

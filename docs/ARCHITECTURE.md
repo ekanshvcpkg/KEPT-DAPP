@@ -126,7 +126,7 @@ Versions checked on the npm registry on 2026-10-09. Expo `latest` is **SDK 57 (5
 
 **Release build** (`app.json` › expo-build-properties): arm64-v8a only, R8 code and resource shrinking, compressed native libraries (APK 131 MB → about 23 MB). `metro.config.js` resolves zod's locale index to English only.
 
-**Motion rule** (motion rework, D-84): views that move, scale, rotate or fade animate transform and opacity only, with Reanimated on the UI thread; anything drawn fresh each frame is Skia; nothing animates SVG props, layout, shadows or blur. Known exception: the tab bar's active tab widens by animating `flex` (docs/notes/MOTION_REWORK.md). On Android a transparent Skia canvas renders through a TextureView; D-90 patches out Skia's failing per-frame `updateTexImage()` call and its log line.
+**Motion rule** (motion rework, D-84): views that move, scale, rotate or fade animate transform and opacity only, with Reanimated on the UI thread; anything drawn fresh each frame is Skia; nothing animates SVG props, layout, shadows or blur. Known exception: the tab bar's active tab widens by animating `flex` (docs/notes/MOTION_REWORK.md). On Android a transparent Skia canvas renders through a TextureView; D-92 patches out Skia's failing per-frame `updateTexImage()` call and its log line.
 
 **Not adding:** Lottie/Rive (none supplied), NativeWind, axios, i18n frameworks, date libraries (`Intl` is enough), react-native-shadow-2 (elevation + inset Views per DESIGN §6).
 

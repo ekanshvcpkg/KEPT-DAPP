@@ -64,5 +64,23 @@ jest.mock("expo-camera", () => {
   return { __camera: state, CameraView, useCameraPermissions };
 });
 
+// kept-gesture: the native on-device models don't exist in Jest. The pure parts (reading the model's answer, matching
+// the gesture) are the real code; the native calls answer "ready" and "passed" unless a test says otherwise.
+jest.mock("kept-gesture", () => {
+  const verdict = jest.requireActual("kept-gesture/src/verdict");
+  const ready = { supported: true, gestureReady: true, visionReady: true, modelBytes: 2588147712, downloadedBytes: 2596521152, totalBytes: 2596521152 };
+  return {
+    ...verdict,
+    GEMMA_MODEL_BYTES: 2588147712,
+    getDeviceModelsStatus: jest.fn(async () => ready),
+    downloadDeviceModels: jest.fn(async () => ready),
+    cancelDeviceModelDownload: jest.fn(async () => false),
+    prepareDeviceScanner: jest.fn(async () => true),
+    onDeviceModelProgress: jest.fn(() => () => {}),
+    analyzeDevicePhoto: jest.fn(async (_uri, _object, gesture) => verdict.buildVerdict(
+      { proofHash: "a".repeat(64), gestureSeen: "Thumb_Up", modelText: '{"objectPresent":true,"objectConfidence":0.9,"looksLikeScreenOrPrintout":false,"reason":"ok"}', model: "test", ms: 1 }, gesture)),
+  };
+});
+
 // Screens mount their content at once: there are no native transitions to wait for (lib/screenReady).
 require("./src/lib/screenReady").setScreenDeferral(false);

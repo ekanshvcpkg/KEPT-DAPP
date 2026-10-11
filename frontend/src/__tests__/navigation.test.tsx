@@ -8,7 +8,7 @@ import { queryClient } from "@/api/queries";
 import { SLICES } from "@/api/types";
 import { RootNavigator, routeInvite } from "@/app/RootNavigator";
 import { FxHost, LoadFailHost } from "@/app/hosts";
-import { navigateTo, navigationRef } from "@/app/nav";
+import { navigateTo, navigationRef, resetStack } from "@/app/nav";
 import { ROUTES, presentation, routeName } from "@/app/routes";
 import { STILL_OFFLINE } from "@/screens/M2";
 import { useDev } from "@/state/dev";
@@ -24,6 +24,8 @@ import amend from "@/app/routes.amend.json";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { setAppMode } from "@/features/mode";
 import { useMode } from "@/state/mode";
+import { setScreenDeferral } from "@/lib/screenReady";
+import { getDeviceModelsStatus } from "kept-gesture";
 import { clock } from "@/lib/clock";
 import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
 import { AppState } from "react-native";
@@ -137,6 +139,30 @@ describe("onboarding on mocks", () => {
     expect(useSession.getState().invite).toBe("");
   }, 30000);
 
+  it("Live needs the on-device models (the sheet shows the download, not the wallet step); Demo never does", async () => {
+    const missing = { supported: true, gestureReady: false, visionReady: false, modelBytes: 1, downloadedBytes: 0, totalBytes: 1 };
+    (getDeviceModelsStatus as jest.Mock).mockResolvedValue(missing);
+    // Development builds let "Not now" through to Live (so an emulator can be used); a release build goes back.
+    const dev = (globalThis as { __DEV__?: boolean }).__DEV__;
+    (globalThis as { __DEV__?: boolean }).__DEV__ = false;
+    try {
+      await render(<App />);
+      await fireEvent.press(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow));
+      await fireEvent.press(await screen.findByText(t("additions.mode.live"), {}, slow));
+      expect(await screen.findByText(t("additions.mode.modelTitle"), {}, slow)).toBeTruthy();
+      expect(screen.queryByText(t("screens.A2.b0.title"))).toBeNull();
+      expect(useMode.getState().mode).not.toBe("live");
+      // Not now → back to the mode choice, and Demo goes on without a download.
+      await fireEvent.press(await screen.findByRole("button", { name: t("additions.mode.modelNotNow") }));
+      await fireEvent.press(await screen.findByText(t("additions.mode.demo"), {}, slow));
+      expect(await screen.findByRole("button", { name: t("screens.A4.pin.0") }, slow)).toBeTruthy();
+      expect(useMode.getState().mode).toBe("demo");
+    } finally {
+      (globalThis as { __DEV__?: boolean }).__DEV__ = dev;
+      (getDeviceModelsStatus as jest.Mock).mockResolvedValue({ ...missing, gestureReady: true, visionReady: true });
+    }
+  }, 30000);
+
   it("no wallet app: back on Connect wallet with a toast that says so", async () => {
     useDev.setState({ mockWallet: false });
     jest.mocked(transact).mockRejectedValueOnce(Object.assign(new Error("Found no installed wallet that supports the mobile wallet protocol."), { name: "SolanaMobileWalletAdapterError", code: "ERROR_WALLET_NOT_FOUND" }));
@@ -232,6 +258,41 @@ describe("onboarding on mocks", () => {
     expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 3 }), {}, slow)).length).toBeGreaterThan(0); // title + FX pill
     expect(screen.queryByText(t("screens.F2c.b0.title"))).toBeNull();
   }, 30000);
+
+  it("F2b's close button leaves even when it is the only screen (a link opened it)", async () => {
+    useDev.setState({ scenario: "activeGroup" });
+    useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
+    useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
+    await render(<App />);
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    await act(async () => { resetStack(["F2b"], { id: "mock-oath-1", photo: 1 }); });
+    expect(rootStack()).toEqual(["F2b"]);
+    await fireEvent.press(await screen.findByRole("button", { name: t("additions.a11y.close") }, slow));
+    expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+    expect(rootStack()).toEqual(["Tabs"]);
+  }, 30000);
+
+  it("F2c → new photo returns to a Shoot that can be used: skeleton gone, fresh challenge, no bounce back to F2c", async () => {
+    setScreenDeferral(true);
+    try {
+      useDev.setState({ scenario: "activeGroup" });
+      useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });
+      useDeviceOaths.setState({ shownResults: ["mock-oath-4:L1"], recapShownOn: new Date().toDateString() });
+      await render(<App />);
+      expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
+      await act(async () => { navigateTo("D2", { id: "mock-oath-1" }); });
+      await act(async () => { navigateTo("F1", { id: "mock-oath-1", photo: 1 }); });
+      // F1 stays under F2c in the stack (history.ts: F2c is a retry outcome), as when the challenge ends during a check.
+      await act(async () => { navigateTo("F2c", { id: "mock-oath-1", photo: 1 }); });
+      expect(rootStack()).toEqual(["Tabs", "D2", "F1", "F2c"]);
+      await fireEvent.press(await screen.findByRole("button", { name: t("screens.F2c.pin.0"), disabled: false }, slow));
+      expect(await screen.findByLabelText(t("additions.a11y.shutter"), {}, slow)).toBeTruthy();
+      await waitFor(() => expect(screen.queryAllByLabelText(t("additions.a11y.loading"))).toHaveLength(0), slow);
+      expect(rootStack()).toEqual(["Tabs", "D2", "F1"]);
+    } finally {
+      setScreenDeferral(false);
+    }
+  }, 40000);
 
   it("joins by code: E1 → E1·code → E2 → sign → D1·m; a bad code shows E3·code, and Try again keeps it", async () => {
     useSession.setState({ token: "mock.x", wallet: "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q", genesis: true, onboarded: true });

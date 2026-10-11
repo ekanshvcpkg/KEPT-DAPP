@@ -173,7 +173,7 @@ export function C7() {
 // ── C7·ok Signed · success ──
 export function C7ok() {
   const { replace } = useGo();
-  const { id } = useParams<{ id: string }>();
+  const { id, code } = useParams<{ id: string; code?: string }>();
   const { view } = useOath(id);
   const reset = useDraft((s) => s.reset);
   const playFx = useUi((s) => s.playFx);
@@ -185,7 +185,7 @@ export function C7ok() {
   const solo = view?.facts.isSolo;
   return (
     <Screen bottomInset={metrics.button.height * 2 + metrics.pinned.gap + metrics.pinned.bottom} pinned={<>
-      {!solo ? <Button kind="p" icon="account-multiple-plus" label={t("screens.C7·ok.pin.0")} onPress={() => replace("C8", { id: id! })} /> : null}
+      {!solo ? <Button kind="p" icon="account-multiple-plus" label={t("screens.C7·ok.pin.0")} onPress={() => replace("C8", { id: id!, ...(code ? { code } : {}) })} /> : null}
       <Button kind={solo ? "p" : "t"} label={t("screens.C7·ok.pin.1")} onPress={() => view && replace(screenFor(view), { id: id! })} />
     </>}>
       <SignStatus state="success" chip={t("screens.C7·ok.b1.chip", { amount: stake })} />

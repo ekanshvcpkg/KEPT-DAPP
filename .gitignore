@@ -24,6 +24,9 @@ id.json
 # Expo / Android
 .expo/
 android/
+# Local Expo modules keep their Kotlin source in android/ (only their build output is ignored).
+!frontend/modules/*/android/
+frontend/modules/*/android/build/
 ios/
 *.apk
 *.aab

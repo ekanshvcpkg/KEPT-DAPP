@@ -1,0 +1,22 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+group = 'expo.modules.keptgesture'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.keptgesture'
+  compileSdkVersion rootProject.ext.compileSdkVersion
+  defaultConfig { minSdkVersion rootProject.ext.minSdkVersion }
+}
+
+// LiteRT-LM 0.13.1 is published with Kotlin 2.3 metadata while Expo SDK 57 uses Kotlin 2.1.
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+  kotlinOptions.freeCompilerArgs += ['-Xskip-metadata-version-check']
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation 'com.google.mediapipe:tasks-vision:0.10.35'
+  implementation 'com.google.ai.edge.litertlm:litertlm-android:0.13.1'
+}

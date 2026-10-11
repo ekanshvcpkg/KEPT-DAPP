@@ -291,7 +291,7 @@ function E3({ id, title, sub, pins }: { id: ScreenId; title: string; sub: string
 const k3 = (id: string, key: string) => t(`screens.${id}.${key}` as CopyKey);
 
 export function E3code() {
-  return <E3 id="E3·code" title={k3("E3·code", "b2.title")} sub={k3("E3·code", "b2.sub")} pins={[{ label: k3("E3·code", "pin.0"), to: "E1" }, { label: k3("E3·code", "pin.1"), to: "C1" }]} />;
+  return <E3 id="E3·code" title={k3("E3·code", "b2.title")} sub={k3("E3·code", "b2.sub")} pins={[{ label: k3("E3·code", "pin.0"), to: "E1", params: { code: "" } }, { label: k3("E3·code", "pin.1"), to: "C1" }]} />;
 }
 export function E3late() {
   const { view } = useInviteOath();

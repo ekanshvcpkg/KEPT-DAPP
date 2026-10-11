@@ -69,7 +69,15 @@ export function useGo() {
     const [n, p] = target(id, params);
     nav.dispatch(CommonActions.reset({ index: 0, routes: [{ name: n, params: p }] }));
   }, [nav]);
-  return useMemo(() => ({ go, replace, back, reset }), [go, replace, back, reset]);
+  /**
+   * A close (✕) button: back when there is somewhere to go back to, else the home screen. A screen can be the only one in
+   * the stack (a link or notification opened it, or the stack was rebuilt around it) and back would do nothing.
+   */
+  const close = useCallback((home: DesignId = "B1") => {
+    if (nav.canGoBack()) nav.goBack();
+    else reset(home);
+  }, [nav, reset]);
+  return useMemo(() => ({ go, replace, back, reset, close }), [go, replace, back, reset, close]);
 }
 
 /**
