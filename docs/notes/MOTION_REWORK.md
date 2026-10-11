@@ -179,7 +179,7 @@ One commit per group, each revertable:
 | Commit | Removed |
 |---|---|
 | b1f4c3a | `KeeperSvg.tsx` (343 lines), `dev/KeeperCompare.tsx` and its route and `kept://dev/keeper/…` link, the Dev menu row, `EXPO_PUBLIC_KEEPER` and the saved renderer setting; the icon font drops "matrix", which the icon scanner had picked up from KeeperSvg |
-| 7f58f90 | `export` from 6 values and 45 types nothing outside their file imports (knip) |
+| 7f58f90 | `export` from 6 values and 47 types (two were re-exports) nothing outside their file imports (knip) |
 | 9a76869 | `additions.placeholder` copy (the Phase 2 placeholder screen is long gone) and two test checks for it |
 | 7b911c9 | three comments describing code that no longer exists |
 | a8ececa | six theme metrics nothing reads |
