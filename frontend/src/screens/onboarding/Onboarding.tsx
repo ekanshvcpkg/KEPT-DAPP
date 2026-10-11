@@ -31,6 +31,9 @@ import { liveConfigured } from "@/config/env";
 import { startDemo, startLive, startLiveWithInvite } from "@/features/mode";
 import { useMode } from "@/state/mode";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getDeviceModelsStatus } from "kept-gesture";
+import { modelsReady } from "@/features/models/deviceModels";
+import { ModelGate } from "@/features/models/ModelGate";
 
 /** Splash shows at least this long so the brand sequence can play (motion.md › splash). */
 const SPLASH_MIN_MS = 1200;
@@ -38,6 +41,17 @@ const SPLASH_MIN_MS = 1200;
 // ── A0 Splash ── waits for the stored session, re-checks it, then routes.
 export function A0() {
   const { reset } = useGo();
+  const [modelGate, setModelGate] = useState(false);
+  const [modelUnsupported, setModelUnsupported] = useState(false);
+  const routeAfterGate = useCallback(async () => {
+    const { token, onboarded, invite } = useSession.getState();
+    const signedIn = token ? await restoreSession(getApi()) : false;
+    if (useDevHold.getState().hold) return;
+    if (signedIn && onboarded) reset("B1");
+    else if (signedIn) reset("A4");
+    else if (invite !== null && useMode.getState().mode === "live") resetStack(["A1", "A2"]);
+    else reset("A1");
+  }, [reset]);
   useEffect(() => {
     let cancelled = false;
     const hydrated = new Promise<void>((resolve) => {
@@ -45,17 +59,35 @@ export function A0() {
       else useSession.persist.onFinishHydration(() => resolve());
     });
     void Promise.all([hydrated, new Promise((r) => setTimeout(r, SPLASH_MIN_MS))]).then(async () => {
-      const { token, onboarded, invite } = useSession.getState();
-      const signedIn = token ? await restoreSession(getApi()) : false;
       if (cancelled || useDevHold.getState().hold) return; // the dev deep link can hold the splash
-      if (signedIn && onboarded) reset("B1");
-      else if (signedIn) reset("A4");
-      // A join link chose Live: straight to connecting a wallet, with A1 under it.
-      else if (invite !== null && useMode.getState().mode === "live") resetStack(["A1", "A2"]);
-      else reset("A1");
+      if (useMode.getState().mode === "live") {
+        const models = await getDeviceModelsStatus();
+        if (!modelsReady(models)) {
+          setModelUnsupported(!models.supported);
+          setModelGate(true);
+          return;
+        }
+      }
+      await routeAfterGate();
     });
     return () => { cancelled = true; };
-  }, [reset]);
+  }, [routeAfterGate]);
+  if (modelGate) return (
+    <Screen bare>
+      <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: metrics.screen.padX, gap: metrics.screen.gap }}>
+        <ModelGate unsupported={modelUnsupported} onReady={() => { setModelGate(false); return routeAfterGate(); }}
+          onLater={() => {
+            if (modelUnsupported || __DEV__) {
+              setModelGate(false);
+              void routeAfterGate();
+            } else {
+              useSession.getState().setInvite(null);
+              reset("A1");
+            }
+          }} />
+      </View>
+    </Screen>
+  );
   return (
     <Screen bare>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><BrandSplash /></View>
@@ -95,17 +127,39 @@ export function A1m() {
   const insets = useSafeAreaInsets();
   const sheet = useSheetRoute();
   const toast = useToast();
+  const [modelStep, setModelStep] = useState(false);
+  const [modelUnsupported, setModelUnsupported] = useState(false);
   const demo = () => { void startDemo().then(() => replace("A4")); };
   // A release build still pointing at localhost can't run Live (no server on the phone).
-  const live = () => { if (!liveConfigured()) { toast(t("additions.mode.noServer")); return; } void startLive().then(() => replace("A2")); };
+  const live = async () => {
+    if (!liveConfigured()) { toast(t("additions.mode.noServer")); return; }
+    const models = await getDeviceModelsStatus();
+    if (!modelsReady(models)) {
+      setModelUnsupported(!models.supported);
+      setModelStep(true);
+      return;
+    }
+    void startLive().then(() => replace("A2"));
+  };
   return (
     <View style={{ flex: 1 }}>
       <BottomSheet {...sheet} bottomInset={insets.bottom}>
-        <Title heading={t("additions.mode.title")} pt={0} fs={26} />
-        <RowList rows={[
-          { title: t("additions.mode.demo"), chevron: true, leading: { kind: "icon", icon: "play-circle-outline", bg: color.lime.base, fg: color.text.onLime }, onPress: demo },
-          { title: t("additions.mode.live"), chevron: true, leading: { kind: "icon", icon: "wallet-outline" }, onPress: live },
-        ]} />
+        {modelStep ? <>
+          <ModelGate sheet unsupported={modelUnsupported} onReady={() => startLive().then(() => replace("A2"))}
+            onLater={() => {
+              if (modelUnsupported || __DEV__) {
+                void startLive().then(() => replace("A2"));
+              } else {
+                setModelStep(false);
+              }
+            }} />
+        </> : <>
+          <Title heading={t("additions.mode.title")} pt={0} fs={26} />
+          <RowList rows={[
+            { title: t("additions.mode.demo"), chevron: true, leading: { kind: "icon", icon: "play-circle-outline", bg: color.lime.base, fg: color.text.onLime }, onPress: demo },
+            { title: t("additions.mode.live"), chevron: true, leading: { kind: "icon", icon: "wallet-outline" }, onPress: () => { void live(); } },
+          ]} />
+        </>}
         <Button kind="s" label={t("screens.+.b3.btn.0")} onPress={back} />
       </BottomSheet>
     </View>

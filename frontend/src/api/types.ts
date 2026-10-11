@@ -116,9 +116,9 @@ export interface OathsApi {
 
 /** A gesture the backend may ask for. The design has three; the backend draws from five (BACKEND_GAPS P0-3). */
 export type GestureLabel = "thumbs_up" | "victory" | "open_palm" | "closed_fist" | "pointing_up";
-export interface Challenge { photo: 1 | 2; dayIndex: number; objectId: number; gesture: GestureLabel; expiresAt: number }
+export interface Challenge { photo: 1 | 2; dayIndex: number; objectId: number; gesture: GestureLabel; expiresAt: number; waitUntil?: number }
 export type ProofOutcome =
-  | { status: "pass" }
+  | { status: "pass"; endAllowedAt?: number }
   | { status: "fail"; attempts: number }
   | { status: "unavailable" }
   | { status: "expired" };
@@ -126,7 +126,7 @@ export type ProofOutcome =
 export interface ProofApi {
   challenge(oath: OathFacts, photo: 1 | 2, dayIndex: number, avoid?: GestureLabel): Promise<Challenge>;
   /** `image` is base64 JPEG from the camera. */
-  submit(oath: OathFacts, c: Challenge, image: string): Promise<ProofOutcome>;
+  submit(oath: OathFacts, c: Challenge, image: string, imageUri?: string): Promise<ProofOutcome>;
 }
 
 export interface KeptApi {
@@ -146,4 +146,3 @@ export interface KeptApi {
 export type Slice = keyof KeptApi;
 export const SLICES: readonly Slice[] = ["oaths", "proof", "bounties", "rematch", "reviews", "auth", "wallet", "inbox", "invites", "notify", "profile"];
 export type SliceMode = "http" | "mock";
-

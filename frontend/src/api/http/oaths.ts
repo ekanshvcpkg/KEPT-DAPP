@@ -9,6 +9,8 @@ import { useDeviceOaths } from "@/features/oaths/device";
 import type { OathFacts } from "@/features/oaths/model";
 import { oathName } from "@/features/oaths/names";
 import { clock } from "@/lib/clock";
+import { z } from "zod";
+import { analyzeDevicePhoto } from "kept-gesture";
 import { useSession } from "@/state/session";
 import { ApiError, fromRpcError, isApiError } from "../errors";
 import type { GestureLabel, OathsApi, ProofApi } from "../types";
@@ -121,13 +123,15 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
 });
 
 /** The backend's MediaPipe labels → the app's gesture names (the design's three, rules.md §5). */
-const GESTURE: Record<string, GestureLabel> = { Thumb_Up: "thumbs_up", Victory: "victory", Open_Palm: "open_palm" };
+const GESTURE: Record<string, GestureLabel> = { Thumb_Up: "thumbs_up", Victory: "victory", Open_Palm: "open_palm", Closed_Fist: "closed_fist", Pointing_Up: "pointing_up" };
+const OBJECT_TEXT = ["dumbbell", "book", "water bottle", "guitar", "running shoes", "plant", "skipping rope", "yoga mat"] as const;
+const GESTURE_TEXT: Record<GestureLabel, string> = { thumbs_up: "thumbs up", victory: "victory sign (index and middle finger in a V)", open_palm: "open palm facing the camera", closed_fist: "closed fist", pointing_up: "pointing up" };
+const VerifyResponse = z.object({ pass: z.boolean(), verificationId: z.string().nullable(), failedChecks: z.number().int().optional() });
+const StartResponse = z.object({ endAllowedAt: z.string() });
+const EndResponse = z.object({ signature: z.string(), proofHash: z.string() }).passthrough();
 
 /**
- * Live proof. The challenge is the backend's (POST /api/proof/challenge). Checking a photo needs a verdict
- * from an on-device model (POST /proof/verify: MediaPipe + Gemma, docs/API.md › Proof), which the app
- * doesn't have yet, so every photo ends on the design's "Check unavailable" (F2b) instead of sending a
- * made-up verdict. docs/LIVE_DEMO_PLAN.md Q1; BACKEND_GAPS P0-1.
+ * Live proof uses the on-device MediaPipe + Gemma module before posting the verdict and photo hash.
  */
 export function httpProof(c: HttpClient): ProofApi {
   return {
@@ -135,11 +139,33 @@ export function httpProof(c: HttpClient): ProofApi {
       // Bounty proof (POST /bounty/:id/challenge) needs the same on-device check: Q1.
       if (oath.bountyId) throw new ApiError("PROOF_UNAVAILABLE", "Bounty proof waits for the on-device check (LIVE_DEMO_PLAN Q1)", 409);
       const r = await c.post("/api/proof/challenge", { oath: oath.id, dayIndex }, ProofChallengeResponse);
-      if (r.phase === "wait") throw new ApiError("PROOF_UNAVAILABLE", `The end photo opens at ${new Date(r.endAllowedAt * 1000).toISOString()}`, 409);
+      if (r.phase === "wait") return { photo: 2, dayIndex, objectId: oath.objectId, gesture: GESTURE[r.startGesture]!, expiresAt: r.endAllowedAt, waitUntil: r.endAllowedAt };
       // The schema (IsoTime) already turns the backend's ISO timestamps into unix seconds. Converting again
       // read them as milliseconds (1970) and every challenge expired the moment it arrived (F2c).
       return { photo, dayIndex, objectId: oath.objectId, gesture: GESTURE[r.gesture]!, expiresAt: r.expiresAt };
     },
-    submit: async () => ({ status: "unavailable" }),
+    submit: async (oath, challenge, _image, imageUri) => {
+      if (oath.bountyId || !imageUri) return { status: "unavailable" };
+      const object = OBJECT_TEXT[challenge.objectId];
+      const gesture = GESTURE_TEXT[challenge.gesture];
+      if (!object || !gesture) return { status: "unavailable" };
+      const verdict = await analyzeDevicePhoto(imageUri, object, gesture);
+      // The model gave no usable answer: not the user's miss. Nothing is sent (a failed check counts toward review); they retry.
+      if (verdict.inconclusive) return { status: "unavailable" };
+      // The photo stays on the phone: the server gets its hash, the verdict and what it was checked for.
+      const checked = await c.post("/proof/verify", {
+        proofHash: verdict.proofHash, objectPresent: verdict.objectPresent, objectConfidence: verdict.objectConfidence,
+        gestureSeen: verdict.gestureSeen, gestureMatches: verdict.gestureMatches, looksLikeScreenOrPrintout: verdict.looksLikeScreenOrPrintout,
+        reason: verdict.reason, model: verdict.model, ms: verdict.ms,
+        expectedObject: object, expectedGesture: gesture, oath: oath.id, dayIndex: challenge.dayIndex,
+      }, VerifyResponse);
+      if (!checked.pass || !checked.verificationId) return { status: "fail", attempts: checked.failedChecks ?? 1 };
+      if (challenge.photo === 1) {
+        const started = await c.post("/api/proof/start", { oath: oath.id, dayIndex: challenge.dayIndex, verificationId: checked.verificationId }, StartResponse);
+        return { status: "pass", endAllowedAt: Math.floor(Date.parse(started.endAllowedAt) / 1000) };
+      }
+      await c.post("/api/proof", { oath: oath.id, dayIndex: challenge.dayIndex, verificationId: checked.verificationId }, EndResponse);
+      return { status: "pass" };
+    },
   };
 }
