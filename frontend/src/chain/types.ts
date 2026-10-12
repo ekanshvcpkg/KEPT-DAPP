@@ -21,7 +21,7 @@ export interface WalletSession {
   forget(): Promise<void>;
 }
 
-export interface CreateOathInput { objectId: number; numDays: number; stake: bigint; goalText: string; name?: string; habits?: string[]; habitObjects?: string[]; tzOffsetMinutes: number; isSolo: boolean; reviewMode: "ai" | "ai_group"; oathId?: bigint }
+export interface CreateOathInput { objectId: number; numDays: number; stake: bigint; goalText: string; name?: string; habits?: string[]; habitObjects?: string[]; /** Demo: the friends join and day 1 starts now (features/oaths/showcase.ts). */ showcase?: boolean; tzOffsetMinutes: number; isSolo: boolean; reviewMode: "ai" | "ai_group"; oathId?: bigint }
 export interface FundBountyInput { bountyId: string; pool: bigint }
 export interface JoinRematchInput { oath: string }
 

@@ -34,6 +34,9 @@ import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
 import { habitProofTexts, savedHabits } from "@/features/oaths/habits";
 import { habitsOf } from "@/features/oaths/model";
+import { SHOWCASE_DRAFT, isBlankDraft } from "@/features/oaths/showcase";
+import { useSettings } from "@/state/settings";
+import { useIsDemo } from "@/state/mode";
 import { objectNameOfText } from "@/features/objects/proof";
 import { SigningScreen } from "../shared/Signing";
 
@@ -56,6 +59,15 @@ export function C1() {
   const { go } = useGo();
   const { draft, set } = useDraft();
   const k = keeperLines("C1");
+  // Demo: a blank draft opens on the pre-filled Oath (running, proven with a running shoe), for filming the app.
+  const demo = useIsDemo();
+  const prefill = useSettings((s) => s.demoPrefill);
+  const filled = useRef(false);
+  useEffect(() => {
+    if (!demo || !prefill || filled.current || !isBlankDraft(useDraft.getState().draft)) return;
+    filled.current = true;
+    set(SHOWCASE_DRAFT);
+  }, [demo, prefill, set]);
   return (
     <Step n={1} close next={() => go("C2")} disabled={!draft.name.trim()}>
       <Title heading={t("additions.oathCreate.nameTitle")} sub={t("additions.oathCreate.nameSub")} />

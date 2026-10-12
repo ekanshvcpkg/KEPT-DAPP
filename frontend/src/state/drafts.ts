@@ -20,6 +20,8 @@ export interface OathDraft {
   /** Whole SKR per member: 500 | 1000 | 2500. */
   stakeSkr: number;
   reviewMode: ReviewMode;
+  /** Set by the Demo's pre-filled Oath (features/oaths/showcase.ts): the friends join and day 1 starts at once. */
+  demoShowcase?: boolean;
   /** Stable chain ID across retries, so a delayed confirmation cannot create a second Oath. */
   chainOathId?: string;
 }

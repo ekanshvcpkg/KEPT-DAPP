@@ -106,7 +106,7 @@ describe("onboarding on mocks", () => {
     queryClient.clear();
   });
 
-  it("Demo: welcome → mode sheet → look → tabs, no wallet, DEMO badge (D-80)", async () => {
+  it("Demo: welcome → mode sheet → look → tabs, no wallet, and no DEMO badge on screen", async () => {
     await render(<App />);
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow));
     await fireEvent.press(await screen.findByText(t("additions.mode.demo")));
@@ -114,7 +114,7 @@ describe("onboarding on mocks", () => {
     expect(useMode.getState().mode).toBe("demo");
     expect(useSession.getState()).toMatchObject({ onboarded: true, genesis: true });
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
-    expect(screen.getAllByLabelText(t("additions.mode.badge")).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("DEMO")).toBeNull();
     await fireEvent.press(screen.getByLabelText(t("additions.a11y.newMenu")));
     expect(await screen.findByText(t("screens.+.b0.title"))).toBeTruthy();
   }, 30000);
@@ -328,6 +328,34 @@ describe("onboarding on mocks", () => {
     expect(rootStack()).toEqual(["Tabs", "C8"]);
     await act(async () => { navigationRef.goBack(); });
     expect(rootStack()).toEqual(["Tabs"]);
+  }, 90000);
+
+  it("Demo showcase: the create flow opens pre-filled (a run, proven with a running shoe); the Oath comes out with its friends on day 1, and one photo of the shoe keeps the day", async () => {
+    const wallet = "7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q";
+    await setAppMode("demo");
+    useSession.setState({ token: "mock.x", wallet, genesis: true, onboarded: true });
+    useDraft.getState().reset();
+    await render(<App />);
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.B3.b3.btn.0") }, slow));
+    // Nothing to type: the name, the habit, its proof object, the length and the stake are all filled in.
+    expect((await screen.findByLabelText(t("additions.oathCreate.nameLabel"))).props.value).toBe("Morning Run");
+    await fireEvent.press(await nextBtn());
+    expect(await screen.findByLabelText(card("Run 5 km before work", "Running shoe"))).toBeTruthy();
+    for (let i = 0; i < 4; i++) await fireEvent.press(await nextBtn());
+    expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "Run 5 km before work" }))).toBeTruthy();
+    expect(screen.getByText("Running shoe")).toBeTruthy();
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.C6.pin.0") }));
+    expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "1,000" }), {}, slow)).toBeTruthy();
+    const created = mockOaths.list(wallet).filter((o) => o.name === "Morning Run");
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ status: "active", habits: ["Run 5 km before work"], habitObjects: ["running shoes"], objectId: 4 });
+    expect(created[0]!.members).toHaveLength(4); // Riya, Arjun and Dev are in
+    // Day 1 has begun: one photo of a running shoe (with the gesture asked for) keeps it.
+    await act(async () => { navigateTo("F1", { id: created[0]!.id, habit: 0 }); });
+    expect(await screen.findByText(/^Running shoe \+/, {}, slow)).toBeTruthy();
+    await fireEvent.press(await screen.findByLabelText(t("additions.a11y.shutter")));
+    expect((await screen.findAllByText(t("screens.F5.b1.title", { day: 1 }), {}, slow)).length).toBeGreaterThan(0);
+    expect(useDraft.getState().draft.name).toBe(""); // the draft starts over for the next Oath
   }, 90000);
 
   it("shows a settled Oath's result once, then the claim screen", async () => {

@@ -91,7 +91,7 @@ export const oathActions = {
     }
     const { oath, started } = await getTx(source).createOath({
       objectId: proofObject, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal,
-      ...(source === "mock" ? { name, habits, habitObjects } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
+      ...(source === "mock" ? { name, habits, habitObjects, ...(d.demoShowcase ? { showcase: true } : {}) } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
     });
     // flows.md: a solo Oath goes C7·ok → D2, with no Start step. On chain it already started in the create
     // transaction; the mock starts it here.

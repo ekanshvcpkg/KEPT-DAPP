@@ -30,3 +30,22 @@ puts the sample account back; **Exit demo** returns to the start, where **Use my
 - Cards say "before midnight"; the Demo's days end at fixed seeded times (the countdown is the real one).
 - Group reviews are decided by the other (simulated) members only after a moment, while you're looking at
   them. One left undecided when you skip a day counts as a miss.
+
+## Filming script: start an Oath, prove it with a running shoe
+
+For a screen recording. In **Demo** the create flow opens **pre-filled** (`frontend/src/features/oaths/showcase.ts`), so there is nothing to type, and the Oath that comes out already has its friends and is on day 1, so the first photo can be taken straight away.
+
+**Before you start:** Demo mode, camera allowed, a running shoe (and a free hand for the gesture) in reach. Profile › Settings › **Restart demo** gives the starting state. The draft must be empty: finish or discard any half-made Oath first.
+
+| Step | Tap | On screen |
+|---|---|---|
+| 1 | Today › **+** › **Start an Oath** | The name is already "Morning Run". |
+| 2 | **Next** | The habit "Run 5 km before work" with its proof object, a running shoe. |
+| 3 | **Next** four times: length (7 days), stake (1,000 SKR each), how a failed check is decided, then the contract | Each step is already filled in. |
+| 4 | **Sign & stake** | "Demo: the approval is simulated." The Oath is created. |
+| 5 | **Invite** (or **Open the Oath**) | Riya, Arjun and Dev are already in; day 1 has begun. |
+| 6 | Today › **Prove** | The camera asks for "Running shoes + <a gesture>". |
+| 7 | Point the camera at the running shoe, make the gesture, tap the shutter | In Demo the check is simulated and always passes. |
+| 8 | **Day 1 kept.** | HP, the day strip, and Arjun still pending (**Nudge**). |
+
+To turn the pre-fill off (a normal Demo create flow), set `demoPrefill` to false in the settings store; Live never pre-fills.

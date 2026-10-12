@@ -197,7 +197,6 @@
   },
   "mode": {
     "$source": "owner: Live and Demo modes (docs/notes/LIVE_DEMO_PLAN.md, DECISIONS D-80)",
-    "badge": "DEMO",
     "title": "How do you want to start?",
     "demo": "Try the demo",
     "live": "Use my wallet",

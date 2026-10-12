@@ -8,8 +8,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const here = path.dirname(new URL(import.meta.url).pathname);
+const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
 const arg = (name: string, d: string) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1]! : d; };
 const out = path.resolve(arg("out", path.join(root, "artifacts/screens")));
@@ -53,7 +54,7 @@ async function main() {
       await sleep(12000);
     }
     adb("logcat", "-c");
-    const url = `kept://dev/open/${encodeURIComponent(routeName(id))}?mode=mock&quiet=1${HOLD.has(id) ? "&hold=1" : ""}`;
+    const url = `kept://dev/open/${encodeURIComponent(routeName(id))}?demo=1&quiet=1${HOLD.has(id) ? "&hold=1" : ""}`;
     adb("shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", `'${url}'`, PKG);
     await sleep(settle);
     const png = execFileSync(ADB, ["exec-out", "screencap", "-p"], { maxBuffer: 64 << 20 });

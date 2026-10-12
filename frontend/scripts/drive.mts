@@ -6,8 +6,9 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const here = path.dirname(new URL(import.meta.url).pathname);
+const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
 const sdk = process.env.ANDROID_HOME ?? path.join(process.env.HOME!, "Library/Android/sdk");
 const ADB = path.join(sdk, "platform-tools/adb");
@@ -20,8 +21,8 @@ function dump(): Node[] {
   // A failed dump ("could not get idle state": camera preview, looping FX) leaves the old file, so
   // delete it first and treat a missing file as nothing on screen yet.
   spawnSync(ADB, ["shell", "rm", "-f", "/sdcard/kept-ui.xml"]);
-  spawnSync(ADB, ["shell", "uiautomator", "dump", "/sdcard/kept-ui.xml"]);
-  const r = spawnSync(ADB, ["shell", "cat", "/sdcard/kept-ui.xml"], { encoding: "utf8", maxBuffer: 64 << 20 });
+  spawnSync(ADB, ["shell", "uiautomator", "dump", "/sdcard/kept-ui.xml"], { timeout: 5000 });
+  const r = spawnSync(ADB, ["shell", "cat", "/sdcard/kept-ui.xml"], { encoding: "utf8", maxBuffer: 64 << 20, timeout: 3000 });
   const xml = r.status === 0 ? r.stdout : "";
   const out: Node[] = [];
   for (const m of xml.matchAll(/<node [^>]*?text="([^"]*)"[^>]*?class="([^"]*)"[^>]*?content-desc="([^"]*)"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/g)) {
@@ -32,13 +33,18 @@ function dump(): Node[] {
 }
 const unescape = (s: string) => s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n");
 /** `field:` taps the first text field (EditText). */
-const matches = (n: Node, q: string) => (q === "field:" ? n.cls === "android.widget.EditText" : false) || n.text.split("\n").includes(q) || n.text === q || n.desc === q || n.desc.startsWith(`${q},`) || n.text.replace(/\n/g, " ") === q;
+const normalize = (s: string) => s.replace(/\s+/g, " ").trim();
+const matches = (n: Node, q: string) => (q === "field:" ? n.cls === "android.widget.EditText" : false) || n.text.split("\n").includes(q) || n.text === q || n.desc === q || n.desc.startsWith(`${q},`) || normalize(n.text).includes(normalize(q));
 
-async function find(q: string, timeoutMs = 8000): Promise<Node> {
+async function find(q: string, timeoutMs = 20000): Promise<Node> {
   const end = Date.now() + timeoutMs;
   for (;;) {
     // Prefer a labelled (pressable) element over plain text with the same words (W3: title "Swap" vs button).
-    const nodes = dump().filter((n) => matches(n, q));
+    let tree = dump();
+    // React Native can keep the device busy with ambient Reanimated loops. A second dump often succeeds
+    // after uiautomator's first idle-state wait times out, so retry once before waiting for the next poll.
+    if (!tree.length) tree = dump();
+    const nodes = tree.filter((n) => matches(n, q));
     const hit = nodes.find((n) => n.desc === q) ?? nodes[0];
     if (hit) return hit;
     if (Date.now() > end) throw new Error(`not found: "${q}"`);
@@ -51,7 +57,7 @@ const tap = (q: string): Step => ({ tap: q });
 const see = (q: string, timeout?: number): Step => (timeout ? { see: q, timeout } : { see: q });
 const link = (url: string): Step => ({ link: url });
 
-const DEV = (id: string, extra = "") => `kept://dev/open/${encodeURIComponent(id)}?mode=mock&quiet=1&still=1${extra}`;
+const DEV = (id: string, extra = "") => `kept://dev/open/${encodeURIComponent(id)}?demo=1&quiet=1&still=1${extra}`;
 
 /**
  * The shutter, by position: a live camera preview never lets uiautomator go idle, so camera screens
@@ -62,17 +68,17 @@ const CAMERA_SETTLE: Step = { wait: 3500 };
 
 /** design/flows.md › Happy paths, each step checked by copy unique to the screen it should land on. */
 export const FLOWS: Record<string, Step[]> = {
-  firstLaunch: [link(DEV("A1", "&scenario=fresh")), see("Bet your friends\nyou'll do it."), tap("Get started"), see("Connect your wallet."), tap("Seeker Wallet"),
-    see("Seeker verified.", 15000), tap("Continue"), see("Pick a look."), tap("Looks like me"), see("Put something\non the line.", 10000)],
-  createGroup: [link(DEV("B3", "&scenario=fresh")), tap("Start an Oath"), see("What will you do\nevery day?"), tap("Next"), see("What's in the photo?"), tap("Next"),
-    see("How long?"), tap("Next"), see("Who's in, and\nwhat's on it?"), tap("Group"), tap("Next"), see("If the AI says no?"), tap("Next"), see("Read it like\na contract."),
-    tap("Sign & stake"), see("Confirm in your wallet"), see("Invite your crew", 15000), tap("Invite your crew"), see("Bring your people."), tap("Open the Oath"),
-    see("Copy invite link")],
+  firstLaunch: [link(DEV("A1", "&scenario=fresh")), see("Bet your friends\nyou'll do it."), tap("Get started"), see("How do you want to start?"), tap("Try the demo"),
+    see("Pick a look."), tap("Looks like me"), see("Put something on the line.", 10000)],
+  createGroup: [link(DEV("B3", "&scenario=fresh")), tap("Start an Oath"), see("Name your Oath"), tap("Next"), see("Add your habits"), tap("lift for 20 minutes"), see("Edit habit and proof"), tap("Dumbbell"), tap("Save habit"),
+    see("Add your habits"), tap("Next"), see("How long?"), tap("Next"), see("Who's in, and\nwhat's on it?"), tap("Group"), tap("Next"), see("If the AI says no?"), tap("Next"), see("Read it like\na contract."),
+    tap("Sign & stake"), see("Sworn.\n1,000 SKR on the table.", 15000), tap("Invite your crew"), see("Copy invite link")],
   createSolo: [link(DEV("C4")), tap("Solo"), tap("Next"), see("Read it like\na contract."), tap("Sign & stake"), see("Solo? Go to the Oath", 15000), tap("Solo? Go to the Oath"), see("Starts tonight at midnight")],
-  join: [link(DEV("B3", "&scenario=fresh")), tap("New"), tap("Join with code"), see("Got an invite?"), tap("field:"), { type: "IRON-7K2Q" }, tap("Find Oath"),
+  join: [link(DEV("B3", "&scenario=fresh")), tap("New"), tap("Join with code"), see("Got an invite?"), tap("Enter an invite code"), tap("field:"), { type: "IRON-7K2Q" }, tap("Find Oath"),
     see("RIYA INVITED YOU"), tap("Join & stake 1,000 SKR"), see("Riya starts it", 15000)],
-  joinBadCode: [link(DEV("E1", "&scenario=fresh")), tap("field:"), { type: "NOPE" }, tap("Find Oath"), see("That code doesn't exist.")],
-  dailyProof: [link(DEV("D2")), tap("Take photo 2"), CAMERA_SETTLE, SHUTTER, see("Day 3 kept.", 20000), tap("Done"), see("Today", 8000)],
+  joinBadCode: [link(DEV("E1", "&scenario=fresh")), tap("Enter an invite code"), tap("field:"), { type: "NOPE" }, tap("Find Oath"), see("That code doesn't exist.")],
+  dailyProof: [link(DEV("B1", "&scenario=activeGroup")), tap("Prove next"), CAMERA_SETTLE, SHUTTER, see("Lift for 20 minutes is in.", 20000),
+    tap("Prove next habit"), CAMERA_SETTLE, SHUTTER, see("Day 3 kept.", 20000), tap("Done"), see("Today", 8000)],
   proofFromPhoto1: [link(DEV("B4", "&scenario=deadlineClose")), tap("Prove now"), CAMERA_SETTLE, SHUTTER, see("Photo 1 is in.", 20000), tap("Take photo 2"), CAMERA_SETTLE,
     SHUTTER, see("Day 3 kept.", 20000)],
   reviewSomeone: [link(DEV("N1")), tap("Review photo"), see("Dev wants your vote."), tap("Approve"), see("OATH HP", 10000)],

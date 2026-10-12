@@ -9,7 +9,7 @@ pnpm --filter @kept/mobile shoot:reference  # 116 prototype screens → artifact
 pnpm --filter @kept/mobile compare          # artifacts/compare/index.html, side by side
 node frontend/scripts/drive.mts          # flows.md happy paths with adb taps (set animator/transition scales to 0 first)
 ```
-`kept://dev/open/<screen>?scenario=&mode=mock&hold=1&quiet=1&still=1` (development builds only) resets the mock to a scenario and opens any design id. `hold` keeps signing/checking screens pending, `quiet` hides LogBox toasts, `still` stops per-second countdowns so uiautomator can read the screen.
+`kept://dev/open/<screen>?scenario=&demo=1&hold=1&quiet=1&still=1` (development builds only) resets the mock to a scenario and opens any design id. `hold` keeps signing/checking screens pending, `quiet` hides LogBox toasts, `still` stops per-second countdowns so uiautomator can read the screen.
 
 ## Result
 - **116 / 116 screens** render with **no logcat errors, no red boxes, no crashes** (`artifacts/screens/report.json`).

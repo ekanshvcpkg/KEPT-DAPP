@@ -18,9 +18,11 @@ interface SettingsState {
   profileTipSeen: boolean;
   /** Today's card stack was swiped once: its "swipe" hint and nudge stop (D-85). */
   deckHintSeen: boolean;
+  /** Demo only: the create flow opens on a pre-filled Oath (features/oaths/showcase.ts), for filming. */
+  demoPrefill: boolean;
   setNotify(k: keyof SettingsState["notify"], on: boolean): void;
   setVisibility(k: keyof SettingsState["visibility"], a: Audience): void;
-  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen">>): void;
+  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill">>): void;
   follow(name: string): void;
 }
 
@@ -35,6 +37,7 @@ const DEFAULTS: SettingsData = {
   following: [],
   profileTipSeen: false,
   deckHintSeen: false,
+  demoPrefill: true,
 };
 
 export const useSettings = create<SettingsState>()(persist((set) => ({

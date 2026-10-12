@@ -54,7 +54,7 @@ describe("accessibility on every screen", () => {
     const reached: string[] = [];
     let buttons = 0;
     for (const { id } of ROUTES) {
-      await act(async () => { openDevLinkWhenReady(`kept://dev/open/${encodeURIComponent(routeName(id))}?mode=mock&quiet=1&hold=1`); });
+      await act(async () => { openDevLinkWhenReady(`kept://dev/open/${encodeURIComponent(routeName(id))}?demo=1&quiet=1&hold=1`); });
       await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
       expect(navigationRef.isReady()).toBe(true);
       if (navigationRef.getCurrentRoute()?.name === routeName(id)) reached.push(id);

@@ -22,8 +22,7 @@ import { isNoteOnlyKeeper, useKeeperHost } from "../keeper/ScreenKeeper";
 import { Enter, FadeOut, flattenBlocks } from "../primitives";
 import { Ambient } from "../chrome/Ambient";
 import { Spacer } from "../content/Basics";
-import { DemoBadge, DevnetBadge } from "../chrome/Header";
-import { useIsDemo } from "@/state/mode";
+import { DevnetBadge } from "../chrome/Header";
 import { PinnedActions } from "../actions";
 import { momentSettleMs, pinnedDelay, useBackBlockedFor } from "./moment";
 import { ScreenSkeleton } from "./ScreenSkeleton";
@@ -88,9 +87,8 @@ export function Screen({ bar, children, pinned, bottomInset = 0, scroll = true, 
   const top = l?.top ? <Spacer h={l.top} /> : null;
   const openDev = useUi((s) => s.setDevMenu);
   const m = metrics.screen;
-  const demo = useIsDemo();
   const devnet = env.cluster === "devnet";
-  const badges = devnet || demo;
+  const badges = devnet;
   const kind = routeId && presentation(routeId) === "tab" ? "tab" : "flow";
   const keeper = useKeeperHost(routeId, kind, keeperIdle ?? null);
   // The bar and light paint at once; the content mounts when the push has landed (D-83, lib/screenReady).
@@ -127,8 +125,7 @@ export function Screen({ bar, children, pinned, bottomInset = 0, scroll = true, 
       {l ? <Ambient tone={l.tone} ambient={l.ambient} beam={l.beam} decor={l.decor} /> : null}
       {badges ? (
         <View style={{ height: metrics.statusBar.badgeRow, paddingHorizontal: m.padX, flexDirection: "row", alignItems: "center", gap: space[6] }}>
-          {devnet ? <DevnetBadge {...(__DEV__ ? { onLongPress: () => openDev(true) } : {})} /> : null}
-          {demo ? <DemoBadge /> : null}
+          <DevnetBadge {...(__DEV__ ? { onLongPress: () => openDev(true) } : {})} />
         </View>
       ) : null}
       {bar ? <View style={{ paddingHorizontal: m.padX, marginTop: m.barGap }}>{bar}</View> : null}

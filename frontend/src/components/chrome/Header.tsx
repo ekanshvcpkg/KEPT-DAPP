@@ -24,16 +24,6 @@ export function DevnetBadge({ onLongPress }: { onLongPress?: () => void }) {
   );
 }
 
-/** DEMO badge next to DEVNET while the app runs on the sample account (state/mode.ts). */
-export function DemoBadge() {
-  const s = metrics.statusBar;
-  return (
-    <View accessible accessibilityRole="text" accessibilityLabel={t("additions.mode.badge")} style={{ height: s.badgeH, paddingHorizontal: s.badgePadX, borderRadius: s.badgeRadius, backgroundColor: color.violet.tint16, justifyContent: "center" }}>
-      <Text variant="devnet" color={color.violet.base}>{t("additions.mode.badge")}</Text>
-    </View>
-  );
-}
-
 // ── RoundButton ── 36 (bell), 40 (back) or 34 (extra) round surface.2 + hairline; pressed .94.
 function RoundButton({ icon, size, iconSize, label, onPress }: { icon: IconName; size: number; iconSize: number; label: string; onPress?: () => void }) {
   return (
