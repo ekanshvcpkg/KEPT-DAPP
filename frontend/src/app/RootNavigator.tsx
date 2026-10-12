@@ -26,7 +26,7 @@ import { J1, J1f, J1ok, J1p, L1, L2, L3, L4, L4b, L4m } from "@/screens/results/
 import { L6, R1, R2, R3, R4, R4lost } from "@/screens/rematch/Rematch";
 import { G1, G2, G3, G3no } from "@/screens/review/Review";
 import { BountiesTab, H1c, H1j, H2, H2no, H3, H4, H5, H6, H7, L5 } from "@/screens/bounties/Bounties";
-import { K1, K2, K3, K4, K5, K5ok, K5p } from "@/screens/bounties/CreateBounty";
+import { K1, K1t, K2, K3, K4, K5, K5ok, K5p } from "@/screens/bounties/CreateBounty";
 import { I2, I2me, I2p, I3, I4, I5, I7, I8, I9, ProfileTab } from "@/screens/profile/Profile";
 import { M1, N1 } from "@/screens/inbox/Inbox";
 import { W1, W2, W3, W3ok, W3s, W4 } from "@/screens/wallet/Wallet";
@@ -57,7 +57,7 @@ const BUILT: Record<StackId, ComponentType> = {
   R1, R2, R3, "R·act": D2, R4, "R4·lost": R4lost, L6,
   G1, G2, G3, "G3·no": G3no,
   "H1·j": H1j, "H1·c": H1c, H2, "H2·no": H2no, H3, H4, H5, H6, H7, L5,
-  K1, K2, K3, K4, K5, "K5·p": K5p, "K5·ok": K5ok,
+  K1, "K1·t": K1t, K2, K3, K4, K5, "K5·p": K5p, "K5·ok": K5ok,
   I2, "I2·me": I2me, "I2·p": I2p, I3, I4, I5, I7, I8, I9,
   W1, W2, W3, "W3·s": W3s, "W3·ok": W3ok, W4,
 };

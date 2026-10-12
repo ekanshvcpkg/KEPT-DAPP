@@ -37,7 +37,7 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 - 🤝 **Oaths.** Solo or group, 3, 7 or 14 days, stakes escrowed by an Anchor program on Solana.
 - ❤️ **Oath HP.** Every Oath shares one health bar. Misses hurt it, kept days heal it, and at 0 the Oath breaks.
 - 🔁 **Rematch.** Win back half of a broken Oath by keeping every day of a new one.
-- 🏆 **Bounties.** Free public challenges funded by a creator; survivors split the pool.
+- 🏆 **Bounties.** Free public challenges funded by a sponsor, with several daily tasks; survivors split the pool.
 - 📈 **Kept rate.** A public trust score: how reliably you keep your word.
 - 💀 **The Keeper.** A half-warden, half-bookie reaper who holds the pot, judges proof and has opinions.
 
@@ -60,13 +60,13 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
     <td align="center"><img src="docs/screenshots/broken.webp" width="200" alt="Broken"><br><sub><b>Broken</b> at 0 HP</sub></td>
     <td align="center"><img src="docs/screenshots/rematch.webp" width="200" alt="Rematch"><br><sub><b>Rematch</b>: win back half</sub></td>
     <td align="center"><img src="docs/screenshots/claim.webp" width="200" alt="Claim"><br><sub><b>Claim</b> your payout</sub></td>
-    <td align="center"><img src="docs/screenshots/claimed.webp" width="200" alt="Claimed"><br><sub><b>Claimed.</b> The Keeper approves</sub></td>
+    <td align="center"><img src="docs/screenshots/wallet.webp" width="200" alt="Wallet"><br><sub><b>Wallet</b>: SKR, SOL, claims</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/bounties.webp" width="200" alt="Bounties"><br><sub><b>Bounties</b>: free public challenges</sub></td>
-    <td align="center"><img src="docs/screenshots/bounty.webp" width="200" alt="Bounty"><br><sub><b>Bounty</b>: survivors split the pool</sub></td>
+    <td align="center"><img src="docs/screenshots/bounty.webp" width="200" alt="Bounty tasks"><br><sub><b>Bounty</b>: a sponsor's daily tasks</sub></td>
+    <td align="center"><img src="docs/screenshots/bounty-progress.webp" width="200" alt="Bounty progress"><br><sub><b>Prove every task</b>, one photo each</sub></td>
     <td align="center"><img src="docs/screenshots/profile.webp" width="200" alt="Profile"><br><sub><b>Profile</b> and kept rate</sub></td>
-    <td align="center"><img src="docs/screenshots/wallet.webp" width="200" alt="Wallet"><br><sub><b>Wallet</b>: SKR, SOL, claims</sub></td>
   </tr>
 </table>
 
@@ -103,7 +103,7 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | Invites, nudges, inbox, kept rate | The backend (kept rate is the backend's plain kept / (kept + missed), "New" under 10 days) |
 | Bounties | The backend's current Bounty: list, detail and join |
 
-**Not in Live yet** (hidden or shown as unavailable, never faked): Rematch, creating a Bounty, swap, creator pages and group review of habit photos. HP and cost-per-miss on Oath screens are computed in the app by [`packages/engine`](packages/engine); what the program pays follows its own rules on Devnet. Details: [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md).
+**Not in Live yet** (hidden or shown as unavailable, never faked): Rematch, creating a Bounty, Bounties with several tasks (Live's Bounty has one), swap, creator pages and group review of habit photos. HP and cost-per-miss on Oath screens are computed in the app by [`packages/engine`](packages/engine); what the program pays follows its own rules on Devnet. Details: [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md).
 
 </details>
 
@@ -118,6 +118,7 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | **Review** | Choose *AI only* or *AI + group review*: after 3 failed checks of a photo, the group votes. |
 | **Get paid** | When the Oath ends, claim what you kept plus what you won from others' misses. |
 | **Rematch** | A broken Oath can be run back: keep every day of the Rematch and win back half of what you lost. |
+| **Bounties** | A sponsor funds the pool and sets the daily tasks (say: check in at the gym, bench press, push-ups, a protein shake), each with its own proof object. Joining is free; prove every task every day to stay in, and survivors split the pool. |
 
 Product rules in full: [`design/rules.md`](design/rules.md), with amendments in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 

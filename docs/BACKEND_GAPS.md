@@ -451,6 +451,14 @@ See `docs/DECISIONS.md`. All answered on 2026-10-09; see DECISIONS.md, "Rules am
 - The new one-photo flow has **no group review**: the existing review routes work on `OathProof` rows (one per day), and a day now has one photo per habit. In Live, an Oath with "AI + group review" ends a failing habit at F4a ("3 failed checks is final") instead of offering the vote; in Demo the mock still offers it.
 - To restore it: review rows per habit (`HabitProof` with a PENDING_REVIEW status and the photo path, `GET /api/oaths/:oath/reviews` listing them with the habit's object, approval recording the habit and, if it was the last, the day), and `POST /api/proof/habit` with `review: true` after 3 failed checks of that habit. The app side is `Proof.tsx › next()` and `features/reviews`.
 
+### P1-28. Bounties with several daily tasks · NEW (2026-10-12, frontend, D-99)
+- **What the app does:** a Bounty has 1–8 daily tasks, each with its own proof object; an entrant proves every task with one live photo a day and is out after a day with any task missing. Demo runs it end to end (create with K1·t, join, prove per task, eliminate, pay survivors).
+- **Live today:** `GET /bounty/current` has one `objectId` and no task list, so the app shows the Bounty as a single task (its title, proven with that object), and Bounty proof still uses the legacy two-photo routes. Creating a Bounty stays hidden in Live (P1-10).
+- **Needed (shape the app is coded against, `BountyFacts.tasks` / `BountyDraftInput.tasks`):**
+  - `BountyView.tasks: { name: string (1–60), object: string (proof text, as OathDetails.habitObjects) }[]` (1–8) on `/bounty/current` and the proposed list route; the admin/creator create route takes the same array.
+  - Per-task proof for an entry, like the Oath habit flow: `POST /api/proof/challenge { bounty, task }`, `/proof/verify { bounty, task }`, `POST /api/proof/habit`-style recording per task; the entry's day is kept once every task has a verified photo (`daysKept` unchanged).
+  - Elimination and payouts unchanged: a day with any task missing is a miss; survivors split the pool.
+
 ### P1-25. Structured habits and custom Oath names · CLOSED (2026-10-11, owner request)
 - **Implemented:** the Live app sends `habits: string[]` with a canonical `goalText` joined by ` · `. The program's existing goal hash commits to that exact joined text; no program instruction or account layout changed.
 - **Backend:** `OathDetails.habits` stores 1–8 trimmed habits (up to 60 characters each). `POST /api/oaths/details`, member details, invite resolution and invite restoration carry the structured list. The migration backfills existing details as a one-item list. Requests without `habits` remain accepted as a legacy single habit.

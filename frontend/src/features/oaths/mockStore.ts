@@ -169,7 +169,9 @@ function rematchOf(source: MockOath, wallets: string[], seeded: boolean): MockOa
 
 /** The user's participation in a Bounty: a stake-0 solo Oath that follows the Bounty's days. */
 function bountyOath(b: BountyFacts, wallet: string, m: Partial<MockMember>, seeded: boolean): MockOath {
-  return add({ name: b.name, goal: null, objectId: b.objectId, numDays: b.numDays, stake: 0n, isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
+  // Each task is one of the Oath's habits (D-99), so proof asks for one photo per task.
+  const tasks = { goal: b.tasks.map((x) => x.name).join(" · "), habits: b.tasks.map((x) => x.name), habitObjects: b.tasks.map((x) => x.object) };
+  return add({ name: b.name, ...tasks, objectId: b.objectId, numDays: b.numDays, stake: 0n, isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
     day1StartsAt: b.startsAt, members: [me(wallet, m)], seeded, bountyId: b.id, inviteCode: null });
 }
 

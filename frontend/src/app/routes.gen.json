@@ -781,6 +781,14 @@
   "id": "K1",
   "name": "Basics",
   "to": [
+   "K2",
+   "K1·t"
+  ]
+ },
+ {
+  "id": "K1·t",
+  "name": "Daily tasks",
+  "to": [
    "K2"
   ]
  },

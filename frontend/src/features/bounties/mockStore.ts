@@ -5,7 +5,8 @@
 import { SKR_UNIT } from "@kept/config";
 import { bountySplit } from "@kept/engine";
 import { clock } from "@/lib/clock";
-import type { BountyFacts, Category } from "./model";
+import { proofTextOf } from "@/features/objects/proof";
+import type { BountyFacts, BountyTask, Category } from "./model";
 
 const H = 3600;
 const DAY = 86_400;
@@ -27,6 +28,23 @@ const BRANDS: Record<string, { verified: boolean; palette: number; detail: strin
   SkipLab: { verified: true, palette: 4, detail: "1,000 skips a day.", link: null },
 };
 const OBJECT: Record<Category, number> = { Fitness: 0, Reading: 1, Hydration: 2, Music: 3, Mind: 7, Outdoors: 5 };
+
+/** A task proven with a catalog entry (features/objects): the photo is checked for that entry's proof text. */
+const task = (name: string, entry: string): BountyTask => ({ name, object: proofTextOf(entry) ?? entry });
+/** Each sponsor's daily tasks (D-99): one to five, each with its own proof object. */
+const TASKS: Record<string, BountyTask[]> = {
+  "Hydrate Week": [task("Drink 2 litres of water", "water_bottle"), task("Eat a piece of fruit", "fruit")],
+  "Northbound Run Club": [task("Run 5 km", "running_shoe"), task("Stretch for 10 minutes", "yoga_mat"), task("Refill after the run", "water_bottle")],
+  "Mat Month": [task("10 minutes on the mat", "yoga_mat"), task("Meditate for 5 minutes", "meditation_cushion")],
+  "Sol Strings": [task("Practise for 20 minutes", "guitar")],
+  "Dawn Pages": [task("Read 20 pages before your phone", "book"), task("Write one line in your journal", "journal")],
+  "Iron October": [
+    task("Check in at the gym", "gym"), task("Chest day: bench press", "barbell"), task("Push-ups to finish", "push_ups"),
+    task("Lift for 20 minutes", "dumbbell"), task("Protein shake after", "shaker_bottle"),
+  ],
+  "Green Thumb": [task("Water your plant", "plant")],
+  "Rope 1k": [task("1,000 skips", "skipping_rope"), task("Rehydrate", "water_bottle")],
+};
 
 function add(b: Omit<BountyFacts, "id">): BountyFacts {
   const full = { ...b, id: `mock-bounty-${++counter}` };
@@ -60,7 +78,7 @@ export function seedBounties() {
     add({
       name: s.name, brand: { name: s.by, verified: brand.verified, logo: s.by.replace("@", "").slice(0, 1).toUpperCase(), palette: brand.palette },
       message: `${s.name}\n${s.pool.toLocaleString("en-US")} SKR · ${s.category === "Reading" ? 14 : 7} days · free`, detail: brand.detail, link: brand.link,
-      objectId: OBJECT[s.category], numDays: s.category === "Reading" || s.category === "Fitness" && s.pool > 100000 ? 14 : 7,
+      objectId: OBJECT[s.category], tasks: TASKS[s.name]!, numDays: s.category === "Reading" || s.category === "Fitness" && s.pool > 100000 ? 14 : 7,
       pool: skr(s.pool), joinClosesAt: closes, startsAt: closes, entrants: s.entrants, remaining: s.entrants, category: s.category,
       minKeptRate: rules[s.name] ?? null, tokenHeld: null, createdBy: null, featured: s.name === "Hydrate Week",
       recentlyOut: [], stillInByDay: [], finishersOptIn: [],
@@ -103,13 +121,13 @@ export const mockBounties = {
   },
   join(id: string) { const b = bounties.get(id); if (b) { b.entrants += 1; b.remaining += 1; } },
   eliminate(id: string) { const b = bounties.get(id); if (b && b.remaining > 0) b.remaining -= 1; },
-  create(d: { wallet: string; name: string; objectId: number; numDays: number; pool: bigint; joinWindowHours: number | null; message: string; link: string | null; minKeptRate: number | null; tokenHeld: { symbol: string; amount: number } | null }): BountyFacts {
+  create(d: { wallet: string; name: string; objectId: number; tasks: BountyTask[]; numDays: number; pool: bigint; joinWindowHours: number | null; message: string; link: string | null; minKeptRate: number | null; tokenHeld: { symbol: string; amount: number } | null }): BountyFacts {
     ensure();
     const t = now();
     const closes = t + (d.joinWindowHours ?? 24) * H;
     return add({
       name: d.name, brand: { name: "You", verified: false, logo: "Y", palette: 0 }, message: `${d.name}\n${d.message}`, detail: d.message, link: d.link,
-      objectId: d.objectId, numDays: d.numDays, pool: d.pool, joinClosesAt: closes, startsAt: closes, entrants: 0, remaining: 0,
+      objectId: d.objectId, tasks: d.tasks.map((x) => ({ ...x })), numDays: d.numDays, pool: d.pool, joinClosesAt: closes, startsAt: closes, entrants: 0, remaining: 0,
       category: (Object.keys(OBJECT) as Category[]).find((c) => OBJECT[c] === d.objectId) ?? "Fitness", minKeptRate: d.minKeptRate, tokenHeld: d.tokenHeld,
       createdBy: d.wallet, featured: false, recentlyOut: [], stillInByDay: [], finishersOptIn: [],
     });

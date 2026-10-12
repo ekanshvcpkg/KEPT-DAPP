@@ -2,7 +2,9 @@
 // (GET /bounty/current). H1 lists only that one; it has no creator page (I3), and creating or funding one
 // (K) is hidden in Live. The backend has no brand, category, cover message or rules for it, so it shows as
 // KEPT's own, verified, with the category of its object and no entry rules. My entry is a stake-0 solo
-// Oath on the Bounty's days (D-53), as on the mock; its proof waits for Q1 (ends on F2b).
+// Oath on the Bounty's days (D-53), as on the mock; its proof waits for Q1 (ends on F2b). The backend's Bounty has
+// one object and no task list, so it shows as one task, its title proven with that object (D-99, BACKEND_GAPS P1-28).
+import { OBJECTS } from "@kept/config";
 import { BountyCurrentResponse, RecentlyOutResponse } from "@kept/shared";
 import type { BountyCurrent } from "@kept/shared";
 import { t } from "@/copy";
@@ -33,7 +35,7 @@ function toBounty(b: View, out: BountyFacts["recentlyOut"]): BountyFacts {
     id: liveBountyId(b.id), name: b.title,
     brand: { name: brand, verified: true, logo: brand.slice(0, 1), palette: 0 },
     message: b.title, detail: "", link: null,
-    objectId: b.objectId, numDays: b.numDays, pool: BigInt(b.poolAmount),
+    objectId: b.objectId, tasks: [{ name: b.title, object: OBJECTS[b.objectId]?.text ?? OBJECTS[0].text }], numDays: b.numDays, pool: BigInt(b.poolAmount),
     joinClosesAt: b.joinClosesAt, startsAt: b.startTs,
     entrants: b.entrants, remaining: b.stillIn, category: CATEGORY[b.objectId] ?? "Fitness",
     minKeptRate: null, tokenHeld: null, createdBy: null, featured: true,

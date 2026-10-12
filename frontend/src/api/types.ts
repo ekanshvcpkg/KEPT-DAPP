@@ -2,7 +2,7 @@
 // implementation; the app mode picks them (Demo: mock, Live: http, D-80).
 import type { Balances, InboxItem, InviteResolve, Me, OathRead, Price, Profile } from "@kept/shared";
 import type { OathFacts } from "@/features/oaths/model";
-import type { BountyFacts } from "@/features/bounties/model";
+import type { BountyFacts, BountyTask } from "@/features/bounties/model";
 import type { ReviewFacts } from "@/features/reviews/model";
 
 export interface AuthApi {
@@ -79,7 +79,7 @@ export interface BountiesApi {
   create(d: BountyDraftInput, wallet: string): Promise<BountyFacts>;
 }
 export interface BountyDraftInput {
-  name: string; objectId: number; numDays: number; pool: bigint; joinWindowHours: number | null;
+  name: string; objectId: number; tasks: BountyTask[]; numDays: number; pool: bigint; joinWindowHours: number | null;
   message: string; link: string | null; minKeptRate: number | null; tokenHeld: { symbol: string; amount: number } | null;
 }
 

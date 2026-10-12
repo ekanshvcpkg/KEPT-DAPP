@@ -1,5 +1,5 @@
 {
- "$doc": "Routes the app has that design/flows.md doesn't (docs/DECISIONS.md D-80, D-91). scripts/gen-routes.mjs and __tests__/routes.test.ts apply them on top of flows.md › Route table.",
+ "$doc": "Routes the app has that design/flows.md doesn't (docs/DECISIONS.md D-80, D-91, D-99). scripts/gen-routes.mjs and __tests__/routes.test.ts apply them on top of flows.md › Route table.",
  "screens": [
   {
    "id": "A1·i",
@@ -46,6 +46,14 @@
     "E3·elig",
     "E3·skr"
    ]
+  },
+  {
+   "id": "K1·t",
+   "name": "Daily tasks",
+   "after": "K1",
+   "to": [
+    "K2"
+   ]
   }
  ],
  "edges": {
@@ -74,6 +82,9 @@
   ],
   "A0": [
    "A1·i"
+  ],
+  "K1": [
+   "K1·t"
   ]
  }
 }

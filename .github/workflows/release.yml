@@ -136,6 +136,10 @@ jobs:
         run: |
           export SHOTS="https://raw.githubusercontent.com/$REPO/${GITHUB_SHA}/docs/screenshots"
           envsubst '$TAG $REPO $SHOTS $APK_SIZE $APK_SHA256' < .github/release-notes.md > dist/notes.md
+          # What's new in this version, when .github/changelog/<tag>.md exists: right after the banner.
+          if [ -f ".github/changelog/$TAG.md" ]; then
+            { sed -n '1,4p' dist/notes.md; echo; envsubst '$TAG $REPO $SHOTS' < ".github/changelog/$TAG.md"; echo; sed '1,4d' dist/notes.md; } > dist/notes.tmp && mv dist/notes.tmp dist/notes.md
+          fi
           flags=()
           [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
           if gh release view "$TAG" >/dev/null 2>&1; then

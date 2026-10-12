@@ -3,6 +3,9 @@
 export type Category = "Fitness" | "Reading" | "Hydration" | "Music" | "Mind" | "Outdoors";
 export const CATEGORIES: Category[] = ["Fitness", "Reading", "Hydration", "Music", "Mind", "Outdoors"];
 
+/** One of a Bounty's daily tasks: what to do and what its proof photo shows (proof text, as an Oath habit's object). */
+export interface BountyTask { name: string; object: string }
+
 export interface BountyFacts {
   id: string;
   name: string;
@@ -11,7 +14,10 @@ export interface BountyFacts {
   message: string;
   detail: string;
   link: string | null;
+  /** The program's object tag (0–7) for icons; what each photo checks is the task's own object. */
   objectId: number;
+  /** The daily tasks, in order (D-99). Every entrant proves each one with its own photo every day; at least one. */
+  tasks: BountyTask[];
   numDays: number;
   /** Pool after the KEPT fee: what survivors split. */
   pool: bigint;

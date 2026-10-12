@@ -27,7 +27,8 @@ import { CATEGORIES } from "@/features/bounties/model";
 import type { BountyFacts, Category } from "@/features/bounties/model";
 import { useOath, useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
-import { objectIcon, objectName, skrWhole, startsTitle } from "@/features/oaths/present";
+import { objectIcon, skrWhole, startsTitle } from "@/features/oaths/present";
+import { objectIconOfText, objectNameOfText } from "@/features/objects/proof";
 import { bountyActions, useBounties, useBounty, useMyBounty, useStats } from "@/features/queries";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
@@ -51,6 +52,20 @@ function useEligibility(b: BountyFacts | undefined) {
   const rate = stats.data?.keptRate ?? null;
   const rateOk = !b?.minKeptRate || (rate !== null && rate >= b.minKeptRate);
   return { ok: genesis && rateOk, genesis, rate, rateOk };
+}
+
+/** "1 task" / "5 tasks". */
+const taskCount = (n: number) => (n === 1 ? t("additions.bountyTasks.countOne") : t("additions.bountyTasks.countMany", { n }));
+
+/** The Bounty's daily tasks (D-99): what to do and the object its photo shows; ticked when today's photo is in. */
+function TaskList({ tasks, done }: { tasks: BountyFacts["tasks"]; done?: ReadonlySet<number> }) {
+  return (
+    <RowList label={t("additions.bountyTasks.label", { n: tasks.length })} rows={tasks.map((x, i) => ({
+      title: x.name, sub: t("additions.bountyTasks.proof", { object: objectNameOfText(x.object) }),
+      leading: { kind: "icon" as const, icon: done?.has(i) ? "check" as const : objectIconOfText(x.object), fg: done?.has(i) ? color.lime.base : color.text.primary },
+      ...(done?.has(i) ? { value: t("additions.proof.done"), valueColor: color.lime.base } : {}),
+    }))} />
+  );
 }
 
 /** My Bounty participations (stake-0 Oaths with a bountyId). */
@@ -184,12 +199,13 @@ export function H2() {
       <RowList rows={[{ title: b.brand.name, sub: b.brand.verified ? t("screens.H2.b1.r0.s") : t("additions.bounty.creatorUnverified"), leading: { kind: "initial", initial: b.brand.logo, bg: coverColors(b)[0] }, ...(creatorPages ? { chevron: true, onPress: () => go("I3", { name: b.brand.name }) } : {}) }]} />
       <Breakdown rows={[
         { label: t("screens.H2.b2.row0.l"), value: t("screens.H2.b2.row0.v", { amount: skrWhole(b.pool) }) },
-        { label: t("screens.H2.b2.row1.l"), value: objectName(b.objectId) },
+        { label: t("additions.bountyTasks.row"), value: taskCount(b.tasks.length) },
         { label: t("screens.H2.b2.row2.l"), value: t("screens.H2.b2.row2.v", { n: b.numDays }) },
         { label: t("screens.H2.b2.row3.l"), value: open ? t("screens.H2.b2.row3.v", { time: shortDuration(b.joinClosesAt - now) }) : t("additions.bounty.closed") },
         { label: t("screens.H2.b2.row4.l"), value: String(b.entrants) },
         { label: t("screens.H2.b2.row5.l"), value: t("screens.H2.b2.row5.v") },
       ]} />
+      <TaskList tasks={b.tasks} />
       <ChipRow>
         <Chip text={t("screens.H2.b3.chip.0")} icon={el.genesis ? "check" : "close"} tone={el.genesis ? "lime" : "red"} tilt={-2} />
         {rateChip ? <Chip text={rateChip} icon={el.rateOk ? "check" : "close"} tone={el.rateOk ? "lime" : "red"} tilt={1} /> : null}
@@ -220,17 +236,20 @@ export function H3() {
   if (!b || !v) return <Screen bar={<NavBar onBack={back} title="" />}><Skeleton height={200} /></Screen>;
   const me = v.members[v.me]!;
   const k = keeperLines("H3")[0]!;
-  const photos = me.pendingToday ? 0 : 1;
+  const done = v.habits.filter((h) => h.done).length;
+  const next = v.habits.find((h) => !h.done);
+  const meta = b.tasks.length === 1 ? t("additions.bountyTasks.metaOne", { object: objectNameOfText(b.tasks[0]!.object) }) : t("additions.bountyTasks.metaMany", { n: b.tasks.length });
   const share = b.remaining > 0 ? b.pool / BigInt(b.remaining) : 0n;
   return (
     <Screen bar={<NavBar onBack={back} title={b.name} {...(v.life === "active" ? { right: t("screens.D2.nav.right", { day: v.dayNumber, length: b.numDays }) } : {})} />}>
       <Title heading={t("screens.H3.b0.title", { n: b.remaining, total: b.entrants })} />
       {v.life === "waiting" ? <Banner tone="vio" icon="weather-night" title={startsTitle(v.secondsToStart ?? 0)} sub={t("additions.core.startsIn", { time: shortDuration(v.secondsToStart ?? 0) })} /> : null}
       {v.life === "active" ? (
-        <OathCard icon={objectIcon(b.objectId)} name={t("screens.H3.b1.name")} meta={t("additions.proof.bountyMeta", { object: objectName(b.objectId) })}
-          tags={[{ text: t("additions.proof.bountyTag", { n: photos }), icon: "camera-outline", ...(photos === 1 ? { tone: "g" as const } : {}) }, { text: t("screens.H3.b1.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" }]}
-          {...(me.pendingToday ? { button: { label: t("screens.H3.b1.btn"), kind: "p" as const, icon: "camera" as const, onPress: () => go("F1", { id: v.facts.id, habit: 0 }) } } : {})} />
+        <OathCard icon={objectIcon(b.objectId)} name={t("screens.H3.b1.name")} meta={meta}
+          tags={[{ text: t("additions.proof.tagPartial", { done, total: v.habits.length }), icon: "camera-outline", ...(next ? {} : { tone: "g" as const }) }, { text: t("screens.H3.b1.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" }]}
+          {...(me.pendingToday && next ? { button: { label: b.tasks.length > 1 ? t("screens.B1.b3.btn") : t("screens.H3.b1.btn"), kind: "p" as const, icon: "camera" as const, onPress: () => go("F1", { id: v.facts.id, habit: next.index }) } } : {})} />
       ) : null}
+      {b.tasks.length > 1 ? <TaskList tasks={b.tasks} done={new Set(v.life === "active" ? v.habits.filter((h) => h.done).map((h) => h.index) : [])} /> : null}
       <ScreenKeeper id="H3" lines={[k]} />
       {b.recentlyOut.length ? <RowList label={t("screens.H3.b3.label")} rows={b.recentlyOut.map((o) => ({
         title: o.name, sub: t("screens.H3.b3.r0.s", { day: o.day }), valueColor: color.red.base,
@@ -328,6 +347,7 @@ export function H6() {
         { label: t("screens.H6.b2.row2.l"), value: t("screens.H6.b2.row2.v", { amount: skrWhole(perFinisher) }) },
         { label: t("screens.H6.b2.row3.l"), value: String(b.finishersOptIn.length) },
       ]} />
+      <TaskList tasks={b.tasks} />
       {b.finishersOptIn.length ? <RowList label={t("screens.H6.b3.label")} rows={b.finishersOptIn.map((h, i) => ({
         // reference/kept-screens-4.js › H6: initial tiles, violet then yellow.
         title: h, sub: t("screens.H6.b3.r0.s", { n: day, total: day }), value: t("screens.H6.b3.r0.r"),

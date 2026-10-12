@@ -55,6 +55,33 @@ describe("Bounties (mock)", () => {
     await api.bounties.mine(hydrate.id, MOCK_WALLET);
     expect((await api.bounties.get(hydrate.id)).remaining).toBe(entrants);
   });
+  it("a sponsor's Bounty has several tasks; joining makes one habit per task, and the day is kept only when every task is proven (D-99)", async () => {
+    scenario = "fresh";
+    const iron = (await api.bounties.list()).find((b) => b.name === "Iron October")!;
+    expect(iron.tasks.map((x) => x.name)).toEqual(["Check in at the gym", "Chest day: bench press", "Push-ups to finish", "Lift for 20 minutes", "Protein shake after"]);
+    expect(iron.tasks.map((x) => x.object)).toEqual(["gym workout", "barbell", "push-ups and planks", "dumbbell", "protein shaker"]);
+    const mine = await api.bounties.join(iron.id, MOCK_WALLET);
+    expect(mine.habits).toEqual(iron.tasks.map((x) => x.name));
+    expect(mine.habitObjects).toEqual(iron.tasks.map((x) => x.object));
+    clock.set((iron.startsAt + 3600) * 1000); // day 1
+    for (const habit of [0, 1, 2, 3]) expect(mockOaths.proveHabit(mine.id, MOCK_WALLET, habit)).toBe(false);
+    const partial = oathView(mockOaths.get(mine.id)!, now(), MOCK_WALLET);
+    expect(partial.habits.filter((h) => h.done)).toHaveLength(4);
+    expect(partial.members[partial.me]!.pendingToday).toBe(true);
+    expect(mockOaths.proveHabit(mine.id, MOCK_WALLET, 4)).toBe(true);
+    expect(oathView(mockOaths.get(mine.id)!, now(), MOCK_WALLET).members[0]!.pendingToday).toBe(false);
+  });
+  it("a created Bounty keeps its tasks, and its entrants prove each one", async () => {
+    scenario = "fresh";
+    const b = await api.bounties.create({
+      name: "Chest Week", objectId: 0, tasks: [{ name: "Bench press", object: "barbell" }, { name: "Drink water", object: "water bottle" }], numDays: 7,
+      pool: 10_000n * SKR_UNIT, joinWindowHours: 24, message: "", link: null, minKeptRate: null, tokenHeld: null,
+    }, MOCK_WALLET);
+    expect(b.tasks).toHaveLength(2);
+    const mine = await api.bounties.join(b.id, MOCK_WALLET);
+    expect(mine.habits).toEqual(["Bench press", "Drink water"]);
+    expect(mine.habitObjects).toEqual(["barbell", "water bottle"]);
+  });
   it("a survivor's payout is the pool split by survivors", async () => {
     scenario = "bountyJoined";
     const list = await api.oaths.list(MOCK_WALLET);

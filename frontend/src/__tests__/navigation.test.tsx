@@ -21,6 +21,7 @@ import { mockOaths } from "@/features/oaths/mockStore";
 import { mockBounties } from "@/features/bounties/mockStore";
 import type { Scenario } from "@/api/mock/scenarios";
 import { useDraft } from "@/state/drafts";
+import { useBountyDraft } from "@/screens/bounties/CreateBounty";
 import { storeChallenge } from "@/screens/proof/Proof";
 import { gestureText } from "@/features/oaths/present";
 import amend from "@/app/routes.amend.json";
@@ -792,10 +793,33 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
     expect(rootStack()).toEqual(["Tabs", "H3"]);
   }, 30000);
 
+  it("K1·t: a Bounty's daily tasks are built like Oath habits, each with its own proof object, and reach the review (D-99)", async () => {
+    await signedIn("activeGroup");
+    useBountyDraft.getState().reset();
+    await act(async () => { navigateTo("K1"); });
+    await fireEvent.changeText(await screen.findByLabelText(t("screens.K1.b1.label"), {}, slow), "Chest Week");
+    await fireEvent.press(screen.getByRole("button", { name: t("screens.K1.pin.0") }));
+    expect(await screen.findByText(t("additions.bountyTasks.title"))).toBeTruthy();
+    await screen.findByRole("button", { name: t("screens.C1.pin.0"), disabled: true });
+    for (const [name, object] of [["Go to the gym", "Dumbbell"], ["Drink water", "Water bottle"]] as const) {
+      await fireEvent.press(await screen.findByRole("button", { name: t("additions.bountyTasks.add") }));
+      await fireEvent.changeText(await screen.findByLabelText(t("additions.bountyTasks.name")), name);
+      await fireEvent.press(screen.getByLabelText(object));
+      await fireEvent.press(await screen.findByRole("button", { name: t("additions.bountyTasks.save") }));
+    }
+    expect(useBountyDraft.getState().d).toMatchObject({ habits: ["Go to the gym", "Drink water"], habitObjectEntries: ["dumbbell", "water_bottle"] });
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.C1.pin.0") }));
+    expect(rootStack().slice(-3)).toEqual(["K1", "K1_t", "K2"]);
+    await act(async () => { navigateTo("K5"); });
+    expect(await screen.findByText(t("additions.bountyTasks.label", { n: 2 }), {}, slow)).toBeTruthy();
+    expect(screen.getByText("Go to the gym")).toBeTruthy();
+    expect(screen.getByText(t("additions.bountyTasks.countMany", { n: 2 }))).toBeTruthy();
+  }, 60000);
+
   it("opens every one of those screens that needs no id without a render error", async () => {
     await signedIn("activeGroup");
     const errors = jest.spyOn(console, "error");
-    for (const id of ["H1·j", "H1·c", "H7", "K1", "K2", "K3", "K4", "K5", "I2·me", "I4", "I5", "I7", "I8", "I9", "W1", "W4", "N1", "M1"] as const) {
+    for (const id of ["H1·j", "H1·c", "H7", "K1", "K1·t", "K2", "K3", "K4", "K5", "I2·me", "I4", "I5", "I7", "I8", "I9", "W1", "W4", "N1", "M1"] as const) {
       await act(async () => { navigateTo(id); });
     }
     expect(errors).not.toHaveBeenCalled();
