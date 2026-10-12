@@ -1,0 +1,147 @@
+# Builds the Android release APK and publishes it as a GitHub Release.
+#   - Push a tag:   git tag v0.2.0 && git push origin v0.2.0
+#   - Or by hand:   Actions › Release APK › Run workflow (enter a tag; it is created on the chosen branch)
+# The APK is attached as KEPT.apk, so https://github.com/<owner>/<repo>/releases/latest/download/KEPT.apk
+# always serves the newest build (the README's Download button links there).
+#
+# Signing: with the repo secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
+# ANDROID_KEY_PASSWORD set, the APK is signed with that key (plugins/withReleaseSigning.js). Without them it
+# is signed with the standard React Native debug key, the same as a local `./gradlew assembleRelease`, so it
+# installs over APKs that were already handed out. Don't switch keys later: Android refuses to update an app
+# signed with a different key (people would have to uninstall first).
+#
+# Build-time settings (all optional, defaults in frontend/src/config/env.ts): set repository variables
+# EXPO_PUBLIC_API_URL, EXPO_PUBLIC_STAKE_MINT, EXPO_PUBLIC_RPC_URL, EXPO_PUBLIC_PROGRAM_ID to override them.
+name: Release APK
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.2.0 (created if it doesn't exist)"
+        required: true
+      prerelease:
+        description: "Mark as a pre-release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_STAKE_MINT: ${{ vars.EXPO_PUBLIC_STAKE_MINT }}
+      EXPO_PUBLIC_RPC_URL: ${{ vars.EXPO_PUBLIC_RPC_URL || 'https://api.devnet.solana.com' }}
+      EXPO_PUBLIC_PROGRAM_ID: ${{ vars.EXPO_PUBLIC_PROGRAM_ID || '6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh' }}
+      EXPO_PUBLIC_CLUSTER: devnet
+    steps:
+      - name: Check the tag
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::Tag must look like v1.2.3 (got '$TAG')"; exit 1; }
+
+      # The React Native build needs ~15 GB; the runner image ships toolchains we don't use.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.6.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # versionName from the tag, versionCode from the run number, so every release installs over the last.
+      - name: Set the app version
+        working-directory: frontend
+        run: |
+          node -e '
+            const fs = require("fs");
+            const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
+            app.expo.version = process.env.TAG.replace(/^v/, "").replace(/-.*/, "");
+            app.expo.android.versionCode = 100 + Number(process.env.GITHUB_RUN_NUMBER);
+            fs.writeFileSync("app.json", JSON.stringify(app, null, 2));
+            console.log(app.expo.version, app.expo.android.versionCode);
+          '
+
+      - name: Release signing key (optional)
+        working-directory: frontend
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No ANDROID_KEYSTORE_BASE64 secret: signing with the debug key."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > kept-release.keystore
+          printf 'storeFile=kept-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+
+      - name: Prebuild (generate android/)
+        working-directory: frontend
+        run: pnpm exec expo prebuild --platform android --no-install
+        env:
+          CI: "1"
+
+      - name: Build the release APK
+        working-directory: frontend/android
+        run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+
+      - name: Collect the APK
+        run: |
+          mkdir -p dist
+          cp frontend/android/app/build/outputs/apk/release/app-release.apk dist/KEPT.apk
+          (cd dist && sha256sum KEPT.apk > KEPT.apk.sha256)
+          echo "APK_SIZE=$(du -m dist/KEPT.apk | cut -f1)" >> "$GITHUB_ENV"
+          echo "APK_SHA256=$(cut -d' ' -f1 dist/KEPT.apk.sha256)" >> "$GITHUB_ENV"
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KEPT-${{ env.TAG }}
+          path: dist/
+          retention-days: 30
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
+        run: |
+          export SHOTS="https://raw.githubusercontent.com/$REPO/${GITHUB_SHA}/docs/screenshots"
+          envsubst '$TAG $REPO $SHOTS $APK_SIZE $APK_SHA256' < .github/release-notes.md > dist/notes.md
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/KEPT.apk dist/KEPT.apk.sha256 --clobber
+            gh release edit "$TAG" --notes-file dist/notes.md "${flags[@]}"
+          else
+            gh release create "$TAG" dist/KEPT.apk dist/KEPT.apk.sha256 \
+              --target "$GITHUB_SHA" --title "KEPT $TAG" --notes-file dist/notes.md --generate-notes "${flags[@]}"
+          fi
