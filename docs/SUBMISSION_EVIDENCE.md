@@ -14,7 +14,7 @@ Nothing here is Mainnet. The SKR used on Devnet is a **test mint** (below), not 
 
 ## 1. Commit to inspect
 
-- **Commit:** `<COMMIT_SHA: owner fills in>`. This document is not committed yet. After committing it, run `git rev-parse HEAD` and put the full SHA here (and in the submission form).
+- **Commit:** `33e5f925c5922ae86289857031d4660878ba351d`: the code, this document's evidence and the test results above are as of this commit. The commit after it only fills in this line.
 - Repository: `https://github.com/ekanshvcpkg/KEPT-DAPP`. For reference only: before this document, the latest commit on that repository's `main` was `b377b59`, and release `v1.1.1` was built from it by `.github/workflows/release.yml`.
 
 ## 2. Where things are
