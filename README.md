@@ -32,7 +32,7 @@
 
 **KEPT** is an Android app for the **Solana Seeker** that turns habits into commitments with real stakes.
 
-You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on it, and prove each habit every day with a **live photo**. An AI model running **on your phone** checks the photo for the habit's object and a hand gesture, so the photo never leaves the device. Keep your word and you get paid; miss a day and the ones who kept take your share.
+You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on it, and prove each habit every day with a **live photo**. An AI model running **on your phone** checks the photo for the habit's object and a hand gesture, so the photo never leaves the device (the backend records the verdict and a hash of the photo; it cannot re-check the photo itself). Keep your word and you get paid; miss a day and the ones who kept take your share.
 
 - 🤝 **Oaths.** Solo or group, 3, 7 or 14 days, stakes escrowed by an Anchor program on Solana.
 - ❤️ **Oath HP.** Every Oath shares one health bar. Misses hurt it, kept days heal it, and at 0 the Oath breaks.
@@ -97,13 +97,13 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | Real on Devnet | How |
 |---|---|
 | Sign-in | Sign-In With Solana message signed in your wallet, checked by the backend; Seeker Genesis Token check |
-| Create, join, start, cancel, settle, claim an Oath | Transactions to the Anchor program `kept_test` ([`6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh`](https://explorer.solana.com/address/6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh?cluster=devnet)); stakes are escrowed on chain |
-| Daily proof | On-device check (MediaPipe gesture model + Gemma, downloaded on first use, about 2.6 GB, on a physical 64-bit phone). The photo stays on the phone; the verdict and photo hash go to the backend |
+| Create, join, start, cancel, settle, claim an Oath | Transactions to the Anchor program `kept_test` ([`6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh`](https://explorer.solana.com/address/6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh?cluster=devnet)); stakes (a Devnet test SKR mint) are escrowed on chain. Settle is sent by the backend's scheduler |
+| Daily proof | On-device check (MediaPipe gesture model + Gemma, downloaded on first use, about 2.6 GB, on a physical 64-bit phone). The photo stays on the phone; the verdict and photo hash go to the backend, which accepts the phone's verdict and cannot re-check the photo ([`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md) P0-1). One-time, expiring challenges stop a check being reused |
 | Balances, test SKR | Read from RPC; the faucet sends test SKR once per wallet |
 | Invites, nudges, inbox, kept rate | The backend (kept rate is the backend's plain kept / (kept + missed), "New" under 10 days) |
-| Bounties | The backend's current Bounty: list, detail and join |
+| Bounties | The backend's current Bounty: list, detail and join (proving a Bounty day is not available yet: it ends on "Check unavailable") |
 
-**Not in Live yet** (hidden or shown as unavailable, never faked): Rematch, creating a Bounty, Bounties with several tasks (Live's Bounty has one), swap, creator pages and group review of habit photos. HP and cost-per-miss on Oath screens are computed in the app by [`packages/engine`](packages/engine); what the program pays follows its own rules on Devnet. Details: [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md).
+**Not in Live yet** (hidden or shown as unavailable, never faked): Rematch, creating a Bounty, Bounties with several tasks (Live's Bounty has one), swap, creator pages, group review of habit photos and proving a Bounty day. HP and cost-per-miss on Oath screens are computed in the app by [`packages/engine`](packages/engine). Oaths created since the rules v3 upgrade (2026-10-11) settle on chain by the same rules, tested against the same vectors (`packages/engine/test-vectors/oath-vectors.json`); Oaths created earlier keep the program's v1 rules. Addresses, transactions and what is and isn't verified: [`docs/SUBMISSION_EVIDENCE.md`](docs/SUBMISSION_EVIDENCE.md). Gaps: [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md).
 
 </details>
 
@@ -115,9 +115,9 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | **Prove** | Each habit, each day: one live photo of the object plus the hand gesture KEPT asks for. Camera only, no gallery. Checked on the phone. |
 | **HP** | Every Oath starts at 100 HP. At the end of each day: −20 per member who missed (−35 solo), then +10 heal, capped at 100. At 0 the Oath breaks. |
 | **Miss** | A miss costs 10% of your stake, shared between that day's keepers and KEPT. |
-| **Review** | Choose *AI only* or *AI + group review*: after 3 failed checks of a photo, the group votes. |
+| **Review** | Choose *AI only* or *AI + group review*: after 3 failed checks of a photo, the group votes. Group review runs in Demo only for now; in Live, 3 failed checks end the day as missed. |
 | **Get paid** | When the Oath ends, claim what you kept plus what you won from others' misses. |
-| **Rematch** | A broken Oath can be run back: keep every day of the Rematch and win back half of what you lost. |
+| **Rematch** | A broken Oath can be run back: keep every day of the Rematch and win back half of what you lost. Demo only for now: on chain, the held half goes to KEPT's treasury after 7 days until Rematch recovery is built. |
 | **Bounties** | A sponsor funds the pool and sets the daily tasks (say: check in at the gym, bench press, push-ups, a protein shake), each with its own proof object. Joining is free; prove every task every day to stay in, and survivors split the pool. |
 
 Product rules in full: [`design/rules.md`](design/rules.md), with amendments in [`docs/DECISIONS.md`](docs/DECISIONS.md).
@@ -214,7 +214,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs typecheck, lint
 <br>
 
 1. Start the backend (above). In `backend/.env` put your phone wallet's address in `SGT_MOCK_ALLOWLIST` to get **A3 Seeker verified**; leave it out to see **A3·no**.
-2. `cp frontend/.env.example frontend/.env` and set `EXPO_PUBLIC_STAKE_MINT` (the `STAKE_MINT` printed by the API's `v4-setup` script) so the balance chip shows SKR. The example points to the hosted Devnet API; to use the local API, set `EXPO_PUBLIC_API_URL=http://localhost:3000`.
+2. `cp frontend/.env.example frontend/.env` (`EXPO_PUBLIC_STAKE_MINT` is only a fallback: Live reads the stake mint from the program's Config account). The example points to the hosted Devnet API; to use the local API, set `EXPO_PUBLIC_API_URL=http://localhost:3000`.
 3. `adb reverse tcp:8082 tcp:8082` for Metro, and `adb reverse tcp:3000 tcp:3000` for the local API.
 4. Open KEPT → **Get started** → **Use my wallet** → pick a wallet row → approve the connect, then the sign-in message in your wallet.
 
@@ -284,7 +284,8 @@ You can also run it by hand: **Actions › Release APK › Run workflow**, enter
 | Doc | What |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How the app, packages, backend and program fit together |
-| [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | A two-minute walkthrough of the core loop |
+| [`docs/SUBMISSION_EVIDENCE.md`](docs/SUBMISSION_EVIDENCE.md) | For reviewers: build and test commands, Devnet addresses and transactions, what is verified, Demo vs Live |
+| [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | A two-minute walkthrough of the core loop (Demo, simulated) |
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Product and engineering decisions, rule amendments |
 | [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md) | What the backend and program still need to match the design |
 | [`docs/API.md`](docs/API.md) | The backend API as it exists today, plus proposed routes |
