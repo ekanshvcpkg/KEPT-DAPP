@@ -74,7 +74,8 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # versionName from the tag, versionCode from the run number, so every release installs over the last.
+      # versionName from the tag; versionCode from it too (1.2.3 → 10203), so a newer version always installs
+      # over an older one, whichever repository built it.
       - name: Set the app version
         working-directory: frontend
         run: |
@@ -82,7 +83,9 @@ jobs:
             const fs = require("fs");
             const app = JSON.parse(fs.readFileSync("app.json", "utf8"));
             app.expo.version = process.env.TAG.replace(/^v/, "").replace(/-.*/, "");
-            app.expo.android.versionCode = 100 + Number(process.env.GITHUB_RUN_NUMBER);
+            const [major, minor, patch] = app.expo.version.split(".").map(Number);
+            if (minor > 99 || patch > 99) throw new Error("minor and patch must be 0-99 for the version code");
+            app.expo.android.versionCode = major * 10000 + minor * 100 + patch;
             fs.writeFileSync("app.json", JSON.stringify(app, null, 2));
             console.log(app.expo.version, app.expo.android.versionCode);
           '

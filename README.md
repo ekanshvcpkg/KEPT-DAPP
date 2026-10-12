@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/priyambuilds/Kept/releases/latest/download/KEPT.apk"><img src="https://img.shields.io/badge/Download-KEPT.apk-C5F25C?style=for-the-badge&logo=android&logoColor=C5F25C&labelColor=1C1C1C&color=C5F25C" alt="Download KEPT.apk"></a>
+  <a href="https://github.com/ekanshvcpkg/KEPT-DAPP/releases/latest/download/KEPT.apk"><img src="https://img.shields.io/badge/Download-KEPT.apk-C5F25C?style=for-the-badge&logo=android&logoColor=C5F25C&labelColor=1C1C1C&color=C5F25C" alt="Download KEPT.apk"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/priyambuilds/Kept/releases/latest"><img src="https://img.shields.io/github/v/release/priyambuilds/Kept?style=flat-square&label=release&color=C5F25C&labelColor=1C1C1C" alt="Latest release"></a>
-  <a href="https://github.com/priyambuilds/Kept/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/priyambuilds/Kept/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1C1C1C" alt="CI"></a>
-  <a href="https://github.com/priyambuilds/Kept/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/priyambuilds/Kept/release.yml?style=flat-square&label=APK%20build&labelColor=1C1C1C" alt="APK build"></a>
+  <a href="https://github.com/ekanshvcpkg/KEPT-DAPP/releases/latest"><img src="https://img.shields.io/github/v/release/ekanshvcpkg/KEPT-DAPP?style=flat-square&label=release&color=C5F25C&labelColor=1C1C1C" alt="Latest release"></a>
+  <a href="https://github.com/ekanshvcpkg/KEPT-DAPP/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ekanshvcpkg/KEPT-DAPP/ci.yml?branch=main&style=flat-square&label=CI&labelColor=1C1C1C" alt="CI"></a>
+  <a href="https://github.com/ekanshvcpkg/KEPT-DAPP/actions/workflows/release.yml"><img src="https://img.shields.io/github/actions/workflow/status/ekanshvcpkg/KEPT-DAPP/release.yml?style=flat-square&label=APK%20build&labelColor=1C1C1C" alt="APK build"></a>
   <img src="https://img.shields.io/badge/Solana-Devnet-9945FF?style=flat-square&logo=solana&logoColor=white&labelColor=1C1C1C" alt="Solana Devnet">
   <img src="https://img.shields.io/badge/Android-7.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white&labelColor=1C1C1C" alt="Android 7.0+">
   <img src="https://img.shields.io/badge/Expo-SDK%2057-FFFFFF?style=flat-square&logo=expo&logoColor=white&labelColor=1C1C1C" alt="Expo SDK 57">
@@ -74,7 +74,7 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 
 ## 📲 Download and try it
 
-<a href="https://github.com/priyambuilds/Kept/releases/latest/download/KEPT.apk"><b>⬇️ Download the latest KEPT.apk</b></a> (Android 7.0+, arm64: the Solana Seeker and any modern Android phone). Every version is on the [Releases](https://github.com/priyambuilds/Kept/releases) page.
+<a href="https://github.com/ekanshvcpkg/KEPT-DAPP/releases/latest/download/KEPT.apk"><b>⬇️ Download the latest KEPT.apk</b></a> (Android 7.0+, arm64: the Solana Seeker and any modern Android phone). Every version is on the [Releases](https://github.com/ekanshvcpkg/KEPT-DAPP/releases) page.
 
 1. Open the link on your phone, or copy the APK over USB (`adb install -r KEPT.apk`).
 2. Tap the file and allow **Install unknown apps** when Android asks.
@@ -256,14 +256,14 @@ In Demo (or a development build with the mock scenario of your choice):
 
 ## 🚀 Releases
 
-Release APKs are built by GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) and attached to a [GitHub Release](https://github.com/priyambuilds/Kept/releases) with screenshots, install steps and a SHA-256 checksum.
+Release APKs are built by GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)) and attached to a [GitHub Release](https://github.com/ekanshvcpkg/KEPT-DAPP/releases) with screenshots, install steps and a SHA-256 checksum.
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0           # builds the APK and publishes the release "KEPT v0.2.0"
 ```
 
-You can also run it by hand: **Actions › Release APK › Run workflow**, enter a tag. The asset is always named `KEPT.apk`, so [`releases/latest/download/KEPT.apk`](https://github.com/priyambuilds/Kept/releases/latest/download/KEPT.apk) serves the newest build. The version name comes from the tag; the version code goes up with every run, so each release installs over the last.
+You can also run it by hand: **Actions › Release APK › Run workflow**, enter a tag. The asset is always named `KEPT.apk`, so [`releases/latest/download/KEPT.apk`](https://github.com/ekanshvcpkg/KEPT-DAPP/releases/latest/download/KEPT.apk) serves the newest build. The version name comes from the tag and so does the version code (`v1.2.3` → 10203), so each release installs over the last.
 
 <details>
 <summary><b>Signing and build settings</b></summary>
