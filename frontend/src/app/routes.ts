@@ -6,8 +6,6 @@ export type DesignId = (typeof table)[number]["id"];
 export interface RouteInfo { id: DesignId; name: string; to: DesignId[] }
 
 export const ROUTES = table as unknown as RouteInfo[];
-const byId = new Map(ROUTES.map((r) => [r.id, r]));
-export const routeInfo = (id: DesignId): RouteInfo => byId.get(id)!;
 
 /** "C7·no" → "C7_no", "R·act" → "R_act", "+" → "Plus". */
 export const routeName = (id: string): string => (id === "+" ? "Plus" : id.replace(/·/g, "_"));
@@ -38,5 +36,3 @@ export function presentation(id: string): Presentation {
   if (MODALS.includes(id)) return "modal";
   return "flow";
 }
-
-export const TAB_IDS = TABS as DesignId[];

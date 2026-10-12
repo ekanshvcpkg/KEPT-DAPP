@@ -158,8 +158,6 @@ export const CATALOG: readonly CatalogEntry[] = [
   e("whiteboard", "tech", null, "white board", "blackboard", "chalkboard", "presentation", "public speaking"),
 ];
 
-export const catalogEntry = (key: string): CatalogEntry | undefined => CATALOG.find((c) => c.key === key);
-
 /**
  * The six objects C2 offers as quick picks: the most common and the most distinct on camera. All eight supported
  * objects stay reachable by search. The model's reading of any of them is unmeasured (BACKEND_GAPS P1-26).

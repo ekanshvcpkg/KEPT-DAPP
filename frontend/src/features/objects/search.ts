@@ -2,7 +2,6 @@
 // catalog stays data. A match is ranked by how directly the query names a term of the entry (its label or an alias):
 // the same word, a start of it, a start of one of its words, a part of it, then a one-letter typo of a whole word.
 import { OBJECTS } from "@kept/config";
-import type { ObjectId } from "@kept/config";
 import { CATALOG } from "./catalog";
 import type { CatalogEntry, ObjectCategory } from "./catalog";
 
@@ -94,6 +93,3 @@ export function entriesIn(category: ObjectCategory, entries: readonly CatalogEnt
 /** The program's `object_id` for a catalog entry, or null when it isn't one of the eight. */
 export const objectIndexOf = (entry: Pick<CatalogEntry, "object">): number | null =>
   entry.object === null ? null : OBJECTS.findIndex((o) => o.id === entry.object);
-
-/** The entry's object as the program knows it. */
-export const canonicalOf = (id: ObjectId) => OBJECTS.find((o) => o.id === id)!;
