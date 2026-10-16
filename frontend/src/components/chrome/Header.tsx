@@ -36,7 +36,7 @@ function RoundButton({ icon, size, iconSize, label, onPress }: { icon: IconName;
 }
 
 // ── BalanceChip ── 36 h pill: sack 17 lime, amount 14/600, plus-circle 15. Tap → W1.
-export function BalanceChip({ amount, onPress }: { amount: string; onPress?: () => void }) {
+export function BalanceChip({ amount, currency = t("common.currency"), onPress }: { amount: string; currency?: string; onPress?: () => void }) {
   const h = metrics.header;
   // motion.md §4: a new balance counts from the old one (900 ms) and the chip pops. The first load
   // ("–" → amount) just shows the amount.
@@ -44,7 +44,7 @@ export function BalanceChip({ amount, onPress }: { amount: string; onPress?: () 
   if (amount !== seen.cur) setSeen({ cur: amount, prev: seen.cur });
   const counting = seen.prev !== amount && /\d/.test(seen.prev);
   return (
-    <PressScale onPress={onPress} accessibilityLabel={`${t("additions.a11y.wallet")}: ${amount} ${t("common.currency")}`} hit={{ w: h.chipH, h: h.chipH }}>
+    <PressScale onPress={onPress} accessibilityLabel={`${t("additions.a11y.wallet")}: ${amount}${currency ? ` ${currency}` : ""}`} hit={{ w: h.chipH, h: h.chipH }}>
       <Bump trigger={counting ? amount : "load"}>
       <View style={{ height: h.chipH, paddingLeft: h.chipPadL, paddingRight: h.chipPadR, borderRadius: h.chipH / 2, backgroundColor: color.surface[2], boxShadow: `inset 0 0 0 1px ${color.line.hairline2}`, flexDirection: "row", alignItems: "center", gap: space[6] }}>
         <Icon name="sack" size={h.chipIcon} color={color.lime.base} />
@@ -79,8 +79,9 @@ export function Bell({ count, onPress }: { count: number; onPress?: () => void }
 // ── AppHeader (tab screens) ── KeeperMark · title · BalanceChip · Bell · optional extra.
 interface AppHeaderProps {
   title: string;
-  /** Pre-formatted SKR amount (formatSkr at the edge). */
+  /** Pre-formatted amount and display unit (formatted at the edge). */
   balance: string;
+  balanceCurrency?: string;
   unreadCount: number;
   /** Defaults to the screen's Keeper (Screen › ScreenKeeper). */
   keeper?: { hasNew: boolean; onPress: () => void };
@@ -89,7 +90,7 @@ interface AppHeaderProps {
   extra?: { icon: IconName; label: string; onPress: () => void };
 }
 
-export function AppHeader({ title, balance, unreadCount, keeper, onBalance, onBell, extra }: AppHeaderProps) {
+export function AppHeader({ title, balance, balanceCurrency, unreadCount, keeper, onBalance, onBell, extra }: AppHeaderProps) {
   const h = metrics.header;
   const host = useScreenKeeper();
   const isDemo = useIsDemo();
@@ -98,7 +99,7 @@ export function AppHeader({ title, balance, unreadCount, keeper, onBalance, onBe
     <View style={{ height: h.height, flexDirection: "row", alignItems: "center", gap: h.gap }}>
       <KeeperMark hasNew={mark.hasNew} onPress={mark.onPress} open={!!host?.open} />
       <Text variant="headerTitle" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} accessibilityRole="header" style={{ marginLeft: h.titleMargin, flex: 1 }}>{title}</Text>
-      <BalanceChip amount={balance} {...(onBalance ? { onPress: onBalance } : {})} />
+      <BalanceChip amount={balance} currency={balanceCurrency} {...(onBalance ? { onPress: onBalance } : {})} />
       <Bell count={unreadCount} {...(onBell ? { onPress: onBell } : {})} />
       {extra ? <RoundButton icon={extra.icon} size={h.extra} iconSize={h.extraIcon} label={extra.label} onPress={extra.onPress} /> : null}
     </View>

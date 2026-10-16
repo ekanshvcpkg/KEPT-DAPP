@@ -1,7 +1,7 @@
 // Real Oaths: program accounts read over RPC, goal text from the backend, and the fields the backend
 // can't store yet from the device (names, review mode). Nothing here reads the mock (Live, D-80).
 import { PublicKey } from "@solana/web3.js";
-import { oathPda } from "@kept/chain";
+import { NATIVE_SOL_MINT, oathPda } from "@kept/chain";
 import { DetailsResponse, GoalResponse, HabitChallengeResponse, HabitProofResponse, InviteCreateResponse, InviteResolveResponse, OathInviteResponse } from "@kept/shared";
 import { PROGRAM_ID, listOathsOf, readOath } from "@/chain/program";
 import type { ChainOath } from "@/chain/program";
@@ -40,6 +40,7 @@ function toFacts(o: ChainOath, details: Details): OathFacts {
   return {
     id: o.address,
     source: "chain",
+    asset: o.mint === NATIVE_SOL_MINT ? "sol" : "skr",
     oathId: o.oathId.toString(),
     creator: o.creator,
     name: d.names[o.address] ?? oathName(o.objectId, o.numDays),

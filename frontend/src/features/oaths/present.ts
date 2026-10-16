@@ -5,7 +5,7 @@ import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
 import { color } from "@/theme";
 import type { IconName } from "@/components/primitives";
-import { formatSkr } from "@/lib/format";
+import { formatSkr, formatSol } from "@/lib/format";
 import { nowSeconds } from "@/features/time";
 import type { GestureLabel } from "@/api/types";
 import { habitsOf } from "./model";
@@ -16,6 +16,13 @@ import { shortWallet } from "./names";
 export const skrText = (units: bigint, sign = false) => formatSkr(units, sign ? { sign: true } : {});
 /** Whole SKR, rounded (tags, chips). */
 export const skrWhole = (units: bigint) => formatSkr(units, { dp: 0 });
+
+/** Amount and asset label for an Oath; native SOL uses exact lamport precision at the display edge. */
+export function oathAmount(f: Pick<OathFacts, "asset">, units: bigint): string {
+  return t(f.asset === "sol" ? "additions.core.solAmount" : "additions.core.skrAmount", { amount: f.asset === "sol" ? formatSol(units) : formatSkr(units, { dp: 0 }) });
+}
+
+export const oathAsset = (f: Pick<OathFacts, "asset">) => t(f.asset === "sol" ? "additions.core.sol" : "additions.core.skr");
 
 export function memberName(m: Pick<MemberView, "isMe" | "facts">): string {
   if (m.isMe) return t("screens.D2.b6.r0.t");

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program::{transfer as system_transfer, Transfer as SystemTransfer};
 use anchor_spl::token_interface::{self, Mint, TokenAccount, TokenInterface, TransferChecked};
 
 pub mod state;
@@ -109,6 +110,40 @@ pub mod kept_test {
         Ok(())
     }
 
+    /// Creates a native SOL Oath. Stake is escrowed as lamports in the Oath PDA itself; the rent reserve is
+    /// never spendable. SPL-token Oaths continue to use `create_oath` and their existing vaults.
+    pub fn create_oath_sol(ctx: Context<CreateOathSol>, oath_id: u64, goal_hash: [u8; 32], object_id: u8,
+        num_days: u8, day_seconds: u32, tz_offset_minutes: i16, stake_amount: u64, is_solo: bool) -> Result<()> {
+        validate_create_oath(object_id, num_days, day_seconds, tz_offset_minutes)?;
+        require!(stake_amount > 0, KeptError::InvalidStake);
+        require_keys_eq!(ctx.accounts.stake_mint.key(), ctx.accounts.config.stake_mint, KeptError::WrongMint);
+        require!(ctx.accounts.treasury.mint == ctx.accounts.stake_mint.key(), KeptError::WrongMint);
+        require_keys_eq!(ctx.accounts.treasury.key(), ctx.accounts.config.treasury, KeptError::WrongTreasury);
+        let oath = &mut ctx.accounts.oath;
+        oath.creator = ctx.accounts.creator.key();
+        oath.oath_id = oath_id;
+        oath.stake_amount = stake_amount;
+        oath.mint = Pubkey::default();
+        oath.goal_hash = goal_hash;
+        oath.object_id = object_id;
+        oath.num_days = num_days;
+        oath.day_seconds = day_seconds;
+        oath.start_ts = 0;
+        oath.tz_offset_minutes = tz_offset_minutes;
+        oath.status = OathStatus::Open;
+        oath.is_solo = is_solo;
+        oath.member_count = 1;
+        oath.bump = ctx.bumps.oath;
+        oath.members = [Member::default(); MAX_MEMBERS];
+        oath.members[0] = Member { authority: ctx.accounts.creator.key(), staked: true, days_kept: 0, claimed: false, payout: 0 };
+        initialize_keeper(&mut ctx.accounts.keeper, ctx.accounts.creator.key(), ctx.bumps.keeper);
+        system_transfer(CpiContext::new(ctx.accounts.system_program.key(),
+            SystemTransfer { from: ctx.accounts.creator.to_account_info(), to: oath.to_account_info() }), stake_amount)?;
+        write_terms(&oath.to_account_info(), &OathTerms::new_v3())?;
+        emit!(OathCreated { oath: oath.key(), creator: oath.creator, oath_id, is_solo, stake_amount });
+        Ok(())
+    }
+
     pub fn join_oath(ctx: Context<JoinOath>) -> Result<()> {
         let oath = &mut ctx.accounts.oath;
         require!(oath.status == OathStatus::Open, KeptError::NotOpen);
@@ -135,6 +170,33 @@ pub mod kept_test {
         initialize_keeper(&mut ctx.accounts.keeper, ctx.accounts.member.key(), ctx.bumps.keeper);
         let slot = oath.member_count as usize;
         oath.members[slot] = Member { authority: ctx.accounts.member.key(), staked: true, days_kept: 0, claimed: false, payout: 0 };
+        oath.member_count += 1;
+        emit!(OathJoined { oath: oath.key(), member: ctx.accounts.member.key() });
+        Ok(())
+    }
+
+    /// Joins a native SOL Oath by transferring the exact stake in lamports to the Oath PDA.
+    pub fn join_oath_sol(ctx: Context<JoinOathSol>) -> Result<()> {
+        let oath = &mut ctx.accounts.oath;
+        require!(oath.status == OathStatus::Open, KeptError::NotOpen);
+        require!(!oath.is_solo, KeptError::SoloOath);
+        require!(oath.mint == Pubkey::default(), KeptError::WrongMint);
+        require_keys_eq!(ctx.accounts.stake_mint.key(), ctx.accounts.config.stake_mint, KeptError::WrongMint);
+        require!(ctx.accounts.treasury.mint == ctx.accounts.stake_mint.key(), KeptError::WrongMint);
+        require_keys_eq!(ctx.accounts.treasury.key(), ctx.accounts.config.treasury, KeptError::WrongTreasury);
+        let count = oath.member_count as usize;
+        require!(!oath.members[..count].iter().any(|m| m.authority == ctx.accounts.member.key()), KeptError::AlreadyMember);
+        let oath_info = oath.to_account_info();
+        let mut terms = read_terms(&oath_info.try_borrow_data()?)?;
+        let due = oath.stake_amount.checked_add(terms.fee_per_member).ok_or(KeptError::Overflow)?;
+        system_transfer(CpiContext::new(ctx.accounts.system_program.key(),
+            SystemTransfer { from: ctx.accounts.member.to_account_info(), to: oath_info.clone() }), due)?;
+        if terms.fee_per_member > 0 {
+            terms.fees_collected = terms.fees_collected.checked_add(terms.fee_per_member).ok_or(KeptError::Overflow)?;
+            write_terms(&oath_info, &terms)?;
+        }
+        initialize_keeper(&mut ctx.accounts.keeper, ctx.accounts.member.key(), ctx.bumps.keeper);
+        oath.members[count] = Member { authority: ctx.accounts.member.key(), staked: true, days_kept: 0, claimed: false, payout: 0 };
         oath.member_count += 1;
         emit!(OathJoined { oath: oath.key(), member: ctx.accounts.member.key() });
         Ok(())
@@ -287,6 +349,62 @@ pub mod kept_test {
         Ok(())
     }
 
+    /// Settles a native SOL Oath under its fixed rules v3 terms. The rent reserve stays in the Oath PDA.
+    pub fn settle_oath_sol(ctx: Context<SettleOathSol>) -> Result<()> {
+        let oath_info = ctx.accounts.oath.to_account_info();
+        let mut terms = read_terms(&oath_info.try_borrow_data()?)?;
+        let oath = &mut ctx.accounts.oath;
+        require!(oath.mint == Pubkey::default(), KeptError::WrongMint);
+        require!(terms.rules_version == RULES_V3, KeptError::LegacyRules);
+        require!(ctx.accounts.treasury.mint == ctx.accounts.stake_mint.key(), KeptError::WrongMint);
+        require_keys_eq!(ctx.accounts.treasury_authority.key(), ctx.accounts.treasury.owner, KeptError::WrongTreasury);
+        require!(oath.status == OathStatus::Active, KeptError::NotActive);
+        let end = oath.start_ts.checked_add(i64::from(oath.num_days) * i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)?;
+        let now = Clock::get()?.unix_timestamp;
+        let member_count = oath.member_count as usize;
+        let days_kept: Vec<u16> = oath.members[..member_count].iter().map(|m| m.days_kept).collect();
+        let closed = closed_days(oath.start_ts, oath.day_seconds, oath.num_days, now);
+        let s = replay_v3(oath.stake_amount, terms.miss_bps, oath.is_solo, &days_kept, closed).ok_or(KeptError::ConservationViolated)?;
+        require!(s.broke_day.is_some() || closed == oath.num_days, KeptError::TooEarly);
+        let full = if oath.num_days == 16 { u16::MAX } else { (1u16 << oath.num_days) - 1 };
+        let successes: Vec<bool> = oath.members[..member_count].iter().map(|m| s.broke_day.is_none() && m.days_kept & full == full).collect();
+        let owed = s.payouts.iter().try_fold(s.to_treasury.checked_add(s.held).ok_or(KeptError::Overflow)?, |sum, p| sum.checked_add(*p)).ok_or(KeptError::Overflow)?;
+        require!(spendable_lamports(&oath_info)? >= owed, KeptError::VaultUnderfunded);
+        for (i, payout) in s.payouts.iter().enumerate() { oath.members[i].payout = *payout; }
+        if s.to_treasury > 0 {
+            transfer_lamports_from_oath(&oath_info, &ctx.accounts.treasury_authority.to_account_info(), s.to_treasury)?;
+        }
+        terms.treasury_paid = s.to_treasury;
+        terms.held_total = s.held;
+        if let Some(day) = s.broke_day {
+            terms.broke_day_plus_one = day + 1;
+            terms.held_release_ts = now.checked_add(HELD_WINDOW_DAYS.checked_mul(i64::from(oath.day_seconds)).ok_or(KeptError::Overflow)?).ok_or(KeptError::Overflow)?;
+        }
+        for i in 0..member_count {
+            let ai = ctx.remaining_accounts.get(i).ok_or(KeptError::KeeperAccountsMissing)?;
+            let expected = Pubkey::find_program_address(&[KEEPER_SEED, oath.members[i].authority.as_ref()], &crate::ID).0;
+            require_keys_eq!(*ai.key, expected, KeptError::BadKeeper);
+            require_keys_eq!(*ai.owner, crate::ID, KeptError::BadKeeper);
+            let mut data = ai.try_borrow_mut_data()?;
+            let mut keeper = Keeper::try_deserialize(&mut &data[..]).map_err(|_| KeptError::BadKeeper)?;
+            require_keys_eq!(keeper.authority, oath.members[i].authority, KeptError::BadKeeper);
+            if successes[i] {
+                if keeper.last_kept_day == oath.start_ts { keeper.current_streak = keeper.current_streak.saturating_add(u16::from(oath.num_days)); }
+                else { keeper.current_streak = u16::from(oath.num_days); }
+                keeper.best_streak = keeper.best_streak.max(keeper.current_streak);
+                keeper.oaths_kept = keeper.oaths_kept.saturating_add(1);
+                keeper.last_kept_day = end;
+            } else { keeper.current_streak = 0; keeper.oaths_missed = keeper.oaths_missed.saturating_add(1); }
+            let mut out: &mut [u8] = &mut data;
+            keeper.try_serialize(&mut out)?;
+        }
+        oath.status = OathStatus::Settled;
+        write_terms(&oath_info, &terms)?;
+        emit!(OathSettledV3 { oath: oath.key(), to_treasury: s.to_treasury, held: s.held, broke_day_plus_one: terms.broke_day_plus_one, hp: s.hp as u8 });
+        emit!(OathSettled { oath: oath.key(), fee: s.to_treasury });
+        Ok(())
+    }
+
     /// Buys this member's one freeze credit (rules v2) with un-staked SKR at the price fixed at creation.
     /// Only while Active: credits cannot be bought before the Oath starts, so cancellation never refunds one.
     pub fn buy_freeze(ctx: Context<BuyFreeze>) -> Result<()> {
@@ -374,6 +492,25 @@ pub mod kept_test {
         Ok(())
     }
 
+    /// Releases held native SOL to the treasury after the Rematch window.
+    pub fn sweep_held_sol(ctx: Context<SweepHeldSol>) -> Result<()> {
+        let oath_info = ctx.accounts.oath.to_account_info();
+        let mut terms = read_terms(&oath_info.try_borrow_data()?)?;
+        let oath = &ctx.accounts.oath;
+        require!(oath.mint == Pubkey::default(), KeptError::WrongMint);
+        require!(terms.rules_version == RULES_V3, KeptError::LegacyRules);
+        require!(oath.status == OathStatus::Settled, KeptError::NotSettled);
+        require!(terms.held_total > 0 && !terms.held_swept, KeptError::NothingToSweep);
+        require!(Clock::get()?.unix_timestamp >= terms.held_release_ts, KeptError::TooEarly);
+        require!(ctx.accounts.treasury.mint == ctx.accounts.stake_mint.key(), KeptError::WrongMint);
+        require_keys_eq!(ctx.accounts.treasury_authority.key(), ctx.accounts.treasury.owner, KeptError::WrongTreasury);
+        transfer_lamports_from_oath(&oath_info, &ctx.accounts.treasury_authority.to_account_info(), terms.held_total)?;
+        terms.held_swept = true;
+        write_terms(&oath_info, &terms)?;
+        emit!(HeldSwept { oath: oath.key(), amount: terms.held_total });
+        Ok(())
+    }
+
     pub fn claim(ctx: Context<Claim>) -> Result<()> {
         let oath_info = ctx.accounts.oath.to_account_info();
         let oath = &mut ctx.accounts.oath;
@@ -393,6 +530,23 @@ pub mod kept_test {
             &ctx.accounts.destination, &oath_info, creator, oath_id, bump, payout)?; }
         let member_key = m.authority;
         emit!(Claimed { oath: oath_key, member: member_key, amount: payout });
+        Ok(())
+    }
+
+    /// Claims a native SOL payout directly to the signing member's wallet.
+    pub fn claim_sol(ctx: Context<ClaimSol>) -> Result<()> {
+        let oath_info = ctx.accounts.oath.to_account_info();
+        let oath = &mut ctx.accounts.oath;
+        require!(oath.mint == Pubkey::default(), KeptError::WrongMint);
+        require!(matches!(oath.status, OathStatus::Settled | OathStatus::Cancelled), KeptError::NotSettled);
+        let oath_key = oath.key();
+        let member_count = oath.member_count as usize;
+        let member = oath.members[..member_count].iter_mut().find(|m| m.authority == ctx.accounts.member.key()).ok_or(KeptError::NotMember)?;
+        require!(!member.claimed, KeptError::AlreadyClaimed);
+        member.claimed = true;
+        let payout = member.payout;
+        if payout > 0 { transfer_lamports_from_oath(&oath_info, &ctx.accounts.member.to_account_info(), payout)?; }
+        emit!(Claimed { oath: oath_key, member: ctx.accounts.member.key(), amount: payout });
         Ok(())
     }
 
@@ -445,6 +599,33 @@ mod payout_tests {
 
 fn transfer_stake<'info>(token: &Interface<'info, TokenInterface>, mint: &InterfaceAccount<'info, Mint>, from: &InterfaceAccount<'info, TokenAccount>, to: &InterfaceAccount<'info, TokenAccount>, authority: &Signer<'info>, amount: u64) -> Result<()> {
     token_interface::transfer_checked(CpiContext::new(token.key(), TransferChecked { from: from.to_account_info(), mint: mint.to_account_info(), to: to.to_account_info(), authority: authority.to_account_info() }), amount, mint.decimals)
+}
+
+fn validate_create_oath(object_id: u8, num_days: u8, day_seconds: u32, tz_offset_minutes: i16) -> Result<()> {
+    require!(matches!(num_days, 3 | 7 | 14), KeptError::InvalidDays);
+    require!(day_seconds > 0, KeptError::InvalidDayLength);
+    require!(object_id < 8, KeptError::InvalidObject);
+    require!((-720..=840).contains(&tz_offset_minutes), KeptError::InvalidTimezoneOffset);
+    #[cfg(feature = "debug-tools")]
+    require!(day_seconds == 86_400 || day_seconds == 120, KeptError::InvalidDayLength);
+    #[cfg(not(feature = "debug-tools"))]
+    require!(day_seconds == 86_400, KeptError::InvalidDayLength);
+    Ok(())
+}
+
+/// Native SOL escrow is held in the Oath account, but its rent reserve must remain for the account's lifetime.
+fn spendable_lamports(oath: &AccountInfo) -> Result<u64> {
+    oath.lamports().checked_sub(Rent::get()?.minimum_balance(oath.data_len())).ok_or(KeptError::VaultUnderfunded.into())
+}
+
+fn transfer_lamports_from_oath(oath: &AccountInfo, destination: &AccountInfo, amount: u64) -> Result<()> {
+    require_keys_neq!(*oath.key, *destination.key, KeptError::WrongTreasury);
+    require!(spendable_lamports(oath)? >= amount, KeptError::VaultUnderfunded);
+    let mut source_lamports = oath.try_borrow_mut_lamports()?;
+    let mut destination_lamports = destination.try_borrow_mut_lamports()?;
+    **source_lamports = (**source_lamports).checked_sub(amount).ok_or(KeptError::VaultUnderfunded)?;
+    **destination_lamports = (**destination_lamports).checked_add(amount).ok_or(KeptError::Overflow)?;
+    Ok(())
 }
 
 fn member_index(oath: &Oath, member: &Pubkey) -> Result<usize> {
@@ -523,6 +704,18 @@ pub struct CreateOath<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(oath_id: u64)]
+pub struct CreateOathSol<'info> {
+    #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
+    #[account(init, payer=creator, space=OATH_LEN, seeds=[OATH_SEED, creator.key().as_ref(), &oath_id.to_le_bytes()], bump)] pub oath: Account<'info, Oath>,
+    #[account(init_if_needed, payer=creator, space=8+Keeper::INIT_SPACE, seeds=[KEEPER_SEED, creator.key().as_ref()], bump)] pub keeper: Account<'info, Keeper>,
+    #[account(mut)] pub creator: Signer<'info>,
+    #[account(address=config.stake_mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
+    #[account(address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct JoinOath<'info> {
     #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
     #[account(mut)] pub oath: Account<'info, Oath>,
@@ -533,6 +726,17 @@ pub struct JoinOath<'info> {
     #[account(mut, constraint=member_token.owner==member.key())] pub member_token: InterfaceAccount<'info, TokenAccount>,
     pub treasury: InterfaceAccount<'info, TokenAccount>,
     pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct JoinOathSol<'info> {
+    #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
+    #[account(mut)] pub oath: Account<'info, Oath>,
+    #[account(init_if_needed, payer=member, space=8+Keeper::INIT_SPACE, seeds=[KEEPER_SEED, member.key().as_ref()], bump)] pub keeper: Account<'info, Keeper>,
+    #[account(mut)] pub member: Signer<'info>,
+    #[account(address=config.stake_mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
+    #[account(address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
     pub system_program: Program<'info, System>,
 }
 
@@ -547,12 +751,24 @@ pub struct JoinOath<'info> {
     #[account(address=oath.mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
     pub token_program: Interface<'info, TokenInterface>,
 }
+#[derive(Accounts)] pub struct SettleOathSol<'info> {
+    #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
+    #[account(mut)] pub oath: Account<'info, Oath>,
+    #[account(address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
+    #[account(address=config.stake_mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
+    /// CHECK: validated against the configured treasury token account's authority in the handler.
+    #[account(mut)] pub treasury_authority: UncheckedAccount<'info>,
+}
 #[derive(Accounts)] pub struct Claim<'info> {
     #[account(mut)] pub oath: Account<'info, Oath>,
     #[account(mut, seeds=[VAULT_SEED, oath.key().as_ref()], bump)] pub vault: InterfaceAccount<'info, TokenAccount>,
     #[account(address=oath.mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
     #[account(mut, constraint=destination.owner==member.key())] pub destination: InterfaceAccount<'info, TokenAccount>,
     pub member: Signer<'info>, pub token_program: Interface<'info, TokenInterface>,
+}
+#[derive(Accounts)] pub struct ClaimSol<'info> {
+    #[account(mut)] pub oath: Account<'info, Oath>,
+    #[account(mut)] pub member: Signer<'info>,
 }
 #[derive(Accounts)] pub struct BuyFreeze<'info> {
     #[account(mut)] pub oath: Account<'info, Oath>,
@@ -577,6 +793,14 @@ pub struct JoinOath<'info> {
     #[account(mut, address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
     #[account(address=oath.mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
     pub token_program: Interface<'info, TokenInterface>,
+}
+#[derive(Accounts)] pub struct SweepHeldSol<'info> {
+    #[account(seeds=[CONFIG_SEED], bump=config.bump)] pub config: Account<'info, Config>,
+    #[account(mut)] pub oath: Account<'info, Oath>,
+    #[account(address=config.treasury, token::mint=stake_mint)] pub treasury: InterfaceAccount<'info, TokenAccount>,
+    #[account(address=config.stake_mint)] pub stake_mint: InterfaceAccount<'info, Mint>,
+    /// CHECK: validated against the configured treasury token account's authority in the handler.
+    #[account(mut)] pub treasury_authority: UncheckedAccount<'info>,
 }
 #[derive(Accounts)] pub struct MigrateKeeper<'info> {
     #[account(mut, seeds=[KEEPER_SEED, authority.key().as_ref()], bump, has_one=authority,

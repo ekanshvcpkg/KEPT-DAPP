@@ -4,13 +4,13 @@ import { InviteResolveResponse, MeResponse, OathFactsResponse, PriceResponse } f
 
 const wallet = "52eWttmzYBJn4awLjEMB42bw5oTFvL4XC1gDqFAQgPxJ";
 const oathRead = {
-  oathId: "1", creator: wallet, goalHash: "a".repeat(64), status: 0, startTs: 0, daySeconds: 86400,
+  oathId: "1", creator: wallet, mint: "11111111111111111111111111111111", goalHash: "a".repeat(64), status: 0, startTs: 0, daySeconds: 86400,
   numDays: 7, objectId: 0, members: [wallet], daysKept: { [wallet]: 0 },
 };
 
 test("existing routes: the shapes backend returns today parse", () => {
   assert.equal(MeResponse.parse({ wallet, genesis: true, mocked: true, genesisMint: "mock-sgt-x" }).genesis, true);
-  assert.equal(PriceResponse.parse({ usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "placeholder rate" }).usdPerSkr, 0.01);
+  assert.equal(PriceResponse.parse({ usdPerSol: 200, usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "Coinbase SOL/USD spot" }).usdPerSol, 200);
   assert.equal(InviteResolveResponse.parse({ oath: oathRead, goalText: "lift", alreadyStarted: false }).oath.numDays, 7);
 });
 

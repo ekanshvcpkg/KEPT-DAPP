@@ -1,7 +1,7 @@
 // The real TxService: packages/chain instruction builders, signed and sent through MWA (mwa.ts).
 // Bounty funding and Rematch have no program support yet (BACKEND_GAPS P1-10, P1-2).
 import { PublicKey } from "@solana/web3.js";
-import { cancelOathIx, claimIx, createOathIx, joinOathIx, settleOathIx, startOathIx } from "@kept/chain";
+import { cancelOathIx, claimIx, claimSolIx, createOathSolIx, joinOathIx, joinOathSolIx, NATIVE_SOL_MINT, settleOathIx, settleOathSolIx, startOathIx } from "@kept/chain";
 import { env } from "@/config/env";
 import { useSession } from "@/state/session";
 import { signAndSend } from "./mwa";
@@ -23,11 +23,10 @@ export const realTx: TxService = {
     const e = await programEnv();
     const creator = me();
     const oathId = i.oathId ?? newOathId();
-    const { ix, oath } = createOathIx(e, {
-      creator, creatorToken: tokenAccount(e, creator), oathId, goalText: i.goalText, objectId: i.objectId,
+    const { ix, oath } = createOathSolIx(e, {
+      creator, oathId, goalText: i.goalText, objectId: i.objectId,
       numDays: i.numDays, daySeconds: env.daySeconds, tzOffsetMinutes: i.tzOffsetMinutes,
-      // The program requires a solo stake of 0 today (BACKEND_GAPS P0-7, DECISIONS D-30).
-      stake: i.isSolo ? 0n : i.stake, isSolo: i.isSolo,
+      stake: i.stake, isSolo: i.isSolo,
     });
     // A solo Oath has no one to wait for, so it starts in the same transaction: one wallet approval, not two
     // (the program accepts start_oath right after create_oath for a solo Oath; BACKEND_GAPS P1-18).
@@ -47,7 +46,12 @@ export const realTx: TxService = {
   async joinOath(oath) {
     const e = await programEnv();
     const member = me();
-    return { signature: await signAndSend(member, [joinOathIx(e, { oath: new PublicKey(oath), member, memberToken: tokenAccount(e, member) })]) };
+    const before = await readOath(oath);
+    if (!before) throw new TxFailure("failed", `Oath ${oath} not found`);
+    const ix = before.mint === NATIVE_SOL_MINT
+      ? joinOathSolIx(e, { oath: new PublicKey(oath), member })
+      : joinOathIx(e, { oath: new PublicKey(oath), member, memberToken: tokenAccount(e, member) });
+    return { signature: await signAndSend(member, [ix]) };
   },
   async startOath(oath) {
     const e = await programEnv();
@@ -61,14 +65,22 @@ export const realTx: TxService = {
     const e = await programEnv();
     const o = await readOath(oath);
     if (!o) throw new TxFailure("failed", `Oath ${oath} not found`);
-    return { signature: await signAndSend(me(), [settleOathIx(e, { oath: new PublicKey(oath), members: o.members.map((m) => new PublicKey(m.wallet)) })]) };
+    const members = o.members.map((m) => new PublicKey(m.wallet));
+    const ix = o.mint === NATIVE_SOL_MINT
+      ? settleOathSolIx(e, { oath: new PublicKey(oath), members })
+      : settleOathIx(e, { oath: new PublicKey(oath), members });
+    return { signature: await signAndSend(me(), [ix]) };
   },
   async claim(oath) {
     const e = await programEnv();
     const member = me();
     const before = await readOath(oath);
     const amount = before?.members.find((m) => m.wallet === member.toBase58())?.payout ?? 0n;
-    const signature = await signAndSend(member, [claimIx(e, { oath: new PublicKey(oath), member, destination: tokenAccount(e, member) })]);
+    if (!before) throw new TxFailure("failed", `Oath ${oath} not found`);
+    const ix = before.mint === NATIVE_SOL_MINT
+      ? claimSolIx(e, { oath: new PublicKey(oath), member })
+      : claimIx(e, { oath: new PublicKey(oath), member, destination: tokenAccount(e, member) });
+    const signature = await signAndSend(member, [ix]);
     return { signature, amount };
   },
   fundBounty: () => Promise.reject(new TxFailure("failed", "Bounties have no program support yet")),

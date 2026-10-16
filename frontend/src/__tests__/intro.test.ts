@@ -3,10 +3,10 @@ import { chartGeometry, keptSeries, sampleMiss, sampleSummary, SAMPLE_DAYS } fro
 describe("intro example (A1·i)", () => {
   it("a miss in the example Oath costs 10% of the stake, shared by the three keepers and KEPT", () => {
     const m = sampleMiss();
-    expect(m.pot).toBe(4000n);
-    expect(m.lost).toBe(100n);
-    expect(m.each).toBe(25n);
-    expect(m.each * 3n + 25n).toBe(m.lost);
+    expect(m.pot).toBe(200_000_000n);
+    expect(m.lost).toBe(5_000_000n);
+    expect(m.each).toBe(1_250_000n);
+    expect(m.each * 3n + m.each).toBe(m.lost);
   });
   it("the kept-days series only rises, and stands still on the two missed days", () => {
     const s = keptSeries();

@@ -53,8 +53,8 @@ describe("Button", () => {
 describe("chrome", () => {
   it("AppHeader routes the balance chip, bell and Keeper mark", async () => {
     const onBalance = jest.fn(), onBell = jest.fn(), onKeeper = jest.fn();
-    await render(<AppHeader title="Today" balance="1,043" unreadCount={3} keeper={{ hasNew: true, onPress: onKeeper }} onBalance={onBalance} onBell={onBell} />);
-    await fireEvent.press(screen.getByLabelText(`${t("additions.a11y.wallet")}: 1,043 SKR`));
+    await render(<AppHeader title="Today" balance="1,043 SOL" balanceCurrency="" unreadCount={3} keeper={{ hasNew: true, onPress: onKeeper }} onBalance={onBalance} onBell={onBell} />);
+    await fireEvent.press(screen.getByLabelText(`${t("additions.a11y.wallet")}: 1,043 SOL`));
     await fireEvent.press(screen.getByLabelText(`${t("additions.a11y.inbox")}, ${t("additions.a11y.unread", { n: 3 })}`));
     await fireEvent.press(screen.getByLabelText(t("additions.a11y.keeper")));
     expect([onBalance, onBell, onKeeper].map((f) => f.mock.calls.length)).toEqual([1, 1, 1]);

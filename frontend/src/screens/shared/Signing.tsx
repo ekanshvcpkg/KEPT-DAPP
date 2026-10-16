@@ -23,6 +23,7 @@ import { useSigningFlow } from "@/app/useSigningFlow";
 import type { SignOutcome } from "@/app/useSigningFlow";
 import { skrWhole } from "@/features/oaths/present";
 import { useIsDemo } from "@/state/mode";
+import { formatSol } from "@/lib/format";
 
 /** Where a failed signature goes. `retry` re-runs the same signing screen with the same params. */
 interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
@@ -107,21 +108,21 @@ export function C7fail() {
   );
 }
 
-// ── M3 Not enough SOL ── (devnet SOL comes from a faucet; the button opens W2 once it exists)
+// ── M3 Not enough SOL ── Receive SOL into the signing wallet before retrying.
 export function M3() {
   const { back, replace } = useGo();
   const insets = useSafeAreaInsets();
   const sheet = useSheetRoute();
   const balances = useBalances();
   const k = keeperLines("M3")[0]!;
-  const sol = balances.data ? (Number(balances.data.sol) / 1e9).toString() : "0";
+  const sol = balances.data ? formatSol(balances.data.sol) : "0";
   return (
     <View style={{ flex: 1 }}>
       <BottomSheet {...sheet} bottomInset={insets.bottom}>
         <ScreenKeeper id="M3" lines={[k]} />
         <Title heading={t("screens.M3.b1.title")} sub={t("screens.M3.b1.sub", { sol })} pt={0} fs={26} />
         <ButtonRow direction="column">
-          <Button kind="p" icon="water-outline" label={t("screens.M3.b2.btn.0")} onPress={() => replace("W2")} />
+          <Button kind="p" icon="qrcode" label={t("screens.M3.b2.btn.0")} onPress={() => replace("W4")} />
           <Button kind="s" label={t("screens.M3.b2.btn.1")} onPress={back} />
         </ButtonRow>
       </BottomSheet>

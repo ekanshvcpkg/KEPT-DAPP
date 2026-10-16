@@ -16,13 +16,13 @@ import { RowList, rowListItems } from "@/components/content/Rows";
 import type { RowProps } from "@/components/content/Rows";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen, ScreenList } from "@/components/layout/Screen";
-import { formatSkr, shortDuration } from "@/lib/format";
+import { shortDuration } from "@/lib/format";
 import { color, metrics } from "@/theme";
 import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOath, useOathList, oathActions } from "@/features/oaths/hooks";
 import type { MemberView, OathView } from "@/features/oaths/model";
 import { isLowHp } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, oathIcon, oathObjects, objectIcon, reviewText, shortDate, skrText, skrWhole, weekday, startsTitle } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, oathObjects, objectIcon, reviewText, shortDate, weekday, startsTitle } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { TabScreen } from "../tabs/TabScreen";
@@ -71,7 +71,7 @@ export function OathsTab() {
             meta={v.facts.isSolo ? t("screens.D0.b3.meta", { day: v.dayNumber, length: v.facts.numDays }) : t("screens.D0.b2.meta", { day: v.dayNumber, length: v.facts.numDays })}
             hp={v.hp}
             tags={[
-              ...(me ? [{ text: t("screens.D0.b2.tag.0", { amount: skrWhole(me.inPlay) }), icon: "sack" as const, tone: "lime" as const }] : []),
+              ...(me ? [{ text: t("screens.D0.b2.tag.0", { amount: oathAmount(v.facts, me.inPlay) }), icon: "sack" as const, tone: "lime" as const }] : []),
               ...(me && !me.pendingToday ? [{ text: t("screens.D0.b3.tag.1"), icon: "check-bold" as const, tone: "g" as const }] : []),
               ...(v.life === "waiting" ? [{ text: t("additions.core.startsIn", { time: shortDuration(v.secondsToStart ?? 0) }), icon: "timer-sand" as const }] : []),
               ...pending.slice(0, 1).map((m) => ({ text: t("screens.D0.b2.tag.1", { name: memberName(m) }), icon: "timer-sand" as const, tone: "ora" as const })),
@@ -88,7 +88,7 @@ export function OathsTab() {
         return {
           title: v.facts.name,
           sub: v.life === "broken" ? t("screens.D0.b5.r1.s", { day: (v.state.brokeOnDay ?? 0) + 1 }) : t("screens.D0.b5.r0.s", { when: weekday(endOf(v)).slice(0, 3) }),
-          value: t("screens.D0.b5.r0.r", { delta: skrWhole(delta) === "0" ? "±0" : delta > 0n ? `+${skrWhole(delta)}` : skrWhole(delta) }),
+          value: t("screens.D0.b5.r0.r", { delta: delta === 0n ? "±0" : delta > 0n ? `+${oathAmount(v.facts, delta)}` : oathAmount(v.facts, delta) }),
           valueColor: delta > 0n ? color.lime.base : delta < 0n ? color.red.base : color.text.secondary,
           // reference/kept-screens-2.js › D0: finished rows show the outcome, not the object.
           leading: v.life === "broken" ? { kind: "icon", icon: "fire", fg: color.red.base } : { kind: "icon", icon: "trophy-outline", fg: color.lime.base },
@@ -128,7 +128,7 @@ function OpenHeader({ v, member }: { v: OathView; member?: boolean }) {
       <ChipRow>
         <Chip text={t("screens.D1.b0.chip.0")} icon="timer-sand" tone="vio" tilt={-2} />
         <Chip text={t("screens.D1.b0.chip.1", { n: f.numDays })} icon="calendar-blank" tilt={1} />
-        <Chip text={member ? t("screens.D1·m.b0.chip.2", { amount: skrWhole(f.stake) }) : t("screens.D1.b0.chip.2", { amount: skrWhole(f.stake) })} icon="sack" tone="lime" tilt={-1} />
+        <Chip text={member ? t("screens.D1·m.b0.chip.2", { amount: oathAmount(f, f.stake) }) : t("screens.D1.b0.chip.2", { amount: oathAmount(f, f.stake) })} icon="sack" tone="lime" tilt={-1} />
         {!f.isSolo && !member ? <Chip text={reviewText(f.reviewMode)} icon="account-group-outline" tilt={2} /> : null}
       </ChipRow>
       <Title heading={t("screens.D1.b1.title", { goal: f.goal ?? f.name })} {...(!member ? { sub: t("additions.proof.objectsSub", { objects: oathObjects(f) }) } : {})} fs={28} />
@@ -168,12 +168,12 @@ function OpenMember({ v }: { v: OathView }) {
   const creatorName = creator ? memberName(creator) : "";
   const leave = async () => {
     await oathActions.leave(f);
-    toast(t("toasts.2", { amount: skrWhole(f.stake) }));
+    toast(t("toasts.2", { amount: oathAmount(f, f.stake) }));
     go("D0");
   };
   return (
     <Screen bar={<NavBar onBack={back} title={f.name} />} bottomInset={f.source === "mock" ? pinned(1) : 0}
-      pinned={f.source === "mock" ? <Button kind="d" icon="logout" label={t("screens.D1·m.pin.0", { amount: skrWhole(f.stake) })} onPress={() => { void leave(); }} /> : undefined}>
+      pinned={f.source === "mock" ? <Button kind="d" icon="logout" label={t("screens.D1·m.pin.0", { amount: oathAmount(f, f.stake) })} onPress={() => { void leave(); }} /> : undefined}>
       <OpenHeader v={v} member />
       <Banner tone="vio" icon="flag-checkered" title={t("screens.D1·m.b2.title", { name: creatorName })} sub={t("screens.D1·m.b2.sub", { name: creatorName })} />
       <SeatSlots seats={seatsOf(v, true)} />
@@ -194,7 +194,7 @@ export function D1x() {
     <View style={{ flex: 1 }}>
       <BottomSheet {...sheet} bottomInset={insets.bottom}>
         <Title heading={t("screens.D1·x.b0.title", { name: f.name })} pt={0}
-          sub={others.length ? t("screens.D1·x.b0.sub", { names: listNames(others), amount: skrWhole(f.stake) }) : t("additions.core.cancelAlone", { amount: skrWhole(f.stake) })} fs={26} />
+          sub={others.length ? t("screens.D1·x.b0.sub", { names: listNames(others), amount: oathAmount(f, f.stake) }) : t("additions.core.cancelAlone", { amount: oathAmount(f, f.stake) })} fs={26} />
         <ButtonRow direction="column">
           <Button kind="d" icon="close" label={t("screens.D1·x.b1.btn.0")} onPress={() => replace("D1·xs", { id: f.id })} />
           <Button kind="s" label={t("screens.D1·x.b1.btn.1")} onPress={back} />
@@ -212,7 +212,7 @@ export function D1xs() {
   const fail = useMemo(() => ({ retry: "D1·xs" as const, edit: "D1" as const, params: { id } }), [id]);
   if (!view) return <Loading />;
   const total = view.facts.stake * BigInt(view.members.length);
-  return <SigningScreen title={t("screens.D1·xs.b2.title")} sub={t("screens.D1·xs.b2.sub", { amount: skrWhole(total), n: view.members.length })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.D1·xs.b2.title")} sub={t("screens.D1·xs.b2.sub", { amount: oathAmount(view.facts, total), n: view.members.length })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── D1·go Start · signing ──
@@ -225,7 +225,7 @@ export function D1go() {
   const total = view.facts.stake * BigInt(view.members.length);
   // The program starts day 1 at Start today (BACKEND_GAPS P0-4); the mock follows D-6 (tonight at midnight).
   const when = view.facts.source === "chain" ? t("additions.core.startsNow") : `${t("additions.waiting.startsTonight")}.`;
-  return <SigningScreen title={t("screens.D1·go.b2.title", { name: view.facts.name })} sub={t("screens.D1·go.b2.sub", { amount: skrWhole(total), when })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.D1·go.b2.title", { name: view.facts.name })} sub={t("screens.D1·go.b2.sub", { amount: oathAmount(view.facts, total), when })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── D2 / D2·low Active ── also shows the waiting state (before day 1) and "over, settling".
@@ -277,7 +277,7 @@ function Active({ v }: { v: OathView }) {
       <HPPanel hp={v.hp} lostToday={v.hpLostLastDay} {...(seenHp !== undefined ? { from: seenHp } : {})} {...(lostNote ? { note: lostNote } : {})} {...(low ? { warn: t("screens.D2·low.b0.warn") } : {})} />
       {v.life === "waiting" ? <Banner tone="vio" icon="weather-night" title={startsTitle(v.secondsToStart ?? 0)} sub={t("additions.core.startsIn", { time: shortDuration(v.secondsToStart ?? 0) })} /> : null}
       {v.life === "over" ? <Over v={v} /> : null}
-      {v.life === "active" && me ? <BodyText text={t("screens.D2.b1.text", { timeLeft: `<m${v.deadlineClose ? ' class="r"' : ""}>${shortDuration(v.secondsToReset ?? 0)}</m>`, cost: skrWhole(v.myMissCost) })} /> : null}
+      {v.life === "active" && me ? <BodyText text={t("screens.D2.b1.text", { timeLeft: `<m${v.deadlineClose ? ' class="r"' : ""}>${shortDuration(v.secondsToReset ?? 0)}</m>`, cost: oathAmount(v.facts, v.myMissCost) })} /> : null}
       <ScreenKeeper id={low ? "D2·low" : "D2"} lines={[k]} />
       <DayMemberGrid days={f.numDays} today={gridToday(v.dayIndex)} members={v.members.map((m) => ({ key: m.facts.wallet, name: memberName(m), initial: memberInitial(m), color: memberColor(m), cells: m.cells }))} />
       {!f.isSolo && v.life === "active" ? <ChipRow>{v.members.filter((m) => !m.isMe).map((m) => <Odds key={m.facts.wallet} m={m} />)}</ChipRow> : null}
@@ -286,7 +286,7 @@ function Active({ v }: { v: OathView }) {
         title: memberName(m),
         sub: f.rematchOf ? recoveryLine(v, m.index) : m.facts.keptRate === null ? t("common.keptRateNew") : t("screens.D2.b6.r0.s", { rate: Math.round(m.facts.keptRate * 100), days: m.facts.rateDays }),
         leading: m.facts.avatar ? { kind: "avatar", config: m.facts.avatar } : { kind: "initial", initial: memberInitial(m), bg: memberColor(m) },
-        value: t("screens.D2.b6.r0.r", { amount: formatSkr(m.balance) }),
+        value: t("screens.D2.b6.r0.r", { amount: oathAmount(v.facts, m.balance) }),
         // On chain the program pays out (D-14); until it settles by the same rule (D-93) this is a projection, not money earned.
         valueSub: m.missed.length === 0 ? t(v.estimated ? "additions.core.estimate" : "screens.D2.b6.r0.rs")
           : (text => (v.estimated ? t("additions.core.estimateAfter", { text }) : text))(m.missed.length === 1 ? t("screens.D2.b6.r2.rs", { day: m.missed[0]! + 1 }) : t("screens.D2·low.b3.r2.rs", { n: m.missed.length })),
@@ -296,8 +296,8 @@ function Active({ v }: { v: OathView }) {
       {v.preview ? <Banner tone="ora" icon="cards-playing-outline"
         title={t("screens.D2.b7.title", { name: memberName(v.members[v.preview.member]!) })}
         sub={t("screens.D2.b7.sub", {
-          shares: v.members.filter((m) => (v.preview!.result.won[m.index] ?? 0n) > 0n).map((m) => `${memberName(m)} +${formatSkr(v.preview!.result.won[m.index]!)}`).join(" · "),
-          fee: formatSkr(v.preview.result.fee),
+          shares: v.members.filter((m) => (v.preview!.result.won[m.index] ?? 0n) > 0n).map((m) => `${memberName(m)} +${oathAmount(v.facts, v.preview!.result.won[m.index]!)}`).join(" · "),
+          fee: oathAmount(v.facts, v.preview.result.fee),
         })} /> : null}
     </Screen>
   );
@@ -349,13 +349,13 @@ function Broken({ v }: { v: OathView }) {
   const rematch = useFeature("rematch");
   return (
     <Screen layout="D3" bar={<NavBar onBack={back} title={f.name} />} bottomInset={pinned(rematch ? 2 : 1)} pinned={<>
-      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.D3.pin.0", { amount: skrWhole(myHeld) })} onPress={() => go("R1", { id: f.id })} /> : null}
+      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.D3.pin.0", { amount: oathAmount(f, myHeld) })} onPress={() => go("R1", { id: f.id })} /> : null}
       <Button kind="t" label={t("screens.D3.pin.1")} onPress={() => go("C1")} />
     </>}>
       <HPPanel hp={0} lostToday={v.lastDay?.hpBefore ?? 0} note={t("screens.D3.b0.note", { day: broke })} />
       <Title heading={t("screens.D3.b1.title")} sub={t("screens.D3.b1.sub", { missed: missedText })} />
       <DayMemberGrid days={f.numDays} today={-1} members={v.members.map((m) => ({ key: m.facts.wallet, name: memberName(m), initial: memberInitial(m), color: memberColor(m), cells: m.cells }))} />
-      <Breakdown label={t("screens.D3.b3.label")} rows={v.members.map((m) => ({ label: memberName(m), value: t("screens.D3.b3.row0.v", { amount: skrWhole(-v.results[m.index]!.lost) }), color: color.red.base }))} />
+      <Breakdown label={t("screens.D3.b3.label")} rows={v.members.map((m) => ({ label: memberName(m), value: t("screens.D3.b3.row0.v", { amount: oathAmount(f, -v.results[m.index]!.lost) }), color: color.red.base }))} />
       {rematch ? <OathCard variant="lime" icon="sword-cross" name={t("screens.D3.b4.name")} meta={t("screens.D3.b4.meta")} line={t("additions.rematch.winBackHalf")} onPress={() => go("R1", { id: f.id })} /> : null}
     </Screen>
   );
@@ -375,19 +375,19 @@ function Ended({ v }: { v: OathView }) {
   const slipped = v.members.filter((m) => m.missed.length);
   return (
     <Screen bar={<NavBar onBack={back} title={f.name} />} bottomInset={v.claimable > 0n ? pinned(1) : 0}
-      pinned={v.claimable > 0n ? <Button kind="l" icon="hand-coin-outline" label={t("screens.D4.pin.0", { amount: skrWhole(v.claimable) })} onPress={() => go("J1", { id: f.id })} /> : undefined}>
+      pinned={v.claimable > 0n ? <Button kind="l" icon="hand-coin-outline" label={t("screens.D4.pin.0", { amount: oathAmount(f, v.claimable) })} onPress={() => go("J1", { id: f.id })} /> : undefined}>
       <ChipRow>
         <Chip text={t("screens.D4.b0.chip.0", { date: shortDate(endOf(v)) })} icon="flag-checkered" tilt={-2} />
         <Chip text={t("screens.D4.b0.chip.1", { hp: v.hp })} icon="heart-pulse" tone="lime" tilt={2} />
       </ChipRow>
-      <Title heading={t("screens.D4.b1.title", { n: kept, total: v.members.length })} sub={slipped.length ? t("additions.core.slipped", { names: listNames(slipped.map(memberName)) }) : t("additions.core.allKept")} />
+      <Title heading={t("screens.D4.b1.title", { n: kept, total: v.members.length })} sub={slipped.length ? t("additions.core.slipped", { names: listNames(slipped.map(memberName)), asset: oathAsset(v.facts) }) : t("additions.core.allKept")} />
       <DayMemberGrid days={f.numDays} today={-1} members={v.members.map((m) => ({ key: m.facts.wallet, name: memberName(m), initial: memberInitial(m), color: memberColor(m), cells: m.cells }))} />
       <RowList label={t("screens.D4.b3.label")} rows={v.members.map((m) => {
         const r = v.results[m.index]!;
         return {
           title: memberName(m),
-          sub: t("screens.D4.b3.r0.s", { start: skrWhole(r.start), lost: r.lost > 0n ? skrWhole(-r.lost) : "0", won: r.won > 0n ? `+${skrWhole(r.won)}` : "0" }),
-          value: t("screens.D4.b3.r0.r", { amount: skrText(r.final) }), valueSub: t("screens.D4.b3.r0.rs"),
+          sub: t("screens.D4.b3.r0.s", { start: oathAmount(f, r.start), lost: r.lost > 0n ? oathAmount(f, -r.lost) : oathAmount(f, 0n), won: r.won > 0n ? `+${oathAmount(f, r.won)}` : oathAmount(f, 0n) }),
+          value: t("screens.D4.b3.r0.r", { amount: oathAmount(f, r.final) }), valueSub: t("screens.D4.b3.r0.rs"),
           leading: { kind: "initial" as const, initial: memberInitial(m), bg: memberColor(m) },
         };
       })} />
@@ -406,13 +406,13 @@ export function D5() {
   const month = (r: HistoryRow) => new Date(r.endedAt * 1000).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const months = [...new Set(shown.map(month))];
   const totals = historyTotals(rows);
-  const net = (n: bigint) => (n === 0n ? t("screens.D5.b4.r1.r") : n > 0n ? `+${skrWhole(n)}` : skrWhole(n));
+  const net = (n: bigint) => (n === 0n ? t("screens.D5.b4.r1.r") : n > 0n ? `+${oathAmount({ asset: "sol" }, n)}` : oathAmount({ asset: "sol" }, n));
   return (
     <Screen bar={<NavBar onBack={back} title={t("screens.D5.nav.title")} />}>
       <SearchBar placeholder={t("screens.D5.b0.placeholder", { n: rows.length })} onPress={() => toast(t("toasts.23"))} />
       <Segmented items={[0, 1, 2, 3].map((i) => t(`screens.D5.b1.seg.${i}` as never))} value={seg} onChange={setSeg} />
       <Banner tone="grey" icon="chart-box-outline" title={t("screens.D5.b2.title", { n: totals.n, kept: totals.kept, broken: totals.broken })}
-        sub={t("screens.D5.b2.sub", { won: skrWhole(totals.won), lost: skrWhole(totals.lost) })} />
+        sub={t("screens.D5.b2.sub", { won: oathAmount({ asset: "sol" }, totals.won), lost: oathAmount({ asset: "sol" }, totals.lost) })} />
       {/* Virtualised: history only grows (Live). Each month is a labelled section, as RowLists were. */}
       <ScreenList items={months.flatMap((m, k) => rowListItems(m, shown.filter((r) => month(r) === m).map((r) => ({
         title: r.name, sub: r.sub, value: net(r.net), valueColor: r.net < 0n ? color.red.base : r.net > 0n ? color.lime.base : color.text.secondary,

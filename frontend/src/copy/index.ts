@@ -66,7 +66,12 @@ export function t(key: CopyKey, vars?: Vars): string {
   }
   if (!vars) return raw;
   const tpl = TEMPLATES[key];
-  return interpolate(tpl ? tpl.template : raw, vars);
+  const solAmount = Object.values(vars).some((v) => typeof v === "string" && /(?:^|\s)SOL$/.test(v));
+  const template = tpl ? tpl.template : raw;
+  const assetTemplate = solAmount
+    ? template.replace(/\{(\w+)\}\s+SKR\b/g, "{$1}").replace(/\bSKR\b/g, "SOL")
+    : template;
+  return interpolate(assetTemplate, vars);
 }
 
 /** The Keeper's lines for a screen (copy.keeper.byScreen). */

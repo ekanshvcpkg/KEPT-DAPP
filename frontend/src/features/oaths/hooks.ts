@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { getApi, useApi } from "@/api";
 import { queryClient } from "@/api/queries";
 import { getTx } from "@/chain";
-import { SKR_UNIT } from "@kept/config";
 import { flags, useDev } from "@/state/dev";
 import { useSession } from "@/state/session";
 import { useDraft } from "@/state/drafts";
@@ -90,7 +89,7 @@ export const oathActions = {
       if (!d.chainOathId) useDraft.getState().set({ chainOathId: stableId });
     }
     const { oath, started } = await getTx(source).createOath({
-      objectId: proofObject, numDays: d.numDays, stake: BigInt(d.stakeSkr) * SKR_UNIT, goalText: goal,
+      objectId: proofObject, numDays: d.numDays, stake: BigInt(d.stakeLamports || "0"), goalText: goal,
       ...(source === "mock" ? { name, habits, habitObjects, ...(d.demoShowcase ? { showcase: true } : {}) } : {}), tzOffsetMinutes: tzOffset(), isSolo: d.isSolo, reviewMode: d.reviewMode, ...(oathId === undefined ? {} : { oathId }),
     });
     // flows.md: a solo Oath goes C7·ok → D2, with no Start step. On chain it already started in the create

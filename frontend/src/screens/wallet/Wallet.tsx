@@ -21,12 +21,12 @@ import { color, metrics } from "@/theme";
 import { isApiError, useApi } from "@/api";
 import { qk, useBalances } from "@/api/queries";
 import { env } from "@/config/env";
-import { formatSol, formatUsd } from "@/lib/format";
+import { formatSol, formatUsdSol } from "@/lib/format";
 import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { shortWallet } from "@/features/oaths/names";
-import { oathIcon, skrWhole, weekday } from "@/features/oaths/present";
+import { oathAmount, oathIcon, skrWhole, weekday } from "@/features/oaths/present";
 import { useActivity, walletActions } from "@/features/queries";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
@@ -57,6 +57,10 @@ export function W1() {
   const sum = (vs: OathView[]) => vs.reduce((a, v) => a + mineIn(v), 0n);
   const locked = views.filter((v) => LOCKED.includes(v.life) && !v.facts.rematchOf && v.facts.stake > 0n);
   const rematch = views.filter((v) => LOCKED.includes(v.life) && v.facts.rematchOf);
+  const lockedSol = locked.filter((v) => v.facts.asset === "sol");
+  const lockedSkr = locked.filter((v) => v.facts.asset !== "sol");
+  const rematchSol = rematch.filter((v) => v.facts.asset === "sol");
+  const rematchSkr = rematch.filter((v) => v.facts.asset !== "sol");
   const recent = (activity.data ?? []).filter((a) => a.kind === "money").slice(0, 2);
   const k = claim ? keeperLines("W1")[0] : undefined;
   const b = balances.data;
@@ -64,24 +68,26 @@ export function W1() {
     <Screen bar={<NavBar onBack={back} title={t("screens.W1.nav.title")} />}>
       {k ? <ScreenKeeper id="W1" lines={[k]} /> : null}
       {b ? (
-        <MoneyMoment value={skrWhole(b.skr)} caption={price.data ? t("screens.W1.b1.caption", { usd: formatUsd(b.skr, price.data.usdPerSkr) }) : t("additions.wallet.available")} />
+        <MoneyMoment value={oathAmount({ asset: "sol" }, b.sol)} caption={price.data ? t("additions.wallet.availableSolUsd", { usd: formatUsdSol(b.sol, price.data.usdPerSol) }) : t("additions.wallet.availableSol")} />
       ) : <Skeleton height={120} />}
       <ButtonRow>
         <Button kind="l" size="row" icon="plus" label={t("screens.W1.b2.btn.0")} onPress={() => go("W2")} />
         <Button kind="s" size="row" icon="qrcode" label={t("screens.W1.b2.btn.1")} onPress={() => go("W4")} />
       </ButtonRow>
       {claim ? (
-        <OathCard variant="lime" icon={oathIcon(claim.facts)} name={t("screens.W1.b3.name", { amount: skrWhole(claim.claimable) })}
+        <OathCard variant="lime" icon={oathIcon(claim.facts)} name={t("screens.W1.b3.name", { amount: oathAmount(claim.facts, claim.claimable) })}
           meta={t("screens.W1.b3.meta", { name: claim.facts.name, when: weekday(endOf(claim)) })} onPress={() => go("J1", { id: claim.facts.id })}
           button={{ kind: "l", label: t("screens.W1.b3.btn"), onPress: () => go("J1", { id: claim.facts.id }) }} />
       ) : null}
       {b ? (
         <View>
           <Breakdown label={t("screens.W1.b4.label")} rows={[
-            { label: t("screens.W1.b4.row0.l"), value: t("screens.W1.b4.row0.v", { amount: skrWhole(b.skr) }) },
-            { label: t("screens.W1.b4.row1.l"), value: locked.length === 1 ? t("additions.wallet.lockedOne", { amount: skrWhole(sum(locked)) }) : t("screens.W1.b4.row1.v", { amount: skrWhole(sum(locked)), n: locked.length }) },
-            ...(rematch.length ? [{ label: t("screens.W1.b4.row2.l"), value: t("screens.W1.b4.row2.v", { amount: skrWhole(sum(rematch)) }) }] : []),
-            { label: t("screens.W1.b4.row3.l"), value: t("screens.W1.b4.row3.v", { sol: formatSol(b.sol) }) },
+            { label: t("additions.wallet.availableSol"), value: oathAmount({ asset: "sol" }, b.sol) },
+            ...(b.skr > 0n ? [{ label: t("additions.wallet.availableSkr"), value: oathAmount({ asset: "skr" }, b.skr) }] : []),
+            ...(lockedSol.length ? [{ label: t("additions.wallet.lockedSol"), value: t("additions.wallet.oathCount", { amount: oathAmount({ asset: "sol" }, sum(lockedSol)), count: t(lockedSol.length === 1 ? "additions.wallet.oneOath" : "additions.wallet.manyOaths", { n: lockedSol.length }) }) }] : []),
+            ...(lockedSkr.length ? [{ label: t("additions.wallet.lockedSkr"), value: t("additions.wallet.oathCount", { amount: oathAmount({ asset: "skr" }, sum(lockedSkr)), count: t(lockedSkr.length === 1 ? "additions.wallet.oneOath" : "additions.wallet.manyOaths", { n: lockedSkr.length }) }) }] : []),
+            ...(rematchSol.length ? [{ label: t("additions.wallet.rematchSol"), value: oathAmount({ asset: "sol" }, sum(rematchSol)) }] : []),
+            ...(rematchSkr.length ? [{ label: t("additions.wallet.rematchSkr"), value: oathAmount({ asset: "skr" }, sum(rematchSkr)) }] : []),
           ]} />
         </View>
       ) : null}

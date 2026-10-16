@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { keeperIdle, t } from "@/copy";
 import { AppHeader } from "@/components/chrome";
 import { Screen } from "@/components/layout/Screen";
-import { formatSkr } from "@/lib/format";
+import { formatSol } from "@/lib/format";
 import { metrics } from "@/theme";
 import { useBalances, useInbox } from "@/api/queries";
 import { useGo } from "@/app/nav";
@@ -31,7 +31,8 @@ export function TabScreen({ tab, children, layout }: { tab: TabId; children?: Re
       bar={
         <AppHeader
           title={t(`screens.${id}.header.title` as never)}
-          balance={balances.data ? formatSkr(balances.data.skr, { dp: 0 }) : "–"}
+          balance={balances.data ? `${formatSol(balances.data.sol)} ${t("additions.core.sol")}` : "–"}
+          balanceCurrency=""
           unreadCount={inbox.data?.unread ?? 0}
           onBalance={() => go("W1")}
           onBell={() => go("N1")}

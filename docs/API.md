@@ -45,7 +45,7 @@ ADMIN_SECRET=<admin secret> # the ADMIN_SECRET env var
 | `POST /api/proof/challenge`, `POST /api/proof/start`, `POST /api/proof` | Genesis |
 | `GET /api/oaths/:oath/reviews`, `POST /api/reviews/:id` | Genesis |
 | `POST /api/push-token`, `POST /api/nudges` | Genesis |
-| `GET /api/price` | Genesis |
+| `GET /api/price` | Signed in |
 | `GET /identity/:wallet`, `GET /reputation/:wallet` | Signed in |
 | `GET /bounty/current`, `GET /bounty/:id/recently-out` | Signed in |
 | `POST /bounty/:id/join`, `POST /bounty/:id/challenge`, `POST /bounty/:id/start`, `POST /bounty/:id/proof` | Genesis |
@@ -513,12 +513,18 @@ Errors:
 
 ### GET /api/price
 
-Genesis. A placeholder SKR price for Devnet.
+Signed in. Returns a cached SOL/USD spot quote used to show the SOL amount for the app's approximate $5/$10/$25 stake choices. The SKR fields remain for legacy wallet screens and Bounties. The public Coinbase spot endpoint is queried server-side and cached for 60 seconds.
 
 ```bash
 curl -s $API/api/price -H "authorization: Bearer $TOKEN"
-# → {"usdPerSkr":0.01,"skrForUsd10":1000,"devnet":true,"label":"placeholder rate"}
+# → {"usdPerSol":200.00,"usdPerSkr":0.01,"skrForUsd10":1000,"devnet":true,"label":"Coinbase SOL/USD spot"}
 ```
+
+If the quote provider is unavailable, the route returns `503`; the app keeps Oath creation disabled until it can show the SOL amount for the selected USD tier.
+
+### Oath stake assets
+
+New Oaths use native SOL lamports for the stake. In `OathRead` responses, `mint` is the all-ones System Program address (`11111111111111111111111111111111`) for native SOL, and remains the SPL mint for older token Oaths. Existing SPL Oaths remain readable and claimable. Bounties continue to use SKR.
 
 ## Profile
 

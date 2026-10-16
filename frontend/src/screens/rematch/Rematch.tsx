@@ -18,7 +18,7 @@ import { color, metrics } from "@/theme";
 import { useGo, useParams } from "@/app/nav";
 import { useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, oathObjects, skrWhole } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathObjects } from "@/features/oaths/present";
 import { rematchActions, useRematch } from "@/features/queries";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
@@ -27,7 +27,7 @@ import { SigningScreen } from "../shared/Signing";
 import { keeperAt } from "@/app/layout";
 
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
-const signed = (u: bigint) => (u > 0n ? `+${skrWhole(u)}` : u < 0n ? skrWhole(u) : "0");
+const signed = (f: OathView["facts"], u: bigint) => (u > 0n ? `+${oathAmount(f, u)}` : u < 0n ? oathAmount(f, u) : "0");
 
 /** Lobby seats: everyone in, then an open seat per original member still out. */
 function lobbySeats(v: OathView, outCount: number, label: string): Seat[] {
@@ -63,13 +63,13 @@ export function R1() {
       <Button kind="t" label={t("screens.R1.pin.1")} onPress={back} />
     </>}>
       {/* The chips float around the Keeper at the design's spots (layout.gen.json). */}
-      <ScreenKeeper id="R1" lines={[k]} chips={keeperAt("R1", [t("screens.R1.b0.chip.0", { amount: skrWhole(held) }), t("screens.R1.b0.chip.1", { time: shortDuration(left) })]).chips ?? []} />
-      <Title heading={t("screens.R1.b1.title", { amount: skrWhole(held) })} sub={t("additions.rematch.winBackHalf")} />
+      <ScreenKeeper id="R1" lines={[k]} chips={keeperAt("R1", [t("screens.R1.b0.chip.0", { amount: oathAmount(f, held) }), t("screens.R1.b0.chip.1", { time: shortDuration(left) })]).chips ?? []} />
+      <Title heading={t("screens.R1.b1.title", { amount: oathAmount(f, held) })} sub={t("additions.rematch.winBackHalf")} />
       <Breakdown rows={[
         { label: t("screens.R1.b2.row0.l"), value: t("screens.R1.b2.row0.v", { name: f.name, n: f.numDays, object: oathObjects(f) }) },
-        { label: t("screens.R1.b2.row1.l"), value: t("screens.R1.b2.row1.v", { amount: skrWhole(lost) }), color: color.red.base },
-        { label: t("screens.R1.b2.row2.l"), value: t("screens.R1.b2.row2.v", { amount: skrWhole(held) }), color: color.lime.base },
-        { label: t("screens.R1.b2.row3.l"), value: t("screens.R1.b2.row3.v", { amount: skrWhole(f.stake) }) },
+        { label: t("screens.R1.b2.row1.l"), value: t("screens.R1.b2.row1.v", { amount: oathAmount(f, lost) }), color: color.red.base },
+        { label: t("screens.R1.b2.row2.l"), value: t("screens.R1.b2.row2.v", { amount: oathAmount(f, held) }), color: color.lime.base },
+        { label: t("screens.R1.b2.row3.l"), value: t("screens.R1.b2.row3.v", { amount: oathAmount(f, f.stake) }) },
         { label: t("screens.R1.b2.row4.l"), value: t("screens.R1.b2.row4.v", { time: shortDuration(left) }) },
       ]} />
       <BodyText mono text={t("screens.R1.b3.text", { n: joined, total: source.members.length })} />
@@ -91,7 +91,7 @@ export function R2() {
   const task = useCallback(() => rematchActions.join(id!), [id]);
   const onDone = useCallback((r: { id: string }) => ({ to: "R3" as const, params: { id: r.id } }), []);
   const fail = useMemo(() => ({ retry: "R2" as const, edit: "R1" as const, params: { id: id ?? "" } }), [id]);
-  return <SigningScreen title={t("screens.R2.b2.title")} sub={t("screens.R2.b2.sub", { amount: source ? skrWhole(source.facts.stake) : "", name: source?.facts.name ?? "" })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.R2.b2.title")} sub={t("screens.R2.b2.sub", { amount: source ? oathAmount(source.facts, source.facts.stake) : "", name: source?.facts.name ?? "" })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── R3 Rematch lobby ──
@@ -135,7 +135,7 @@ export function recoveryLine(v: OathView, i: number): string {
   const m = v.members[i]!;
   const amount = v.facts.recovery?.[m.facts.wallet] ?? 0n;
   if (m.missed.length) return t("screens.R·act.b4.r1.s", { day: m.missed[0]! + 1 });
-  return t("screens.R·act.b4.r0.s", { amount: skrWhole(amount) });
+  return t("screens.R·act.b4.r0.s", { amount: oathAmount(v.facts, amount) });
 }
 
 // ── L6 Rematch kept / R4 Rematch result / R4·lost ──
@@ -157,14 +157,14 @@ export function L6() {
   const k = keeperLines("L6")[0]!;
   return (
     <Screen bar={<NavBar onBack={() => replace("D4", { id: view.facts.id })} close />} bottomInset={pinned(1)}
-      pinned={<><Button kind="l" icon="hand-coin-outline" label={t("screens.L6.pin.0", { amount: skrWhole(mine.final) })} onPress={() => go("J1", { id: view.facts.id })} /></>}>
+      pinned={<><Button kind="l" icon="hand-coin-outline" label={t("screens.L6.pin.0", { amount: oathAmount(view.facts, mine.final) })} onPress={() => go("J1", { id: view.facts.id })} /></>}>
       <ScreenKeeper id="L6" lines={[k]} />
       <Title heading={t("screens.L6.b1.title")} sub={t("screens.L6.b1.sub", { n: view.facts.numDays })} align="center" />
-      <MoneyMoment value={t("screens.L6.b2.value", { amount: skrWhole(recovered) })} caption={t("screens.L6.b2.caption", { name: source?.facts.name ?? view.facts.name })} tone="lime" />
+      <MoneyMoment value={t("screens.L6.b2.value", { amount: oathAmount(view.facts, recovered) })} caption={t("screens.L6.b2.caption", { name: source?.facts.name ?? view.facts.name })} tone="lime" />
       <Breakdown rows={[
-        { label: t("screens.L6.b3.row0.l"), value: t("screens.L6.b3.row0.v", { amount: skrWhole(mine.final - recovered) }) },
-        { label: t("screens.L6.b3.row1.l"), value: t("screens.L6.b3.row1.v", { amount: skrWhole(recovered) }), color: color.lime.base },
-        { label: t("screens.L6.b3.row2.l"), value: t("screens.L6.b3.row2.v", { amount: skrWhole(mine.final) }), total: true },
+        { label: t("screens.L6.b3.row0.l"), value: t("screens.L6.b3.row0.v", { amount: oathAmount(view.facts, mine.final - recovered) }) },
+        { label: t("screens.L6.b3.row1.l"), value: t("screens.L6.b3.row1.v", { amount: oathAmount(view.facts, recovered) }), color: color.lime.base },
+        { label: t("screens.L6.b3.row2.l"), value: t("screens.L6.b3.row2.v", { amount: oathAmount(view.facts, mine.final) }), total: true },
       ]} />
       <BrandStamp text={t("screens.L6.brand.stamp")} />
     </Screen>
@@ -179,22 +179,22 @@ function RematchResult({ lost }: { lost: boolean }) {
   const me = view.members[view.me]!;
   const firstMiss = me.missed[0] !== undefined ? me.missed[0] + 1 : 0;
   const rows = [
-    { label: t(`screens.${id}.b1.row0.l`), value: t(`screens.${id}.b1.row0.v`, { amount: skrWhole(mine.start) }) },
-    { label: lost ? t("screens.R4·lost.b1.row1.l", { days: dayList(me.missed.map((d) => d + 1)) }) : t("screens.R4.b1.row1.l"), value: t(`screens.${id}.b1.row1.v`, { amount: mine.lost > 0n ? skrWhole(-mine.lost) : "0" }), ...(mine.lost > 0n ? { color: color.red.base } : {}) },
-    { label: t(`screens.${id}.b1.row2.l`, { name: listNames(view.members.filter((m) => m.missed.length && !m.isMe).map(memberName)) }), value: t(`screens.${id}.b1.row2.v`, { amount: signed(mine.won) }), ...(mine.won > 0n ? { color: color.lime.base } : {}) },
+    { label: t(`screens.${id}.b1.row0.l`), value: t(`screens.${id}.b1.row0.v`, { amount: oathAmount(view.facts, mine.start) }) },
+    { label: lost ? t("screens.R4·lost.b1.row1.l", { days: dayList(me.missed.map((d) => d + 1)) }) : t("screens.R4.b1.row1.l"), value: t(`screens.${id}.b1.row1.v`, { amount: mine.lost > 0n ? oathAmount(view.facts, -mine.lost) : oathAmount(view.facts, 0n) }), ...(mine.lost > 0n ? { color: color.red.base } : {}) },
+    { label: t(`screens.${id}.b1.row2.l`, { name: listNames(view.members.filter((m) => m.missed.length && !m.isMe).map(memberName)) }), value: t(`screens.${id}.b1.row2.v`, { amount: signed(view.facts, mine.won) }), ...(mine.won > 0n ? { color: color.lime.base } : {}) },
     // The fee comes out of the money lost (rules.md §3), so it isn't charged again here (DECISIONS D-64).
     { label: t(`screens.${id}.b1.row3.l`), value: lost ? t("screens.R4·lost.b1.row3.v", { amount: "0" }) : t("screens.R4.b1.row3.v") },
-    { label: t(`screens.${id}.b1.row4.l`, { name: source?.facts.name ?? "" }), value: t(`screens.${id}.b1.row4.v`, { amount: signed(recovered) }), ...(recovered > 0n ? { color: color.lime.base } : {}) },
-    { label: t(`screens.${id}.b1.row5.l`), value: t(`screens.${id}.b1.row5.v`, { amount: skrWhole(mine.final) }), total: true, ...(!lost ? { color: color.lime.base } : {}) },
+    { label: t(`screens.${id}.b1.row4.l`, { name: source?.facts.name ?? "" }), value: t(`screens.${id}.b1.row4.v`, { amount: signed(view.facts, recovered) }), ...(recovered > 0n ? { color: color.lime.base } : {}) },
+    { label: t(`screens.${id}.b1.row5.l`), value: t(`screens.${id}.b1.row5.v`, { amount: oathAmount(view.facts, mine.final) }), total: true, ...(!lost ? { color: color.lime.base } : {}) },
   ];
   return (
     <Screen bar={<NavBar onBack={back} close title={t("screens.R4.nav.title")} />} bottomInset={pinned(1)}
-      pinned={<Button kind={lost ? "p" : "l"} icon="hand-coin-outline" label={t("screens.R4.pin.0", { amount: skrWhole(mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />}>
+      pinned={<Button kind={lost ? "p" : "l"} icon="hand-coin-outline" label={t("screens.R4.pin.0", { amount: oathAmount(view.facts, mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />}>
       <Title heading={t(`screens.${id}.b0.title`)} {...(!lost ? { sub: t("screens.R4.b0.sub", { n: view.facts.numDays }) } : {})} />
       <Breakdown rows={rows} />
       {lost
         ? <Banner tone="red" icon="close-circle-outline" title={t("screens.R4·lost.b2.title", { days: dayList([firstMiss]) })} sub={t("screens.R4·lost.b2.sub")} />
-        : <Banner tone="lime" icon="sword-cross" title={t("screens.R4.b2.title", { amount: skrWhole(recovered) })} sub={t("screens.R4.b2.sub", { name: source?.facts.name ?? "" })} />}
+        : <Banner tone="lime" icon="sword-cross" title={t("screens.R4.b2.title", { amount: oathAmount(view.facts, recovered) })} sub={t("screens.R4.b2.sub", { name: source?.facts.name ?? "" })} />}
     </Screen>
   );
 }

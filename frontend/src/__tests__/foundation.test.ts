@@ -4,7 +4,7 @@ import { __amendments, __lookup, __templates, interpolate, keeperLines, t } from
 import designCopy from "../../../design/copy.json";
 import type { CopyKey } from "@/copy";
 import { angleToPoints, hpSegmentColor, splitShadow, type as typeStyles } from "@/theme";
-import { clock, formatSkr, formatUsd, shortDuration } from "@/lib/format";
+import { clock, formatSkr, formatUsd, formatUsdSol, shortDuration } from "@/lib/format";
 
 const root = join(__dirname, "..", "..");
 
@@ -30,9 +30,9 @@ describe("copy", () => {
   });
   it("t() reads screen keys whose ids contain · and +", () => {
     expect(t("screens.C7·no.pin.0" as CopyKey)).toBeTruthy();
-    expect(t("screens.C4.b4.title", { cost: "100" })).toBe("A miss costs 100 SKR");
-    expect(t("screens.D2.b1.text", { timeLeft: "3h 2m", cost: "100" })).toBe("3h 2m left today · a miss costs −100 SKR");
-    expect(t("screens.D2.b7.sub", { shares: "You +25", fee: "25" })).toBe("You +25 · KEPT 25 SKR");
+    expect(t("screens.C4.b4.title", { cost: "0.005 SOL" })).toBe("A miss costs 0.005 SOL");
+    expect(t("screens.D2.b1.text", { timeLeft: "3h 2m", cost: "0.005 SOL" })).toBe("3h 2m left today · a miss costs −0.005 SOL");
+    expect(t("screens.D2.b7.sub", { shares: "You +0.001 SOL", fee: "0.001 SOL" })).toBe("You +0.001 SOL · KEPT 0.001 SOL");
   });
   it("interpolates placeholders that copy.json already has", () => {
     expect(t("common.hpOf", { hp: 70 })).toBe("70 / 100");
@@ -94,6 +94,7 @@ describe("format", () => {
   });
   it("formats USD and time", () => {
     expect(formatUsd(1_000_000_000n, 0.01)).toBe("≈ $10");
+    expect(formatUsdSol(50_000_000n, 200)).toBe("≈ $10");
     expect(clock(33522)).toBe("09:18:42");
     expect(shortDuration(33522)).toBe("9h 18m");
     expect(shortDuration(6 * 86400 + 23 * 3600 + 120)).toBe("6d 23h");

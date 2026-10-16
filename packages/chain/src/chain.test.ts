@@ -5,14 +5,14 @@ import BN from "bn.js";
 import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { accountsCoder, IDL, PROGRAM_ERRORS } from "./idl";
 import { decodeOath, decodeOathTerms, memberSlotOffset, OATH_BASE_LEN, oathDiscriminator } from "./accounts";
-import { cancelOathIx, claimIx, createOathIx, goalHash, joinOathIx, settleOathIx, startOathIx, sweepHeldIx } from "./instructions";
+import { cancelOathIx, claimIx, claimSolIx, createOathIx, createOathSolIx, goalHash, joinOathIx, joinOathSolIx, settleOathIx, settleOathSolIx, startOathIx, sweepHeldIx, sweepHeldSolIx } from "./instructions";
 import type { ProgramEnv } from "./instructions";
 import { configPda, keeperPda, oathPda, vaultPda } from "./pda";
 import { classifyTxError } from "./errors";
 
 const programId = new PublicKey("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh");
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-const env: ProgramEnv = { programId, stakeMint: Keypair.generate().publicKey, treasury: Keypair.generate().publicKey, tokenProgram: TOKEN_2022 };
+const env: ProgramEnv = { programId, stakeMint: Keypair.generate().publicKey, treasury: Keypair.generate().publicKey, treasuryAuthority: Keypair.generate().publicKey, tokenProgram: TOKEN_2022 };
 const disc = (s: string) => createHash("sha256").update(s).digest().subarray(0, 8);
 
 const creator = Keypair.generate().publicKey;
@@ -84,8 +84,8 @@ test("instruction data uses Anchor discriminators (same as the API's hand-hashed
   assert.ok(settle.keys[7]!.pubkey.equals(keeperPda(programId, bob)) && settle.keys[7]!.isWritable);
 });
 
-test("IDL is the current program (rules v3 included) and errors map by code", () => {
-  assert.deepEqual(IDL.instructions.map((i) => i.name).sort(), ["buy_freeze", "cancel_oath", "claim", "configure_economics", "create_oath", "initialize_config", "join_oath", "migrate_keeper", "record_checkin", "settle_oath", "start_oath", "sweep_carryover", "sweep_held", "update_treasury", "use_freeze"]);
+test("IDL is the current program (rules v3 and native SOL included) and errors map by code", () => {
+  assert.deepEqual(IDL.instructions.map((i) => i.name).sort(), ["buy_freeze", "cancel_oath", "claim", "claim_sol", "configure_economics", "create_oath", "create_oath_sol", "initialize_config", "join_oath", "join_oath_sol", "migrate_keeper", "record_checkin", "settle_oath", "settle_oath_sol", "start_oath", "sweep_carryover", "sweep_held", "sweep_held_sol", "update_treasury", "use_freeze"]);
   assert.equal(PROGRAM_ERRORS.get(6009)?.name, "NotOpen");
 });
 
@@ -96,6 +96,20 @@ test("sweep_held is permissionless and pays only the configured treasury", () =>
   assert.ok(ix.keys.every((k) => !k.isSigner));
   assert.ok(ix.keys[3]!.pubkey.equals(env.treasury) && ix.keys[3]!.isWritable);
   assert.ok(ix.keys[2]!.pubkey.equals(vaultPda(programId, oath)));
+});
+
+test("native SOL Oath instructions use separate discriminators and the configured treasury authority", () => {
+  const oath = oathPda(programId, creator, 9n);
+  const created = createOathSolIx(env, { creator, oathId: 9n, goalText: "walk daily", objectId: 3, numDays: 7, daySeconds: 86_400, tzOffsetMinutes: 330, stake: 50_000_000n, isSolo: false });
+  assert.deepEqual([...created.ix.data.subarray(0, 8)], [...disc("global:create_oath_sol")]);
+  assert.ok(created.oath.equals(oath));
+  assert.ok(created.ix.keys.some((k) => k.pubkey.equals(SystemProgram.programId)));
+  assert.deepEqual([...joinOathSolIx(env, { oath, member: bob }).data], [...disc("global:join_oath_sol")]);
+  assert.deepEqual([...claimSolIx(env, { oath, member: bob }).data], [...disc("global:claim_sol")]);
+  const settle = settleOathSolIx(env, { oath, members: [creator, bob] });
+  assert.deepEqual([...settle.data], [...disc("global:settle_oath_sol")]);
+  assert.ok(settle.keys.some((k) => k.pubkey.equals(env.treasuryAuthority)));
+  assert.deepEqual([...sweepHeldSolIx(env, { oath }).data], [...disc("global:sweep_held_sol")]);
 });
 
 test("Oath terms decode: no region is rules v1; v3 carries the miss rate, the held amount and the break day", () => {

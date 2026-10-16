@@ -101,7 +101,7 @@ const ONBOARDING = new Set<string>(["A0", "A1·i", "A1", "A1·m", "A2", "A2·s",
 const SAMPLE_BOUNTY = { name: "Dawn Pages", message: "Read before your phone. 14 mornings.", link: "dawnpages.xyz" };
 /** The prototype's "You" avatar (reference/kept-kit.js › P.Y). */
 const SAMPLE_AVATAR = "13050010";
-const SAMPLE_DRAFT = { name: "Iron Week", habits: ["lift for 20 minutes"], objectId: 0, numDays: 7 as const, isSolo: false, stakeSkr: 1000, reviewMode: "ai_group" as const };
+const SAMPLE_DRAFT = { name: "Iron Week", habits: ["lift for 20 minutes"], objectId: 0, numDays: 7 as const, isSolo: false, stakeUsd: 10 as const, stakeLamports: "50000000", reviewMode: "ai_group" as const };
 
 /** Handles `kept://dev/open/…`. Returns false for any other URL. */
 function openDevLink(url: string): boolean {

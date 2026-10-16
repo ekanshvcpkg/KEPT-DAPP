@@ -6,7 +6,7 @@
 
 **For:** the backend / Solana program developer.
 **Source of truth:** `design/rules.md` and `design/screens.md`. Where the backend differs, the backend should change unless we agree otherwise (decisions in `docs/DECISIONS.md`).
-**Status:** verified against the code on 2026-10-09 (v3: updated with the product owner's decisions of 2026-10-09 and the Phase 0 move; re-checked at the end of Phase 1; updated at the end of Phase 2 (sign-in), Phase 3 (the core loop on the real program and API: create, join, start, cancel, proof, settle, claim) and Phase 4 (Rematch, group review, Bounties, profiles, inbox, wallet: all on the app's mock, with the shapes below). The short checklist is at the top. Every item below was checked by reading the file and line cited.
+**Status:** historical detailed audit verified on 2026-10-09. Current update 2026-10-16: new native-SOL Oath instructions and API settlement/held-sweep branches are implemented in the working tree; `GET /api/price` serves a Coinbase SOL/USD spot quote to signed-in users, including solo users. This program revision is not deployed, so Live SOL Oath transactions remain unavailable until the backend developer deploys the matching program and IDL. Existing SPL Oaths and SKR Bounties remain supported. The older audit entries below describe the earlier revision unless marked updated here.
 
 **Paths.** Phase 0 moved the code with `git mv` and didn't change it, so line numbers are unchanged:
 `backend/src` → `backend/src` · `backend/prisma` → `backend/prisma` · `backend/scripts` → `backend/scripts` · `backend/kept-example/program` → `onchain` · `backend/kept-example/app` → `legacy/harness-app`. Short forms used below: **`v4.ts`** = `backend/src/routes/v4.ts`, **`lib.rs`** / **`state.rs`** = `onchain/programs/kept_test/src/{lib,state}.rs`, **`schema`** = `backend/prisma/schema.prisma`. Other `backend/…` paths below map the same way.
@@ -41,6 +41,13 @@ Live (D-80) uses only `frontend/src/api/http/*`. Where the backend lacks somethi
 | P1-14 error codes | Still `{error}` text only | Mapped by status + message | As before |
 
 ## Short version: what to add, remove and fix
+
+### Current native SOL update (2026-10-16)
+
+- **Implemented in this checkout:** SOL Oath create/join/settle/claim/held-sweep instructions; backend dispatches settlement and held-sweep by the Oath's mint marker; `OathRead.mint` identifies native SOL with the System Program address. New Solo and group Oaths stake lamports. Price access is Signed in, not Genesis-gated.
+- **Deployment required:** Devnet must run the matching `kept_test` program and IDL before Live SOL create/join/settle/claim can succeed. No program deployment or real SOL transaction was performed for this code change.
+- **Still SKR:** existing SPL Oaths keep their original asset and claim path; Bounty funding and payouts remain SKR.
+- **Invite recovery:** C8 retries invite setup after chain creation and `/api/oaths/:oath/invite` restores an existing invite. If invite creation continues failing in Live, capture the exact API response and Genesis state; this checkout cannot validate a real invite without a configured backend session and matching Devnet account.
 
 The checklist for the backend developer. Each line points to the full item below (file and line, the exact request/response shape the app is coded against, and why). Ordered by what unblocks the app most. The app already runs all of this on its mock, so each item can land on its own.
 

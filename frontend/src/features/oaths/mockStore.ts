@@ -1,7 +1,7 @@
 // The mock "chain + backend" for Oaths: in-memory, seeded per Dev scenario relative to the virtual
 // clock, and mutated by the mock TxService and the mock proof API. Days roll forward on read (other
 // members prove on their own), and an Oath settles with the engine's numbers once its last day ends.
-import { SKR_UNIT, STAKES_SKR } from "@kept/config";
+import { SOL_UNIT, STAKE_TIERS_USD } from "@kept/config";
 import { nextMidnight, simulate, marksFromBitmasks, settlement } from "@kept/engine";
 import { clock } from "@/lib/clock";
 import type { Scenario } from "@/api/mock/scenarios";
@@ -13,7 +13,9 @@ import type { BountyFacts } from "../bounties/model";
 const DAY = 86_400;
 const now = () => Math.floor(clock.now() / 1000);
 const tz = () => -new Date(clock.now()).getTimezoneOffset();
-const skr = (n: number) => BigInt(n) * SKR_UNIT;
+/** Demo quote uses a stable $200/SOL, so $5/$10/$25 map to 0.025/0.05/0.125 SOL. */
+const solFromUsd = (usd: number) => BigInt(usd) * (SOL_UNIT / 200n);
+const mockStakeFromOldSkrTier = (skr: number) => solFromUsd(skr === 500 ? STAKE_TIERS_USD[0] : skr === 2500 ? STAKE_TIERS_USD[2] : STAKE_TIERS_USD[1]);
 
 /** The other people in the prototype, with their kept rates from copy.json (D2 › KEEPERS). */
 export const PEOPLE = {
@@ -46,13 +48,13 @@ const mask = (pattern: string) => [...pattern].reduce((m, c, d) => (c === "k" ? 
 
 function add(o: Omit<MockOath, "id" | "createdAt" | "source" | "inviteCode" | "daySeconds" | "oathId"> & Partial<Pick<MockOath, "inviteCode">>): MockOath {
   const id = `mock-oath-${++counter}`;
-  const full: MockOath = { id, source: "mock", oathId: null, createdAt: now() - counter, daySeconds: DAY, inviteCode: o.inviteCode ?? `${o.name.split(" ")[0]!.toUpperCase()}-${(1000 + counter).toString(36).toUpperCase()}`, ...o };
+  const full: MockOath = { id, source: "mock", asset: o.bountyId ? "skr" : "sol", oathId: null, createdAt: now() - counter, daySeconds: DAY, inviteCode: o.inviteCode ?? `${o.name.split(" ")[0]!.toUpperCase()}-${(1000 + counter).toString(36).toUpperCase()}`, ...o };
   oaths.set(id, full);
   return full;
 }
 
 const group = (name: string, objectId: number, numDays: number, stakeSkr: number, wallet: string, members: MockMember[], extra: Partial<MockOath> = {}) =>
-  add({ name, goal: null, objectId, numDays, stake: skr(stakeSkr), isSolo: false, reviewMode: "ai_group", status: "active", day1StartsAt: null, creator: PEOPLE.riya.wallet, members, seeded: true, ...extra });
+  add({ name, goal: null, objectId, numDays, stake: mockStakeFromOldSkrTier(stakeSkr), asset: "sol", isSolo: false, reviewMode: "ai_group", status: "active", day1StartsAt: null, creator: PEOPLE.riya.wallet, members, seeded: true, ...extra });
 
 /** Seeds the store for a scenario (docs/ARCHITECTURE.md §6). Keeps Oaths the user created. */
 function seed(scenario: Scenario, wallet: string) {
@@ -75,7 +77,7 @@ function seed(scenario: Scenario, wallet: string) {
     // L4 / L4·m / L4·b: Read 20 pages, finished. Like D-55, the design's "three misses" can't break a
     // solo Oath (−35 then +10 a day), so the broken one misses days 6–9.
     const pattern = scenario === "soloKept" ? "kkkkkkkkkkkkkk" : scenario === "soloMissed" ? "kkkkmkkkkkmkkk" : "kkkkkmmmm";
-    add({ name: "Read 20 pages", goal: "read 20 pages", objectId: 1, numDays: 14, stake: skr(500), isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
+    add({ name: "Read 20 pages", goal: "read 20 pages", objectId: 1, numDays: 14, stake: solFromUsd(5), asset: "sol", isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
       day1StartsAt: t - pattern.length * DAY - 60, members: [me(wallet, { daysKept: mask(pattern) })], seeded: true });
     return;
   }
@@ -123,7 +125,7 @@ function seed(scenario: Scenario, wallet: string) {
     ], { creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes · read 10 pages", habits: ["lift for 20 minutes", "read 10 pages"], habitObjects: ["dumbbell", "book"], day1StartsAt: startFor(today, secondsLeft) });
   }
   if (!deadline) {
-    add({ name: "Read 20 pages", goal: "read 20 pages", objectId: 1, numDays: 14, stake: skr(500), isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
+    add({ name: "Read 20 pages", goal: "read 20 pages", objectId: 1, numDays: 14, stake: solFromUsd(5), asset: "sol", isSolo: true, reviewMode: "ai", status: "active", creator: wallet,
       day1StartsAt: startFor(8, secondsLeft), members: [me(wallet, { daysKept: mask("kkkkkkkk"), proofToday: "kept", proofDay: 8 })], seeded: true });
   }
   group("Iron Week", 0, 7, 1000, wallet, [me(wallet), person("riya", 0)], { status: "open", creator: wallet, goal: "lift for 20 minutes", inviteCode: "IRON-7K2Q" });
@@ -244,17 +246,17 @@ export const mockOaths = {
   inviteFor(code: string, wallet: string): OathFacts {
     const existing = mockOaths.byCode(code);
     if (existing) return existing;
-    const o = group("Iron Week", 0, 7, STAKES_SKR[1], wallet, [person("riya", 0), person("dev", 0), person("arjun", 0)], { status: "open", creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes", inviteCode: code.toUpperCase() });
+    const o = group("Iron Week", 0, 7, 1000, wallet, [person("riya", 0), person("dev", 0), person("arjun", 0)], { status: "open", creator: PEOPLE.riya.wallet, goal: "lift for 20 minutes", inviteCode: code.toUpperCase() });
     return facts(o);
   },
 
   /** What this session's stakes, refunds and claims did to a wallet's SKR (the mock wallet adds it to its balance). */
-  walletDelta(wallet: string): bigint { return deltas.get(wallet) ?? 0n; },
+  walletDelta(wallet: string, asset: "sol" | "skr" = "sol"): bigint { return deltas.get(`${wallet}:${asset}`) ?? 0n; },
 
   create(d: { wallet: string; goal: string; name?: string; habits?: string[]; habitObjects?: string[]; objectId: number; numDays: number; stake: bigint; isSolo: boolean; reviewMode: ReviewMode; showcase?: boolean }): OathFacts {
     const o = add({ name: d.name || oathName(d.objectId, d.numDays), goal: d.goal, ...(d.habits ? { habits: d.habits.slice() } : {}), ...(d.habitObjects ? { habitObjects: d.habitObjects.slice() } : {}), objectId: d.objectId, numDays: d.numDays, stake: d.stake, isSolo: d.isSolo, reviewMode: d.reviewMode,
       status: "open", creator: d.wallet, day1StartsAt: null, members: [me(d.wallet)], seeded: false });
-    move(d.wallet, -d.stake);
+    move(d.wallet, -d.stake, "sol");
     if (d.showcase && !d.isSolo) {
       // The filming Oath: Riya, Arjun and Dev are in, and day 1 has begun (features/oaths/showcase.ts).
       o.members.push(person("riya", 0), person("arjun", 0), person("dev", 0));
@@ -263,20 +265,21 @@ export const mockOaths = {
     }
     return facts(o);
   },
-  join(id: string, wallet: string) { const o = need(id); if (!o.members.some((m) => m.wallet === wallet)) { o.members.push(me(wallet)); move(wallet, -o.stake); } },
+  join(id: string, wallet: string) { const o = need(id); if (!o.members.some((m) => m.wallet === wallet)) { o.members.push(me(wallet)); move(wallet, -o.stake, o.asset); } },
   leave(id: string, wallet: string) {
     const o = need(id);
-    if (o.members.some((m) => m.wallet === wallet)) move(wallet, o.stake);
+    if (o.members.some((m) => m.wallet === wallet)) move(wallet, o.stake, o.asset);
     o.members = o.members.filter((m) => m.wallet !== wallet);
   },
   /** Start: day 1 begins at the first midnight after Start (D-6). */
   start(id: string) { const o = need(id); o.status = "active"; o.day1StartsAt = nextMidnight(now(), tz()); },
   cancel(id: string) { const o = need(id); o.status = "cancelled"; o.members.forEach((m) => { m.payout = o.stake; }); },
   claim(id: string, wallet: string): bigint {
-    const m = need(id).members.find((x) => x.wallet === wallet);
+    const oath = need(id);
+    const m = oath.members.find((x) => x.wallet === wallet);
     if (!m || m.claimed || m.payout === null) throw new Error("nothing to claim");
     m.claimed = true;
-    move(wallet, m.payout);
+    move(wallet, m.payout, oath.asset);
     return m.payout;
   },
   /** Proof progress for the user today. */
@@ -319,7 +322,7 @@ export const mockOaths = {
   joinRematch(sourceId: string, wallet: string): OathFacts {
     let r = [...oaths.values()].find((o) => o.rematchOf === sourceId);
     if (!r) r = rematchOf(need(sourceId), [], false);
-    if (!r.members.some((m) => m.wallet === wallet)) { r.members.push(me(wallet)); move(wallet, -r.stake); }
+    if (!r.members.some((m) => m.wallet === wallet)) { r.members.push(me(wallet)); move(wallet, -r.stake, r.asset); }
     return facts(r);
   },
   /** Join a Bounty: my participation becomes a mock Oath on the Bounty's days. */
@@ -349,14 +352,17 @@ export const mockOaths = {
       if (i % 2 === 0) {
         group(`Dev Oath ${i + 1}`, (i + 2) % 6, 7, 500, wallet, [me(wallet, { daysKept: mask("kk"), proofDay: day }), person("riya", mask("kk"), "kept", day), person("arjun", mask("kk"), "none", day)], extra);
       } else {
-        add({ name: `Dev Solo ${i + 1}`, objectId: (i + 2) % 6, numDays: 14, stake: skr(300), isSolo: true, reviewMode: "ai", status: "active", members: [me(wallet, { daysKept: mask("kk"), proofDay: day })], seeded: true, ...extra });
+        add({ name: `Dev Solo ${i + 1}`, objectId: (i + 2) % 6, numDays: 14, stake: solFromUsd(3), asset: "sol", isSolo: true, reviewMode: "ai", status: "active", members: [me(wallet, { daysKept: mask("kk"), proofDay: day })], seeded: true, ...extra });
       }
     }
   },
 };
 
 const deltas = new Map<string, bigint>();
-function move(wallet: string, by: bigint) { deltas.set(wallet, (deltas.get(wallet) ?? 0n) + by); }
+function move(wallet: string, by: bigint, asset: "sol" | "skr" = "sol") {
+  const key = `${wallet}:${asset}`;
+  deltas.set(key, (deltas.get(key) ?? 0n) + by);
+}
 
 function need(id: string): MockOath {
   const o = oaths.get(id);

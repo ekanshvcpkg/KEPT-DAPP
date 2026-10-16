@@ -6,7 +6,7 @@ import { useSession } from "@/state/session";
 
 const key = () => Keypair.generate().publicKey;
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-const mockEnv = { programId: new PublicKey("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh"), stakeMint: key(), treasury: key(), tokenProgram: TOKEN_2022 };
+const mockEnv = { programId: new PublicKey("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh"), stakeMint: key(), treasury: key(), treasuryAuthority: key(), tokenProgram: TOKEN_2022 };
 
 jest.mock("@/chain/mwa", () => ({ signAndSend: jest.fn(async () => "sig"), mwaWallet: {} }));
 jest.mock("@/chain/program", () => ({ ...jest.requireActual("@/chain/program"), programEnv: async () => mockEnv }));
@@ -22,17 +22,17 @@ beforeEach(() => {
 
 describe("creating an Oath", () => {
   it("starts a solo Oath in the same transaction: one wallet approval, create then start", async () => {
-    const r = await realTx.createOath({ ...input, isSolo: true });
+    const r = await realTx.createOath({ ...input, stake: 50_000_000n, isSolo: true });
     expect(jest.mocked(signAndSend)).toHaveBeenCalledTimes(1);
     const ixs = instructionsSent();
     expect(ixs).toHaveLength(2);
-    expect(discriminator(ixs[0]!)).not.toBe(discriminator(ixs[1]!)); // create_oath, then start_oath
+    expect(discriminator(ixs[0]!)).not.toBe(discriminator(ixs[1]!)); // create_oath_sol, then start_oath
     expect(ixs[1]!.data).toHaveLength(8); // start_oath takes no arguments
     expect(r).toMatchObject({ signature: "sig", started: true });
   });
 
   it("sends only create for a group Oath, which waits for members", async () => {
-    const r = await realTx.createOath({ ...input, isSolo: false, stake: 1000n });
+    const r = await realTx.createOath({ ...input, isSolo: false, stake: 50_000_000n });
     expect(instructionsSent()).toHaveLength(1);
     expect(r.started).toBe(false);
   });

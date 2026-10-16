@@ -151,6 +151,34 @@
       "args": []
     },
     {
+      "name": "claim_sol",
+      "docs": [
+        "Claims a native SOL payout directly to the signing member's wallet."
+      ],
+      "discriminator": [
+        139,
+        113,
+        179,
+        189,
+        190,
+        30,
+        132,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "configure_economics",
       "docs": [
         "Activates rules v2 (entry fee, freeze credits, 50% slash) for Oaths created from now on, or changes",
@@ -361,6 +389,145 @@
         },
         {
           "name": "token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "oath_id",
+          "type": "u64"
+        },
+        {
+          "name": "goal_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "object_id",
+          "type": "u8"
+        },
+        {
+          "name": "num_days",
+          "type": "u8"
+        },
+        {
+          "name": "day_seconds",
+          "type": "u32"
+        },
+        {
+          "name": "tz_offset_minutes",
+          "type": "i16"
+        },
+        {
+          "name": "stake_amount",
+          "type": "u64"
+        },
+        {
+          "name": "is_solo",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "create_oath_sol",
+      "docs": [
+        "Creates a native SOL Oath. Stake is escrowed as lamports in the Oath PDA itself; the rent reserve is",
+        "never spendable. SPL-token Oaths continue to use `create_oath` and their existing vaults."
+      ],
+      "discriminator": [
+        182,
+        166,
+        172,
+        217,
+        39,
+        2,
+        163,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  97,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "oath_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "keeper",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "treasury"
         },
         {
           "name": "system_program",
@@ -657,6 +824,85 @@
       "args": []
     },
     {
+      "name": "join_oath_sol",
+      "docs": [
+        "Joins a native SOL Oath by transferring the exact stake in lamports to the Oath PDA."
+      ],
+      "discriminator": [
+        169,
+        244,
+        43,
+        239,
+        33,
+        73,
+        188,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "keeper",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "migrate_keeper",
       "docs": [
         "Converts a pre-V4 Keeper account in place; its old XP/Soul fields are no longer used."
@@ -835,6 +1081,57 @@
         },
         {
           "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_oath_sol",
+      "docs": [
+        "Settles a native SOL Oath under its fixed rules v3 terms. The rent reserve stays in the Oath PDA."
+      ],
+      "discriminator": [
+        195,
+        171,
+        119,
+        104,
+        187,
+        133,
+        94,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "treasury_authority",
+          "writable": true
         }
       ],
       "args": []
@@ -1033,6 +1330,57 @@
         },
         {
           "name": "token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sweep_held_sol",
+      "docs": [
+        "Releases held native SOL to the treasury after the Rematch window."
+      ],
+      "discriminator": [
+        82,
+        47,
+        181,
+        57,
+        160,
+        40,
+        136,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "stake_mint"
+        },
+        {
+          "name": "treasury_authority",
+          "writable": true
         }
       ],
       "args": []

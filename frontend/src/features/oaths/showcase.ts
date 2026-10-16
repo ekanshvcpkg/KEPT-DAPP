@@ -13,7 +13,8 @@ export const SHOWCASE_DRAFT: OathDraft = {
   habitObjectEntries: ["running_shoe"],
   numDays: 7,
   isSolo: false,
-  stakeSkr: 1000,
+  stakeUsd: 10,
+  stakeLamports: "50000000",
   reviewMode: "ai_group",
   demoShowcase: true,
 };

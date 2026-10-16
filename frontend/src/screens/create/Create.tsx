@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Share } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useQuery } from "@tanstack/react-query";
-import { LENGTHS, MAX_MEMBERS, OATH_NAME_MAX, SKR_UNIT, STAKES_SKR } from "@kept/config";
+import { LENGTHS, MAX_MEMBERS, OATH_NAME_MAX, LAMPORTS_PER_SOL, STAKE_TIERS_USD } from "@kept/config";
 import { missCost, nextMidnight } from "@kept/engine";
 import { keeperLines, t } from "@/copy";
 import type { CopyKey } from "@/copy";
@@ -17,13 +17,13 @@ import { RowList } from "@/components/content/Rows";
 import { SignStatus } from "@/components/content/Status";
 import { ScreenKeeper } from "@/components/keeper/ScreenKeeper";
 import { Screen } from "@/components/layout/Screen";
-import { formatUsd } from "@/lib/format";
+import { formatSol } from "@/lib/format";
 import { color, metrics } from "@/theme";
 import { getApi, useApi } from "@/api";
 import { qk } from "@/api/queries";
 import { useGo, useParams } from "@/app/nav";
 import { oathActions, useOath } from "@/features/oaths/hooks";
-import { memberColor, memberInitial, memberName, reviewText, skrWhole } from "@/features/oaths/present";
+import { memberColor, memberInitial, memberName, oathAmount, reviewText } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { oathName } from "@/features/oaths/names";
 import { useDraft } from "@/state/drafts";
@@ -42,7 +42,7 @@ import { SigningScreen } from "../shared/Signing";
 
 const STEPS = 6;
 const pinnedOne = metrics.button.height + metrics.pinned.bottom;
-const units = (skr: number) => BigInt(skr) * SKR_UNIT;
+const lamportsForUsd = (usd: number, usdPerSol: number) => BigInt(Math.max(1, Math.round(usd / usdPerSol * Number(LAMPORTS_PER_SOL))));
 
 function Step({ n, children, next, nextLabel, disabled, close }: { n: number; children: React.ReactNode; next: () => void; nextLabel?: string; disabled?: boolean; close?: boolean }) {
   const { back } = useGo();
@@ -107,19 +107,27 @@ export function C4() {
   const genesis = useSession((s) => s.genesis);
   const api = useApi();
   const price = useQuery({ queryKey: qk.price, queryFn: () => api.wallet.price(), retry: false });
-  const cost = skrWhole(missCost(units(draft.stakeSkr)));
+  const quoted = price.data ? lamportsForUsd(draft.stakeUsd, price.data.usdPerSol) : null;
+  useEffect(() => {
+    if (quoted !== null && draft.stakeLamports !== quoted.toString()) set({ stakeLamports: quoted.toString() });
+  }, [quoted, draft.stakeLamports, set]);
+  const cost = quoted === null ? "…" : oathAmount({ asset: "sol" }, missCost(quoted));
   const pickMode = (i: number) => {
     if (i === 1 && !genesis) { toast(t("screens.C4.b1.o1.s")); return; }
     set({ isSolo: i === 0 });
   };
   return (
-    <Step n={4} next={() => go(draft.isSolo ? "C6" : "C5")}>
+    <Step n={4} next={() => go(draft.isSolo ? "C6" : "C5")} disabled={quoted === null}>
       <Title heading={t("screens.C4.b0.title")} />
+      {quoted === null ? <Note icon="alert-outline" text={t("additions.stake.priceUnavailable")} /> : null}
       <OptionGrid mode="row2" value={draft.isSolo ? 0 : 1} onChange={pickMode}
         items={[{ title: t("screens.C4.b1.o0.t"), sub: t("screens.C4.b1.o0.s"), icon: "account" }, { title: t("screens.C4.b1.o1.t"), sub: t("screens.C4.b1.o1.s"), icon: genesis ? "account-group" : "lock-outline" }]} />
       <BodyText mono text={t("screens.C4.b2.text")} />
-      <OptionGrid mode="big" small value={STAKES_SKR.indexOf(draft.stakeSkr as (typeof STAKES_SKR)[number])} onChange={(i) => set({ stakeSkr: STAKES_SKR[i]! })}
-        items={STAKES_SKR.map((s, i) => ({ title: t(`screens.C4.b3.o${i}.t` as CopyKey), ...(price.data ? { sub: formatUsd(units(s), price.data.usdPerSkr) } : {}) }))} />
+      <OptionGrid mode="big" small value={STAKE_TIERS_USD.indexOf(draft.stakeUsd)} onChange={(i) => {
+        const usd = STAKE_TIERS_USD[i]!;
+        set({ stakeUsd: usd, stakeLamports: price.data ? lamportsForUsd(usd, price.data.usdPerSol).toString() : "" });
+      }}
+        items={STAKE_TIERS_USD.map((usd) => ({ title: t("additions.stake.usdTier", { amount: usd }), ...(price.data ? { sub: t("additions.stake.solAmount", { amount: formatSol(lamportsForUsd(usd, price.data.usdPerSol)) }) } : {}) }))} />
       <Banner tone="lime" icon="sack" title={t("screens.C4.b4.title", { cost })} sub={t("screens.C4.b4.sub")} />
     </Step>
   );
@@ -142,14 +150,14 @@ export function C5() {
 export function C6() {
   const { go } = useGo();
   const { draft } = useDraft();
-  const stake = units(draft.stakeSkr);
-  const cost = skrWhole(missCost(stake));
+  const stake = BigInt(draft.stakeLamports || "0");
+  const cost = oathAmount({ asset: "sol" }, missCost(stake));
   const rows = [
     { label: t("screens.C6.b1.row0.l"), value: t("screens.C6.b1.row0.v", { goal: savedHabits(draft).map((h) => h.name).join(" · ") }) },
     // Each habit has its own proof object; the row lists them in the habits' order.
     { label: t("screens.C6.b1.row1.l"), value: [...new Set(habitProofTexts(draft).map(objectNameOfText))].join(" · ") },
     { label: t("screens.C6.b1.row2.l"), value: t(`common.lengths.${LENGTHS.indexOf(draft.numDays)}` as CopyKey) },
-    { label: t("screens.C6.b1.row3.l"), value: t("screens.C6.b1.row3.v", { amount: skrWhole(stake) }), color: color.lime.base },
+    { label: t("screens.C6.b1.row3.l"), value: t("screens.C6.b1.row3.v", { amount: oathAmount({ asset: "sol" }, stake) }), color: color.lime.base },
     ...(draft.isSolo ? [] : [{ label: t("screens.C6.b1.row4.l"), value: reviewText(draft.reviewMode) }]),
   ];
   return (
@@ -171,8 +179,9 @@ export function C7() {
   const { draft } = useDraft();
   const task = useCallback(() => oathActions.create(draft), [draft]);
   const onDone = useCallback((r: { id: string; code: string | null }) => ({ to: "C7·ok" as const, params: { id: r.id, ...(r.code ? { code: r.code } : {}) } }), []);
-  const fail = useMemo(() => ({ retry: "C7" as const, edit: "C6" as const, params: { need: skrWhole(units(draft.stakeSkr)) } }), [draft.stakeSkr]);
-  return <SigningScreen title={t("screens.C7.b2.title")} sub={t("screens.C7.b2.sub", { amount: skrWhole(units(draft.stakeSkr)), name: draft.name.trim() || oathName(draft.objectId, draft.numDays) })} task={task} onDone={onDone} fail={fail} />;
+  const stake = BigInt(draft.stakeLamports || "0");
+  const fail = useMemo(() => ({ retry: "C7" as const, edit: "C6" as const, params: { need: oathAmount({ asset: "sol" }, stake) } }), [stake]);
+  return <SigningScreen title={t("screens.C7.b2.title")} sub={t("screens.C7.b2.sub", { amount: oathAmount({ asset: "sol" }, stake), name: draft.name.trim() || oathName(draft.objectId, draft.numDays) })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── C7·ok Signed · success ──
@@ -182,7 +191,7 @@ export function C7ok() {
   const { view } = useOath(id);
   const reset = useDraft((s) => s.reset);
   const playFx = useUi((s) => s.playFx);
-  const stake = view ? skrWhole(view.facts.stake) : "";
+  const stake = view ? oathAmount(view.facts, view.facts.stake) : "";
   useEffect(() => {
     reset();
     playFx(undefined, "payout");
@@ -250,7 +259,7 @@ export function C8() {
   return (
     <Screen bar={<NavBar onBack={back} close title={t("screens.C8.nav.title")} />} bottomInset={pinnedOne}
       pinned={<Button kind="p" label={t("screens.C8.pin.0")} onPress={() => replace("D1", { id: p.id! })} />}>
-      <Title heading={t("screens.C8.b0.title")} sub={view ? t("screens.C8.b0.sub", { amount: skrWhole(view.facts.stake) }) : undefined} />
+      <Title heading={t("screens.C8.b0.title")} sub={view ? t("screens.C8.b0.sub", { amount: oathAmount(view.facts, view.facts.stake) }) : undefined} />
       {!code && (recovering || recoveryFailed) ? <Note icon={recoveryFailed ? "alert-outline" : "loading"}
         text={t(recoveryFailed ? "additions.oathCreate.inviteRecoveryFailed" : "additions.oathCreate.inviteRecovering")} /> : null}
       {!code && recoveryFailed ? <Button kind="s" icon="refresh" label={t("additions.oathCreate.retryInvite")}

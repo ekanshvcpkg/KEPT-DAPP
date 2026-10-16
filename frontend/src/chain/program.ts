@@ -24,7 +24,13 @@ export function programEnv(): Promise<ProgramEnv> {
     const mint = new PublicKey(cfg.stakeMint);
     const mintInfo = await c.getAccountInfo(mint, "confirmed");
     if (!mintInfo) throw new Error(`Stake mint ${cfg.stakeMint} not found`);
-    return { programId: PROGRAM_ID, stakeMint: mint, treasury: new PublicKey(cfg.treasury), tokenProgram: mintInfo.owner };
+    const treasury = new PublicKey(cfg.treasury);
+    const treasuryInfo = await c.getAccountInfo(treasury, "confirmed");
+    if (!treasuryInfo || !treasuryInfo.owner.equals(mintInfo.owner) || treasuryInfo.data.length < 64 || !new PublicKey(treasuryInfo.data.subarray(0, 32)).equals(mint)) {
+      throw new Error("Configured treasury is not a token account for the stake mint");
+    }
+    const treasuryAuthority = new PublicKey(treasuryInfo.data.subarray(32, 64));
+    return { programId: PROGRAM_ID, stakeMint: mint, treasury, treasuryAuthority, tokenProgram: mintInfo.owner };
   })().catch((e: unknown) => { cached = null; throw e; });
   return cached;
 }

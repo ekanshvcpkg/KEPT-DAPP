@@ -157,6 +157,34 @@ export type KeptTest = {
       "args": []
     },
     {
+      "name": "claimSol",
+      "docs": [
+        "Claims a native SOL payout directly to the signing member's wallet."
+      ],
+      "discriminator": [
+        139,
+        113,
+        179,
+        189,
+        190,
+        30,
+        132,
+        195
+      ],
+      "accounts": [
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "configureEconomics",
       "docs": [
         "Activates rules v2 (entry fee, freeze credits, 50% slash) for Oaths created from now on, or changes",
@@ -367,6 +395,145 @@ export type KeptTest = {
         },
         {
           "name": "tokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "oathId",
+          "type": "u64"
+        },
+        {
+          "name": "goalHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "objectId",
+          "type": "u8"
+        },
+        {
+          "name": "numDays",
+          "type": "u8"
+        },
+        {
+          "name": "daySeconds",
+          "type": "u32"
+        },
+        {
+          "name": "tzOffsetMinutes",
+          "type": "i16"
+        },
+        {
+          "name": "stakeAmount",
+          "type": "u64"
+        },
+        {
+          "name": "isSolo",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "createOathSol",
+      "docs": [
+        "Creates a native SOL Oath. Stake is escrowed as lamports in the Oath PDA itself; the rent reserve is",
+        "never spendable. SPL-token Oaths continue to use `create_oath` and their existing vaults."
+      ],
+      "discriminator": [
+        182,
+        166,
+        172,
+        217,
+        39,
+        2,
+        163,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  97,
+                  116,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "oathId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "keeper",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "treasury"
         },
         {
           "name": "systemProgram",
@@ -663,6 +830,85 @@ export type KeptTest = {
       "args": []
     },
     {
+      "name": "joinOathSol",
+      "docs": [
+        "Joins a native SOL Oath by transferring the exact stake in lamports to the Oath PDA."
+      ],
+      "discriminator": [
+        169,
+        244,
+        43,
+        239,
+        33,
+        73,
+        188,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "keeper",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  107,
+                  101,
+                  101,
+                  112,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "member"
+              }
+            ]
+          }
+        },
+        {
+          "name": "member",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "migrateKeeper",
       "docs": [
         "Converts a pre-V4 Keeper account in place; its old XP/Soul fields are no longer used."
@@ -841,6 +1087,57 @@ export type KeptTest = {
         },
         {
           "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settleOathSol",
+      "docs": [
+        "Settles a native SOL Oath under its fixed rules v3 terms. The rent reserve stays in the Oath PDA."
+      ],
+      "discriminator": [
+        195,
+        171,
+        119,
+        104,
+        187,
+        133,
+        94,
+        155
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "treasuryAuthority",
+          "writable": true
         }
       ],
       "args": []
@@ -1039,6 +1336,57 @@ export type KeptTest = {
         },
         {
           "name": "tokenProgram"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sweepHeldSol",
+      "docs": [
+        "Releases held native SOL to the treasury after the Rematch window."
+      ],
+      "discriminator": [
+        82,
+        47,
+        181,
+        57,
+        160,
+        40,
+        136,
+        110
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "oath",
+          "writable": true
+        },
+        {
+          "name": "treasury"
+        },
+        {
+          "name": "stakeMint"
+        },
+        {
+          "name": "treasuryAuthority",
+          "writable": true
         }
       ],
       "args": []

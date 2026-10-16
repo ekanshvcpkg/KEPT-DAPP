@@ -16,7 +16,7 @@ import { metrics } from "@/theme";
 import { useGo, useParams } from "@/app/nav";
 import { useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
-import { gestureKey, gestureText, listNames, memberColor, memberInitial, memberName, objectIcon, objectName, skrWhole } from "@/features/oaths/present";
+import { gestureKey, gestureText, listNames, memberColor, memberInitial, memberName, objectIcon, objectName, oathAmount } from "@/features/oaths/present";
 import { reviewActions, useOpenReviews, useReview } from "@/features/queries";
 import type { ReviewFacts } from "@/features/reviews/model";
 import { useNow } from "@/features/time";
@@ -126,7 +126,7 @@ export function G3() {
     <Screen bar={<NavBar onBack={() => replace("D2", { id })} close />} bottomInset={pinned(1)}
       pinned={<Button kind="p" label={t("screens.G3.pin.0", { name: view.facts.name })} onPress={() => replace("D2", { id })} />}>
       <SignStatus state="success" chip={t("screens.G3.b1.chip", { yes, no })} />
-      <Title heading={t("screens.G3.b2.title", { day: r.dayIndex + 1 })} sub={t("screens.G3.b2.sub", { names: listNames(backers), amount: me ? skrWhole(me.balance) : "" })} align="center" />
+      <Title heading={t("screens.G3.b2.title", { day: r.dayIndex + 1 })} sub={t("screens.G3.b2.sub", { names: listNames(backers), amount: me ? oathAmount(view.facts, me.balance) : "" })} align="center" />
     </Screen>
   );
 }
@@ -143,7 +143,7 @@ export function G3no() {
       <ScreenKeeper id="G3·no" lines={[k]} />
       <Title heading={t("screens.G3·no.b2.title", { yes, no, day: r.dayIndex + 1 })} align="center" />
       <Breakdown rows={[
-        { label: t("screens.G3·no.b3.row0.l"), value: t("screens.G3·no.b3.row0.v", { cost: skrWhole(view.myMissCost) }) },
+        { label: t("screens.G3·no.b3.row0.l"), value: t("screens.G3·no.b3.row0.v", { cost: oathAmount(view.facts, view.myMissCost) }) },
         { label: t("screens.G3·no.b3.row1.l"), value: t("screens.G3·no.b3.row1.v", { hp: view.facts.isSolo ? 35 : 20 }) },
       ]} />
     </Screen>

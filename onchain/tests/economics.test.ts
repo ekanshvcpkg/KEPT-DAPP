@@ -120,24 +120,44 @@ class Harness {
   join(u: User) {
     return this.send(u.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: u.keeper, role: W }, { address: u.signer.address, role: WS }, { address: this.mint, role: R }, { address: u.token, role: W }, { address: this.treasury, role: R }, { address: TOKEN, role: R }, { address: SYSTEM, role: R }], disc("join_oath"));
   }
+  createOathSol(creator: User, stake: bigint, numDays = 3, isSolo = false) {
+    this.useOath(creator, BigInt(Date.now()) + BigInt(Math.floor(Math.random() * 1e6)));
+    return this.send(creator.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: creator.keeper, role: W }, { address: creator.signer.address, role: WS }, { address: this.mint, role: R }, { address: this.treasury, role: R }, { address: SYSTEM, role: R }],
+      Buffer.concat([disc("create_oath_sol"), u64(this.oathId), Buffer.alloc(32, 8), Buffer.from([0, numDays]), u32(Number(DAY)), i16(330), u64(stake), Buffer.from([isSolo ? 1 : 0])]));
+  }
+  joinOathSol(u: User) {
+    return this.send(u.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: u.keeper, role: W }, { address: u.signer.address, role: WS }, { address: this.mint, role: R }, { address: this.treasury, role: R }, { address: SYSTEM, role: R }], disc("join_oath_sol"));
+  }
   creatorIx(u: User, name: "start_oath" | "cancel_oath") { return this.send(u.signer, [{ address: this.oath, role: W }, { address: u.signer.address, role: RS }], disc(name)); }
   settle(payer: User) {
     const keepers = Array.from({ length: this.memberCount() }, (_, i) => ({ address: this.memberKeeper(i), role: W }));
     return this.send(payer.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: this.treasury, role: W }, { address: this.mint, role: R }, { address: TOKEN, role: R }], disc("settle_oath"), keepers);
   }
+  settleSol(payer: User) {
+    const keepers = Array.from({ length: this.memberCount() }, (_, i) => ({ address: this.memberKeeper(i), role: W }));
+    return this.send(payer.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.treasury, role: R }, { address: this.mint, role: R }, { address: this.admin.address, role: W }], disc("settle_oath_sol"), keepers);
+  }
   claim(u: User) { return this.send(u.signer, [{ address: this.oath, role: W }, { address: this.vault, role: W }, { address: this.mint, role: R }, { address: u.token, role: W }, { address: u.signer.address, role: RS }, { address: TOKEN, role: R }], disc("claim")); }
+  claimSol(u: User) { return this.send(u.signer, [{ address: this.oath, role: W }, { address: u.signer.address, role: WS }], disc("claim_sol")); }
   buyFreeze(u: User) { return this.send(u.signer, [{ address: this.oath, role: W }, { address: this.vault, role: W }, { address: this.mint, role: R }, { address: u.token, role: W }, { address: u.signer.address, role: RS }, { address: TOKEN, role: R }], disc("buy_freeze")); }
   useFreeze(u: User, day: number) { return this.send(u.signer, [{ address: this.oath, role: W }, { address: u.signer.address, role: RS }], Buffer.concat([disc("use_freeze"), Buffer.from([day])])); }
   sweep(payer: User) { return this.send(payer.signer, [{ address: this.config, role: W }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: this.reserve, role: W }, { address: this.mint, role: R }, { address: TOKEN, role: R }], disc("sweep_carryover")); }
 
   sweepHeld(payer: User, treasury: Address = this.treasury) { return this.send(payer.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.vault, role: W }, { address: treasury, role: W }, { address: this.mint, role: R }, { address: TOKEN, role: R }], disc("sweep_held")); }
+  sweepHeldSol(payer: User, authority: Address = this.admin.address) { return this.send(payer.signer, [{ address: this.config, role: R }, { address: this.oath, role: W }, { address: this.treasury, role: R }, { address: this.mint, role: R }, { address: authority, role: W }], disc("sweep_held_sol")); }
+  solBalance(a: Address) { const balance = this.svm.getBalance(a); if (balance === null) throw new Error(`No lamport balance for ${a}`); return BigInt(balance); }
 
   memberCount() { return this.data(this.oath)[138]; }
   memberKeeper(i: number) { return addr(PublicKey.findProgramAddressSync([Buffer.from("keeper"), this.data(this.oath).subarray(MEMBER(i), MEMBER(i) + 32)], PROGRAM)[0]); }
   payouts() { const d = this.data(this.oath); return Array.from({ length: d[138] }, (_, i) => d.readBigUInt64LE(MEMBER(i) + 36)); }
   status() { return this.data(this.oath)[136]; }
   /** Stand-in for verifier check-ins: sets each member's days_kept bitmask directly. */
-  setDaysKept(masks: number[]) { const d = this.data(this.oath); masks.forEach((m, i) => d.writeUInt16LE(m, MEMBER(i) + 33)); this.put(this.oath, d); }
+  setDaysKept(masks: number[]) {
+    const d = this.data(this.oath); masks.forEach((m, i) => d.writeUInt16LE(m, MEMBER(i) + 33));
+    const balance = this.svm.getBalance(this.oath);
+    if (balance === null) throw new Error("Oath account has no lamport balance");
+    this.svm.setAccount({ address: this.oath, data: d, lamports: balance, programAddress: PROGRAM_ADDR, executable: false, space: BigInt(d.length) });
+  }
   daysKept(i: number) { return this.data(this.oath).readUInt16LE(MEMBER(i) + 33); }
   terms() {
     const d = this.data(this.oath);
@@ -512,5 +532,74 @@ describe("KEPT rules v3 settlement (owner money model, DECISIONS D-93)", () => {
       expect(h.token(h.vault)).to.equal(h.payouts().reduce((x, y) => x + y, 0n) + t.heldTotal);
       expect(h.data(h.oath).length).to.equal(OATH_BASE + 110, "Oath account size is unchanged by v3");
     }
+  });
+});
+
+describe("native SOL Oath escrow", () => {
+  it("accepts a nonzero solo stake, starts, settles, and returns the SOL while preserving Oath rent", async () => {
+    const h = await Harness.create(1);
+    const [alice] = h.users;
+    const stake = 50_000_000n;
+    ok(await h.createOathSol(alice, stake, 3, true));
+    const rentReserve = h.solBalance(h.oath) - stake;
+    expect(h.data(h.oath).subarray(56, 88).equals(Buffer.alloc(32))).to.equal(true, "all-ones System Program address marks native SOL");
+    expect(h.token(alice.token)).to.equal(START_BALANCE, "creating an SOL Oath does not require or debit SKR");
+    ok(await h.creatorIx(alice, "start_oath"));
+    h.setDaysKept([7]); h.setTime(T0 + 3n * DAY);
+    ok(await h.settleSol(alice));
+    expect(h.payouts()).to.deep.equal([stake]);
+    ok(await h.claimSol(alice));
+    expect(h.solBalance(h.oath)).to.equal(rentReserve, "only the rent reserve remains in the Oath PDA");
+    expect(h.token(alice.token)).to.equal(START_BALANCE);
+  });
+
+  it("refunds a cancelled group Oath in SOL without touching either member's SKR", async () => {
+    const h = await Harness.create(2);
+    const [alice, bob] = h.users;
+    const stake = 100_000_000n;
+    ok(await h.createOathSol(alice, stake));
+    const rentReserve = h.solBalance(h.oath) - stake;
+    ok(await h.joinOathSol(bob));
+    expect(h.solBalance(h.oath)).to.equal(rentReserve + 2n * stake);
+    expect(h.token(alice.token)).to.equal(START_BALANCE);
+    expect(h.token(bob.token)).to.equal(START_BALANCE);
+    ok(await h.creatorIx(alice, "cancel_oath"));
+    expect(h.payouts()).to.deep.equal([stake, stake]);
+    ok(await h.claimSol(alice)); ok(await h.claimSol(bob));
+    expect(h.solBalance(h.oath)).to.equal(rentReserve);
+    expect(h.token(alice.token)).to.equal(START_BALANCE);
+    expect(h.token(bob.token)).to.equal(START_BALANCE);
+  });
+
+  it("routes the SOL share to the configured treasury authority and releases held SOL after the window", async () => {
+    const h = await Harness.create(4);
+    const stake = 100_000_000n;
+    const users = h.users;
+    h.setTime(T0);
+    ok(await h.createOathSol(users[0], stake));
+    const rentReserve = h.solBalance(h.oath) - stake;
+    for (const user of users.slice(1)) ok(await h.joinOathSol(user));
+    ok(await h.creatorIx(users[0], "start_oath"));
+    expect(h.solBalance(h.oath)).to.equal(rentReserve + 4n * stake);
+    const treasuryBefore = h.solBalance(h.admin.address);
+    h.setDaysKept([7, 0b100, 0b100, 0b100]);
+    h.setTime(T0 + 2n * DAY);
+    fails(await h.send(users[0].signer, [{ address: h.config, role: R }, { address: h.oath, role: W }, { address: h.treasury, role: R }, { address: h.mint, role: R }, { address: users[0].signer.address, role: W }], disc("settle_oath_sol"), users.map((_, i) => ({ address: h.memberKeeper(i), role: W }))), "WrongTreasury");
+    ok(await h.settleSol(users[0]));
+    const terms = h.terms()!;
+    expect(terms.heldTotal + terms.treasuryPaid).to.equal(4n * stake);
+    expect(h.solBalance(h.oath)).to.equal(rentReserve + terms.heldTotal);
+    expect(h.solBalance(h.admin.address) - treasuryBefore).to.equal(terms.treasuryPaid);
+    fails(await h.sweepHeldSol(users[1]), "TooEarly");
+    h.setTime(terms.heldReleaseTs);
+    fails(await h.sweepHeldSol(users[1], users[0].signer.address), "WrongTreasury");
+    const beforeSweep = h.solBalance(h.oath);
+    ok(await h.sweepHeldSol(users[1]));
+    expect(h.solBalance(h.oath)).to.equal(beforeSweep - terms.heldTotal);
+    expect(h.solBalance(h.oath)).to.equal(rentReserve);
+    expect(h.solBalance(h.admin.address) - treasuryBefore).to.equal(terms.treasuryPaid + terms.heldTotal);
+    expect(h.terms()!.heldSwept).to.equal(true);
+    for (const user of users) ok(await h.claimSol(user));
+    expect(h.solBalance(h.oath)).to.equal(rentReserve);
   });
 });

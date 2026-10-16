@@ -13,6 +13,7 @@ import { CountText, Enter, FadeIn, Icon, Pop, Shake, Surface, Text, Tile, useAni
 import type { IconName } from "@/components/primitives";
 import { haptic } from "@/lib/haptics";
 import { chartGeometry, keptSeries, sampleMiss, sampleSummary } from "@/features/intro/introData";
+import { formatSol } from "@/lib/format";
 
 /** A picture drawn at its own size and scaled down to fit the room a small phone leaves it. */
 export function FitHero({ designW, designH, w, h, children }: { designW: number; designH: number; w: number; h: number; children: ReactNode }) {
@@ -109,7 +110,7 @@ export function BetHero() {
             </View>
             <View style={{ gap: 2 }}>
               <Text variant="monoMicro" color={color.text.tertiary}>{t("additions.intro.p1.potLabel").toUpperCase()}</Text>
-              <CountText text={t("additions.intro.p1.potValue")} from={reduce ? undefined : "0 SKR"} variant="display" color={color.lime.base} />
+              <CountText text={t("additions.intro.p1.potValue")} from={reduce ? undefined : t("additions.intro.p1.potZero")} variant="display" color={color.lime.base} />
             </View>
             <View style={{ flexDirection: "row", marginHorizontal: -space[16] + (HERO1.w - 4 * CELL) / 2, justifyContent: "space-between" }}>
               {MEMBERS.map((_, i) => <Member key={i} index={i} />)}
@@ -125,13 +126,13 @@ export function BetHero() {
         <Pop delay={reduce ? 0 : MISS_AT + 250}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space[8], paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, backgroundColor: color.red.tint16 }}>
             <Icon name="close-circle-outline" size={16} color={color.red.base} />
-            <Text variant="chipMd" color={color.red.base}>{t("additions.intro.p1.missChip", { lost: lost.toString() })}</Text>
+            <Text variant="chipMd" color={color.red.base}>{t("additions.intro.p1.missChip", { lost: formatSol(lost) })}</Text>
           </View>
         </Pop>
         <Pop delay={reduce ? 0 : MISS_AT + 900}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: space[8], paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, backgroundColor: color.lime.tint14 }}>
             <Icon name="sack" size={16} color={color.lime.base} />
-            <Text variant="chipMd" color={color.lime.base}>{t("additions.intro.p1.keepChip", { each: each.toString() })}</Text>
+            <Text variant="chipMd" color={color.lime.base}>{t("additions.intro.p1.keepChip", { each: formatSol(each) })}</Text>
           </View>
         </Pop>
       </View>

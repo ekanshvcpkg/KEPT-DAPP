@@ -5,7 +5,6 @@ import copy from "../../../design/copy.json";
 import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
 import { getApi } from "@/api";
-import { SKR_UNIT } from "@kept/config";
 import { ToastHost } from "@/components/chrome";
 import { queryClient } from "@/api/queries";
 import { SLICES } from "@/api/types";
@@ -319,7 +318,7 @@ describe("onboarding on mocks", () => {
     expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "stretch · swing for 5 minutes" }))).toBeTruthy();
     expect(screen.getByText("Yoga mat · Kettlebell")).toBeTruthy();
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C6.pin.0") }));
-    expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "1,000" }), {}, slow)).toBeTruthy();
+    expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "0.05 SOL" }), {}, slow)).toBeTruthy();
     expect(useUi.getState().fx?.feel).toBe("payout");
     const created = mockOaths.list("7xKpQe9mZ3LbVd2RtYc8NfH4uJs6WgA1oPqE5rTk3F9q").filter((o) => o.name === "Stronger every day");
     expect(created).toHaveLength(1);
@@ -348,7 +347,7 @@ describe("onboarding on mocks", () => {
     expect(await screen.findByText(t("screens.C6.b1.row0.v", { goal: "Run 5 km before work" }))).toBeTruthy();
     expect(screen.getByText("Running shoe")).toBeTruthy();
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.C6.pin.0") }));
-    expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "1,000" }), {}, slow)).toBeTruthy();
+    expect(await screen.findByText(t("screens.C7·ok.b2.title", { amount: "0.05 SOL" }), {}, slow)).toBeTruthy();
     const created = mockOaths.list(wallet).filter((o) => o.name === "Morning Run");
     expect(created).toHaveLength(1);
     expect(created[0]).toMatchObject({ status: "active", habits: ["Run 5 km before work"], habitObjects: ["running shoes"], objectId: 4 });
@@ -500,7 +499,7 @@ describe("onboarding on mocks", () => {
     expect(screen.getByLabelText(t("additions.join.codeLabel")).props.value).toBe("nope");
     await fireEvent.changeText(screen.getByLabelText(t("additions.join.codeLabel")), "dawn-4q2z");
     await fireEvent.press(screen.getByRole("button", { name: t("screens.E1.pin.0") }));
-    await fireEvent.press(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) }));
+    await fireEvent.press(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "0.05 SOL" }) }));
     expect(await screen.findByText(t("screens.D1·m.b2.title", { name: "Riya" }), {}, slow)).toBeTruthy();
   }, 30000);
 });
@@ -558,7 +557,7 @@ describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
     expect(await screen.findByText(t("additions.join.notInvite"))).toBeTruthy();
     expect(preview()).toBeTruthy();
     await fireEvent(screen.getByTestId("camera-preview"), "barcodeScanned", { data: "kept://join/dawn-4q2z" });
-    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "0.05 SOL" }) })).toBeTruthy();
     expect(preview()).toBeNull();
   });
 
@@ -599,7 +598,7 @@ describe("E1 starts with a choice; the camera only after Scan (D-91)", () => {
 
   it("a known code skips the choice and is looked up at once", async () => {
     await openE1({ code: "dawn-4q2z" });
-    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "1,000" }) })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: t("screens.E2.pin.0", { amount: "0.05 SOL" }) })).toBeTruthy();
     expect(rootStack().slice(-2)).toEqual(["E1", "E2"]);
     expect(camera.asked).toBe(0);
     expect(preview()).toBeNull();
@@ -763,7 +762,7 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
     await signedIn("fresh");
     const oath = mockOaths.create({
       wallet: WALLET, name: "Retry invite", goal: "read 10 pages", habits: ["read 10 pages"], habitObjects: ["book"],
-      objectId: 1, numDays: 7, stake: 1000n * SKR_UNIT, isSolo: false, reviewMode: "ai_group",
+      objectId: 1, numDays: 7, stake: 50_000_000n, isSolo: false, reviewMode: "ai_group",
     });
     useDeviceOaths.getState().remember(oath.id, { goal: "read 10 pages", habits: ["read 10 pages"], habitObjects: ["book"] });
     const api = getApi();

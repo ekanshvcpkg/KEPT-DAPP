@@ -27,7 +27,7 @@ import { oathActions, useOath } from "@/features/oaths/hooks";
 import { oathView } from "@/features/oaths/model";
 import type { OathView } from "@/features/oaths/model";
 import { nowSeconds } from "@/features/time";
-import { listNames, memberColor, memberInitial, memberName, oathIcon, reviewText, skrWhole } from "@/features/oaths/present";
+import { listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, reviewText } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useSession } from "@/state/session";
 import { missCost } from "@kept/engine";
@@ -76,7 +76,7 @@ function useFindOath(from: JoinStep) {
       const to: DesignId = v.me >= 0 ? "E3·in"
         : alreadyStarted ? "E3·late"
         : !oath.isSolo && !useSession.getState().genesis ? "E3·elig"
-        : (queryClient.getQueryData<{ skr: bigint }>(qk.balances(wallet))?.skr ?? oath.stake) < oath.stake ? "E3·skr"
+        : ((oath.asset === "sol" ? queryClient.getQueryData<{ sol: bigint; skr: bigint }>(qk.balances(wallet))?.sol : queryClient.getQueryData<{ sol: bigint; skr: bigint }>(qk.balances(wallet))?.skr) ?? oath.stake) < oath.stake ? "E3·skr"
         : "E2";
       go(to, params);
     } catch (e) {
@@ -225,15 +225,15 @@ export function E2() {
   const f = view.facts;
   const creator = view.members.find((m) => m.facts.wallet === f.creator) ?? view.members[0]!;
   const cName = memberName(creator);
-  const firstMiss = skrWhole(missCost(f.stake));
+  const firstMiss = oathAmount(f, missCost(f.stake));
   return (
     <Screen bar={<NavBar onBack={back} title={t("screens.E2.nav.title")} />} bottomInset={pinned(1)}
-      pinned={<Button kind="l" icon="draw-pen" label={t("screens.E2.pin.0", { amount: skrWhole(f.stake) })} onPress={() => go("E2·s", { id, code })} />}>
+      pinned={<Button kind="l" icon="draw-pen" label={t("screens.E2.pin.0", { amount: oathAmount(f, f.stake) })} onPress={() => go("E2·s", { id, code })} />}>
       <BodyText mono text={t("screens.E2.b0.text", { name: cName.toUpperCase() })} />
       <OathCard icon={oathIcon(f)} name={f.name}
         meta={t("screens.E2.b1.meta", { name: cName, n: f.numDays, review: reviewText(f.reviewMode) })}
         {...(f.goal ? { line: t("screens.E2.b1.line", { goal: f.goal }) } : {})}
-        tags={[{ text: t("screens.E2.b1.tag.0", { amount: skrWhole(f.stake) }), icon: "sack", tone: "lime" }, { text: t("screens.E2.b1.tag.1", { name: cName }), icon: "flag-checkered" }]}
+        tags={[{ text: t("screens.E2.b1.tag.0", { amount: oathAmount(f, f.stake) }), icon: "sack", tone: "lime" }, { text: t("screens.E2.b1.tag.1", { name: cName }), icon: "flag-checkered" }]}
         {...(creator.facts.keptRate !== null ? { float: { text: t("screens.E2.b1.float", { rate: Math.round(creator.facts.keptRate * 100) }), initial: memberInitial(creator), bg: memberColor(creator) } } : {})} />
       <RowList label={t("screens.E2.b2.label")} rows={view.members.map((m) => ({
         title: memberName(m), sub: t(m.facts.wallet === f.creator ? "screens.E2.b2.r0.s" : "screens.E2.b2.r1.s"),
@@ -245,7 +245,7 @@ export function E2() {
         { label: t("screens.E2.b3.row0.l"), value: t("screens.E2.b3.row0.v") },
         { label: t("screens.E2.b3.row1.l"), value: t("screens.E2.b3.row1.v", { cost: firstMiss }) },
         { label: t("screens.E2.b3.row2.l"), value: t("screens.E2.b3.row2.v") },
-        { label: t("screens.E2.b3.row3.l"), value: t("screens.E2.b3.row3.v") },
+        { label: t("screens.E2.b3.row3.l"), value: t("screens.E2.b3.row3.v", { asset: oathAsset(f) }) },
       ]} />
     </Screen>
   );
@@ -263,7 +263,7 @@ export function E2s() {
   const fail = useMemo(() => ({ retry: "E2·s" as const, edit: "E2" as const, params: { id, code }, noSkr: "E3·skr" as const }), [id, code]);
   if (!view) return null;
   const others = view.members.filter((m) => !m.isMe).map(memberName);
-  return <SigningScreen title={t("screens.E2·s.b2.title", { name: view.facts.name })} sub={t("screens.E2·s.b2.sub", { amount: skrWhole(view.facts.stake), names: listNames(others) })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.E2·s.b2.title", { name: view.facts.name })} sub={t("screens.E2·s.b2.sub", { amount: oathAmount(view.facts, view.facts.stake), names: listNames(others) })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── E3 states ── Keeper + title + two pinned actions each. "Try again" / "Back" (to E1) return to the
@@ -301,7 +301,7 @@ export function E3in() {
   const { id, view } = useInviteOath();
   const when = view?.facts.day1StartsAt ?? view?.facts.createdAt ?? nowSeconds();
   return <E3 id="E3·in" title={k3("E3·in", "b2.title")}
-    sub={view ? t("screens.E3·in.b2.sub", { amount: skrWhole(view.facts.stake), name: view.facts.name, day: new Date(when * 1000).toLocaleDateString("en-GB", { weekday: "long" }) }) : ""}
+    sub={view ? t("screens.E3·in.b2.sub", { amount: oathAmount(view.facts, view.facts.stake), name: view.facts.name, day: new Date(when * 1000).toLocaleDateString("en-GB", { weekday: "long" }) }) : ""}
     pins={[{ label: k3("E3·in", "pin.0"), to: view ? screenFor(view) : "D2", params: { id } }, { label: k3("E3·in", "pin.1"), to: "E1" }]} />;
 }
 export function E3elig() {
@@ -310,7 +310,8 @@ export function E3elig() {
 export function E3skr() {
   const { view } = useInviteOath();
   const balances = useBalances();
-  return <E3 id="E3·skr" title={t("screens.E3·skr.b2.title", { amount: view ? skrWhole(view.facts.stake) : "" })}
-    sub={t("screens.E3·skr.b2.sub", { have: balances.data ? skrWhole(balances.data.skr) : "0" })}
-    pins={[{ label: k3("E3·skr", "pin.0"), to: "I4" }, { label: k3("E3·skr", "pin.1"), to: "C1" }]} />;
+  const asset = view?.facts.asset === "skr" ? "skr" : "sol";
+  return <E3 id="E3·skr" title={t("screens.E3·skr.b2.title", { amount: view ? oathAmount(view.facts, view.facts.stake) : "" })}
+    sub={t("screens.E3·skr.b2.sub", { have: balances.data ? oathAmount(view?.facts ?? { asset: "sol" }, balances.data[asset]) : oathAmount({ asset: "sol" }, 0n) })}
+    pins={[{ label: asset === "sol" ? t("additions.wallet.receiveSol") : k3("E3·skr", "pin.0"), to: asset === "sol" ? "W4" : "I4" }, { label: k3("E3·skr", "pin.1"), to: "C1" }]} />;
 }

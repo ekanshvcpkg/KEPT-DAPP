@@ -17,8 +17,12 @@ export interface OathDraft {
   habitObjectEntries?: string[];
   numDays: 3 | 7 | 14;
   isSolo: boolean;
-  /** Whole SKR per member: 500 | 1000 | 2500. */
-  stakeSkr: number;
+  /** USD tier for a native SOL stake: $5 | $10 | $25. */
+  stakeUsd: 5 | 10 | 25;
+  /** Quoted lamports, refreshed on the stake screen and retained through signing retries. */
+  stakeLamports: string;
+  /** Pre-SOL persisted draft field; used only to migrate an older saved draft. */
+  stakeSkr?: number;
   reviewMode: ReviewMode;
   /** Set by the Demo's pre-filled Oath (features/oaths/showcase.ts): the friends join and day 1 starts at once. */
   demoShowcase?: boolean;
@@ -26,7 +30,7 @@ export interface OathDraft {
   chainOathId?: string;
 }
 
-const EMPTY_DRAFT: OathDraft = { name: "", habits: [""], objectId: 0, habitObjectIds: [], numDays: 7, isSolo: false, stakeSkr: 1000, reviewMode: "ai_group" };
+const EMPTY_DRAFT: OathDraft = { name: "", habits: [""], objectId: 0, habitObjectIds: [], numDays: 7, isSolo: false, stakeUsd: 10, stakeLamports: "", reviewMode: "ai_group" };
 
 interface DraftState { draft: OathDraft; set(p: Partial<OathDraft>): void; reset(): void }
 
@@ -47,6 +51,8 @@ export const useDraft = create<DraftState>()(persist((set) => ({
         ...EMPTY_DRAFT,
         ...previous,
         name: previous?.name ?? "",
+        stakeUsd: previous?.stakeUsd ?? (previous?.stakeSkr === 500 ? 5 : previous?.stakeSkr === 2500 ? 25 : 10),
+        stakeLamports: previous?.stakeLamports ?? "",
         habits: previous?.habits ?? (previous?.goal?.trim() ? [previous.goal] : [""]),
         habitObjectIds: previous?.habitObjectIds ?? (previous?.habits ?? (previous?.goal?.trim() ? [previous.goal] : [])).map(() => previous?.objectId ?? 0),
         habitObjectEntries: previous?.habitObjectEntries ?? [],

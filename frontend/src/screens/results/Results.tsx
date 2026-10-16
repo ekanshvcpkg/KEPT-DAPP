@@ -21,13 +21,13 @@ import type { DesignId } from "@/app/routes";
 import { oathActions, useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { dayList, memberColor, memberInitial, memberName, skrWhole } from "@/features/oaths/present";
+import { dayList, memberColor, memberInitial, memberName, oathAmount } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { SigningScreen } from "../shared/Signing";
 
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
-const signed = (units: bigint) => (units > 0n ? `+${skrWhole(units)}` : units < 0n ? skrWhole(units) : "0");
+const signed = (view: OathView, units: bigint) => (units > 0n ? `+${oathAmount(view.facts, units)}` : units < 0n ? oathAmount(view.facts, units) : "0");
 
 function useClaimScreen() {
   const { id } = useParams<{ id: string }>();
@@ -44,14 +44,14 @@ export function J1() {
   return (
     <Screen bar={<NavBar onBack={back} close title={t("screens.J1.nav.title")} />} bottomInset={amount > 0n ? pinned(1) : 0}
       pinned={amount > 0n ? <Button kind="l" icon="hand-coin-outline" label={t("screens.J1.pin.0")} onPress={() => replace("J1·p", { id })} /> : undefined}>
-      <MoneyMoment value={t("screens.J1.b1.value", { amount: skrWhole(amount) })} caption={amount > 0n ? t("screens.J1.b1.caption") : t("additions.core.nothingToClaim")} tone="lime" />
+      <MoneyMoment value={t("screens.J1.b1.value", { amount: oathAmount(view.facts, amount) })} caption={amount > 0n ? t("screens.J1.b1.caption") : t("additions.core.nothingToClaim")} tone="lime" />
       <Breakdown label={t("screens.J1.b2.label", { name: view.facts.name.toUpperCase() })} rows={[
-        { label: t("screens.J1.b2.row0.l"), value: t("screens.J1.b2.row0.v", { amount: skrWhole(mine.start) }) },
-        { label: t("screens.J1.b2.row1.l"), value: t("screens.J1.b2.row1.v", { amount: mine.lost > 0n ? skrWhole(-mine.lost) : "0" }), ...(mine.lost > 0n ? { color: color.red.base } : {}) },
-        { label: t("screens.J1.b2.row2.l"), value: t("screens.J1.b2.row2.v", { amount: signed(mine.won) }), ...(mine.won > 0n ? { color: color.lime.base } : {}) },
+        { label: t("screens.J1.b2.row0.l"), value: t("screens.J1.b2.row0.v", { amount: oathAmount(view.facts, mine.start) }) },
+        { label: t("screens.J1.b2.row1.l"), value: t("screens.J1.b2.row1.v", { amount: mine.lost > 0n ? oathAmount(view.facts, -mine.lost) : oathAmount(view.facts, 0n) }), ...(mine.lost > 0n ? { color: color.red.base } : {}) },
+        { label: t("screens.J1.b2.row2.l"), value: t("screens.J1.b2.row2.v", { amount: signed(view, mine.won) }), ...(mine.won > 0n ? { color: color.lime.base } : {}) },
         // Fees come out of the losers' money; nobody pays a fee on what they kept (rules.md §3).
         { label: t("screens.J1.b2.row3.l"), value: t("screens.J1.b2.row3.v") },
-        { label: t("screens.J1.b2.row4.l"), value: t("screens.J1.b2.row4.v", { amount: skrWhole(amount) }), total: true, color: color.lime.base },
+        { label: t("screens.J1.b2.row4.l"), value: t("screens.J1.b2.row4.v", { amount: oathAmount(view.facts, amount) }), total: true, color: color.lime.base },
       ]} />
     </Screen>
   );
@@ -61,10 +61,10 @@ export function J1() {
 export function J1p() {
   const { id, view } = useClaimScreen();
   const task = useCallback(async () => { if (!view) throw new Error("Oath not loaded"); return oathActions.claim(view.facts); }, [view]);
-  const onDone = useCallback((amount: bigint) => ({ to: "J1·ok" as const, params: { id, amount: skrWhole(amount) } }), [id]);
+  const onDone = useCallback((amount: bigint) => ({ to: "J1·ok" as const, params: { id, amount: view ? oathAmount(view.facts, amount) : "" } }), [id, view]);
   const fail = useMemo(() => ({ retry: "J1·p" as const, edit: "J1" as const, params: { id }, failed: "J1·f" as const }), [id]);
   if (!view) return null;
-  return <SigningScreen title={t("screens.J1·p.b2.title")} sub={t("screens.J1·p.b2.sub", { amount: skrWhole(view.claimable) })} task={task} onDone={onDone} fail={fail} />;
+  return <SigningScreen title={t("screens.J1·p.b2.title")} sub={t("screens.J1·p.b2.sub", { amount: oathAmount(view.facts, view.claimable) })} task={task} onDone={onDone} fail={fail} />;
 }
 
 // ── J1·ok Claimed ──
@@ -92,7 +92,7 @@ export function J1f() {
     <Screen bar={<NavBar onBack={back} close />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="refresh" label={t("screens.J1·f.pin.0")} onPress={() => replace("J1·p", { id })} />}>
       <SignStatus state="fail" chip={t("screens.C7·fail.b1.chip")} />
-      <Title heading={t("screens.J1·f.b2.title")} sub={t("screens.J1·f.b2.sub", { amount: view ? skrWhole(view.claimable) : "" })} align="center" />
+      <Title heading={t("screens.J1·f.b2.title")} sub={t("screens.J1·f.b2.sub", { amount: view ? oathAmount(view.facts, view.claimable) : "" })} align="center" />
     </Screen>
   );
 }
@@ -160,19 +160,19 @@ function GroupSettled({ missed }: { missed: boolean }) {
   const k = keeperLines(id)[0]!;
   const me = view.members[view.me]!;
   const net = mine.final - mine.start;
-  const claim = <Button kind={missed ? "p" : "l"} icon="hand-coin-outline" label={t("screens.L1.pin.0", { amount: skrWhole(view.claimable || mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />;
+  const claim = <Button kind={missed ? "p" : "l"} icon="hand-coin-outline" label={t("screens.L1.pin.0", { amount: oathAmount(view.facts, view.claimable || mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />;
   return (
     <Moment v={view} pins={claim} stamp={missed ? t("screens.L2.brand.stamp", { name: view.facts.name.toUpperCase() }) : t("screens.L1.brand.stamp", { name: view.facts.name.toUpperCase(), kept: me.keptDays, total: view.facts.numDays })}>
       <ScreenKeeper id={id} lines={[k]} />
       <Title heading={missed ? t("screens.L2.b1.title", { name: view.facts.name }) : t("screens.L1.b1.title", { name: view.facts.name })}
         {...(missed ? { sub: t("screens.L2.b1.sub", { days: dayList(me.missed.map((d) => d + 1)) }) } : {})} align="center" />
-      <MoneyMoment value={t("screens.L1.b2.value", { amount: skrWhole(mine.final) })} tone={missed ? "white" : "lime"}
-        caption={net >= 0n ? t("screens.L1.b2.caption", { amount: skrWhole(net) }) : t("additions.core.down", { amount: skrWhole(-net) })} />
+      <MoneyMoment value={t("screens.L1.b2.value", { amount: oathAmount(view.facts, mine.final) })} tone={missed ? "white" : "lime"}
+        caption={net >= 0n ? t("screens.L1.b2.caption", { amount: oathAmount(view.facts, net) }) : t("additions.core.down", { amount: oathAmount(view.facts, -net) })} />
       <Breakdown rows={[
-        { label: t("screens.L1.b3.row0.l"), value: skrWhole(mine.start) },
-        { label: missed ? t("screens.L2.b3.row1.l", { n: me.missed.length }) : t("screens.L1.b3.row1.l"), value: mine.lost > 0n ? skrWhole(-mine.lost) : "0", ...(mine.lost > 0n ? { color: color.red.base } : {}) },
-        { label: missed ? t("screens.L2.b3.row2.l") : t("screens.L1.b3.row2.l"), value: signed(mine.won), color: color.lime.base },
-        { label: t("screens.L1.b3.row3.l"), value: t("screens.L1.b3.row3.v", { amount: skrWhole(mine.final) }), total: true },
+        { label: t("screens.L1.b3.row0.l"), value: oathAmount(view.facts, mine.start) },
+        { label: missed ? t("screens.L2.b3.row1.l", { n: me.missed.length }) : t("screens.L1.b3.row1.l"), value: mine.lost > 0n ? oathAmount(view.facts, -mine.lost) : oathAmount(view.facts, 0n), ...(mine.lost > 0n ? { color: color.red.base } : {}) },
+        { label: missed ? t("screens.L2.b3.row2.l") : t("screens.L1.b3.row2.l"), value: signed(view, mine.won), color: color.lime.base },
+        { label: t("screens.L1.b3.row3.l"), value: t("screens.L1.b3.row3.v", { amount: oathAmount(view.facts, mine.final) }), total: true },
       ]} />
     </Moment>
   );
@@ -194,12 +194,12 @@ export function L3() {
   const dmg = view.facts.isSolo ? 35 : 20;
   return (
     <Moment v={view} pins={<>
-      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.L3.pin.0", { amount: skrWhole(held) })} onPress={() => go("R1", { id: view.facts.id })} /> : null}
+      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.L3.pin.0", { amount: oathAmount(view.facts, held) })} onPress={() => go("R1", { id: view.facts.id })} /> : null}
       <Button kind="t" label={t("screens.L3.pin.1")} onPress={() => go("C1")} />
     </>}>
       <ScreenKeeper id="L3" lines={[k]} />
       <Title heading={t("screens.L3.b1.title")} sub={t("screens.L3.b1.sub", { name: view.facts.name, day })} align="center" fs={48} />
-      <MoneyMoment value={t("screens.L3.b2.value", { amount: skrWhole(-myLost) })} caption={t("screens.L3.b2.caption")} tone="red" />
+      <MoneyMoment value={t("screens.L3.b2.value", { amount: oathAmount(view.facts, -myLost) })} caption={t("screens.L3.b2.caption")} tone="red" />
       <RowList label={t("screens.L3.b3.label")} rows={view.members.filter((m) => m.missed.length).map((m) => ({
         title: memberName(m), sub: t("screens.L3.b3.r0.s", { days: dayList(m.missed.map((d) => d + 1)) }), value: t("screens.L3.b3.r0.r", { hp: dmg * m.missed.length }), valueColor: color.red.base,
         leading: m.facts.avatar ? { kind: "avatar" as const, config: m.facts.avatar } : { kind: "initial" as const, initial: memberInitial(m), bg: memberColor(m) },
@@ -217,7 +217,7 @@ function SoloSettled({ missed }: { missed: boolean }) {
   const id = missed ? "L4·m" : "L4";
   const k = keeperLines(id)[0]!;
   const me = view.members[view.me]!;
-  const claim = <Button kind={missed ? "p" : "l"} icon="hand-coin-outline" label={t("screens.L4.pin.0", { amount: skrWhole(view.claimable || mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />;
+  const claim = <Button kind={missed ? "p" : "l"} icon="hand-coin-outline" label={t("screens.L4.pin.0", { amount: oathAmount(view.facts, view.claimable || mine.final) })} onPress={() => go("J1", { id: view.facts.id })} />;
   return (
     <Moment v={view} pins={claim}>
       <ScreenKeeper id={id} lines={[k]} />
@@ -225,14 +225,14 @@ function SoloSettled({ missed }: { missed: boolean }) {
         sub={missed ? t("screens.L4·m.b1.sub", { days: dayList(me.missed.map((d) => d + 1)) }) : t("screens.L4.b1.sub", { kept: me.keptDays, total: view.facts.numDays })} align="center" />
       {missed ? (
         <Breakdown rows={[
-          { label: t("screens.L4·m.b2.row0.l"), value: skrWhole(mine.start) },
-          { label: t("screens.L4·m.b2.row1.l", { n: me.missed.length }), value: t("screens.L4·m.b2.row1.v", { amount: skrWhole(-mine.lost) }), color: color.red.base },
+          { label: t("screens.L4·m.b2.row0.l"), value: oathAmount(view.facts, mine.start) },
+          { label: t("screens.L4·m.b2.row1.l", { n: me.missed.length }), value: t("screens.L4·m.b2.row1.v", { amount: oathAmount(view.facts, -mine.lost) }), color: color.red.base },
           { label: t("screens.L4·m.b2.row2.l"), value: t("screens.L4·m.b2.row2.v", { hp: view.hp }) },
-          { label: t("screens.L4·m.b2.row3.l"), value: t("screens.L4·m.b2.row3.v", { amount: skrWhole(mine.final) }), total: true },
+          { label: t("screens.L4·m.b2.row3.l"), value: t("screens.L4·m.b2.row3.v", { amount: oathAmount(view.facts, mine.final) }), total: true },
         ]} />
       ) : (
         <ChipRow justify="center">
-          <Chip text={t("screens.L4.b2.chip.0", { amount: skrWhole(mine.final) })} icon="sack" tone="lime" tilt={-2} />
+          <Chip text={t("screens.L4.b2.chip.0", { amount: oathAmount(view.facts, mine.final) })} icon="sack" tone="lime" tilt={-2} />
           <Chip text={t("screens.L4.b2.chip.1", { hp: view.hp })} icon="heart-pulse" tone="lime" tilt={2} />
         </ChipRow>
       )}
@@ -254,12 +254,12 @@ export function L4b() {
   const held = view.state.held[view.me] ?? 0n;
   return (
     <Moment v={view} pins={<>
-      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.L4·b.pin.0", { amount: skrWhole(held) })} onPress={() => go("R1", { id: view.facts.id })} /> : null}
+      {rematch ? <Button kind="l" icon="sword-cross" label={t("screens.L4·b.pin.0", { amount: oathAmount(view.facts, held) })} onPress={() => go("R1", { id: view.facts.id })} /> : null}
       <Button kind="t" label={t("screens.L4·b.pin.1")} onPress={() => go("C1")} />
     </>}>
       <ScreenKeeper id="L4·b" lines={[k]} />
       <Title heading={t("screens.L4·b.b1.title", { name: view.facts.name, day: (view.state.brokeOnDay ?? 0) + 1 })}
-        sub={t("screens.L4·b.b1.sub", { count: me.missed.length, amount: skrWhole(view.facts.stake) })} align="center" />
+        sub={t("screens.L4·b.b1.sub", { count: me.missed.length, amount: oathAmount(view.facts, view.facts.stake) })} align="center" />
       <HPPanel hp={0} lostToday={view.lastDay?.hpBefore ?? 0} note={t("screens.L4·b.b2.note")} />
     </Moment>
   );

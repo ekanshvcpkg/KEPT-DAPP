@@ -38,6 +38,8 @@ export interface MemberFacts {
 export interface OathFacts {
   id: string;
   source: OathSource;
+  /** Asset used by the Oath escrow. New Oaths use native SOL; older and Bounty token flows use SKR. */
+  asset?: "sol" | "skr";
   /** The program's u64 oath_id (decimal), for chain Oaths: seeds the daily proof target. */
   oathId: string | null;
   creator: string;

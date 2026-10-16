@@ -27,7 +27,7 @@ import { useGo, useParams } from "@/app/nav";
 import type { DesignId } from "@/app/routes";
 import { oathActions, refreshOaths, useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
-import { gestureKey, gestureText, listNames, memberName, skrWhole } from "@/features/oaths/present";
+import { gestureKey, gestureText, listNames, memberName, oathAmount } from "@/features/oaths/present";
 import { nowSeconds } from "@/features/time";
 import { useUi } from "@/state/ui";
 import { haptic } from "@/lib/haptics";
@@ -314,7 +314,7 @@ export function F4a() {
       <ScreenKeeper id="F4a" lines={[k]} />
       <Title heading={t("screens.F4a.b2.title")} sub={view ? t("screens.F4a.b2.sub", { name: view.facts.name }) : ""} align="center" />
       <Breakdown rows={[
-        { label: t("screens.F4a.b3.row0.l"), value: t("screens.F4a.b3.row0.v", { cost: skrWhole(view?.myMissCost ?? 0n) }), color: color.red.base },
+        { label: t("screens.F4a.b3.row0.l"), value: t("screens.F4a.b3.row0.v", { cost: oathAmount(view?.facts ?? { asset: "sol" }, view?.myMissCost ?? 0n) }), color: color.red.base },
         { label: t("screens.F4a.b3.row1.l"), value: t("screens.F4a.b3.row1.v", { hp: view?.facts.isSolo ? 35 : 20 }), color: color.red.base },
         { label: t("screens.F4a.b3.row2.l"), value: t("screens.F4a.b3.row2.v") },
       ]} />
@@ -361,7 +361,7 @@ export function F5() {
       {view ? <DayStrip n={view.facts.numDays} done={day} today={day} labels={Array.from({ length: view.facts.numDays }, (_, i) => t("additions.core.dayShort", { n: i + 1 }))} /> : null}
       <ChipRow justify="center">
         {view ? <Chip text={t("screens.F5.b3.chip.0", { hp: view.hp })} icon="heart-pulse" tone="lime" tilt={-2} /> : null}
-        {me ? <Chip text={t("screens.F5.b3.chip.1", { amount: skrWhole(me.inPlay) })} icon="sack" tone="lime" tilt={2} /> : null}
+        {me && view ? <Chip text={t("screens.F5.b3.chip.1", { amount: oathAmount(view.facts, me.inPlay) })} icon="sack" tone="lime" tilt={2} /> : null}
       </ChipRow>
       {pending.length && view ? <RowList label={t("screens.F5.b4.label")} rows={pending.map((m) => ({
         title: memberName(m), sub: t("screens.F5.b4.r0.s"), value: t("screens.F5.b4.r0.r"),

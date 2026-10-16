@@ -28,6 +28,20 @@ const asyncRoute = (fn: (req: any, res: Response) => unknown): RequestHandler =>
 const post = (route: string, fn: (req: any, res: Response) => unknown) => v4Router.post(route, asyncRoute(fn));
 const get = (route: string, fn: (req: any, res: Response) => unknown) => v4Router.get(route, asyncRoute(fn));
 const configPda = PublicKey.findProgramAddressSync([Buffer.from("config")], programId)[0];
+const NATIVE_SOL_MINT = "11111111111111111111111111111111";
+let solUsdPrice: { amount: number; fetchedAt: number } | null = null;
+
+/** Coinbase's public spot endpoint; cache briefly so the create flow does not depend on repeated calls. */
+async function currentSolUsdPrice(): Promise<number> {
+  if (solUsdPrice && Date.now() - solUsdPrice.fetchedAt < 60_000) return solUsdPrice.amount;
+  const response = await fetch("https://api.coinbase.com/v2/prices/SOL-USD/spot", { signal: AbortSignal.timeout(4_000) });
+  if (!response.ok) throw new Error(`SOL spot price provider returned HTTP ${response.status}`);
+  const data = await response.json() as { data?: { amount?: string; currency?: string } };
+  const amount = Number(data.data?.amount);
+  if (data.data?.currency !== "USD" || !Number.isFinite(amount) || amount <= 0) throw new Error("SOL spot price provider returned an invalid quote");
+  solUsdPrice = { amount, fetchedAt: Date.now() };
+  return amount;
+}
 
 post("/api/auth/nonce", (req, res) => {
   try { const message = issueNonce(req.body?.wallet); res.json({ message }); }
@@ -55,6 +69,12 @@ get("/api/me", async (req: AuthedRequest, res) => {
     catch { return res.status(409).json({ wallet:req.wallet, genesis:false, mocked:false, genesisMint:null, error:"This Genesis Token is assigned to a different wallet" }); }
   }
   return res.json({ wallet: req.wallet, genesis: !!genesisMint, mocked: config.sgtMock && !!genesisMint, genesisMint: genesisMint ?? seat?.genesisMint ?? null });
+});
+
+// Stake tiers also serve solo Oaths, which do not require a Genesis token.
+get("/api/price", async (_req, res) => {
+  try { return res.json({ usdPerSol: await currentSolUsdPrice(), usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "Coinbase SOL/USD spot" }); }
+  catch (e) { return res.status(503).json({ error: e instanceof Error ? e.message : "SOL price is unavailable" }); }
 });
 
 v4Router.use("/api", requireGenesis);
@@ -479,8 +499,6 @@ post("/api/nudges", async (req: AuthedRequest, res) => {
   } catch { return res.status(429).json({ error: "You have already nudged this member today" }); }
 });
 
-get("/api/price", async (_req, res) => res.json({ usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "placeholder rate" }));
-
 /** Today's object is fixed per Oath; the gesture comes from a per-photo challenge. */
 export function dailyTarget(_oathId: string, _day: number, objectId: number) {
   return { object: OBJECT_IDS[objectId] ?? OBJECT_IDS[0] };
@@ -717,6 +735,17 @@ async function configuredTreasury(): Promise<PublicKey> {
   return new PublicKey(config.treasuryTokenAccount);
 }
 
+/** The Config stores the legacy SPL treasury account; its authority wallet receives native SOL protocol shares. */
+async function configuredTreasuryAuthority(mint: PublicKey): Promise<PublicKey> {
+  const treasury = await configuredTreasury();
+  const info = await connection.getAccountInfo(treasury, "confirmed");
+  const tokenProgram = await tokenProgramForMint(mint);
+  if (!info || !info.owner.equals(tokenProgram) || info.data.length < 64 || !new PublicKey(info.data.subarray(0, 32)).equals(mint)) {
+    throw new Error("Configured treasury is not a token account for the configured stake mint");
+  }
+  return new PublicKey(info.data.subarray(32, 64));
+}
+
 /** Sends sweep_held (rules v3): the held half of a broken Oath goes to the treasury after its window. The program refuses a second sweep. */
 async function sweepHeldOnChain(address: string, oath: OathRead, onSubmitted: (signature: string) => Promise<void>) {
   if (!config.verifierSecretKey || !config.stakeMint) throw new Error("Sweep signer/mint is not configured");
@@ -724,12 +753,16 @@ async function sweepHeldOnChain(address: string, oath: OathRead, onSubmitted: (s
   const oathPk = new PublicKey(address), mint = new PublicKey(config.stakeMint);
   const vault = PublicKey.findProgramAddressSync([Buffer.from("vault"), oathPk.toBuffer()], programId)[0];
   const tokenProgram = await tokenProgramForMint(mint);
-  const keys = [
+  const keys = oath.mint === NATIVE_SOL_MINT ? [
+    { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },
+    { pubkey: await configuredTreasury(), isSigner: false, isWritable: false }, { pubkey: mint, isSigner: false, isWritable: false },
+    { pubkey: await configuredTreasuryAuthority(mint), isSigner: false, isWritable: true },
+  ] : [
     { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },
     { pubkey: vault, isSigner: false, isWritable: true }, { pubkey: await configuredTreasury(), isSigner: false, isWritable: true },
     { pubkey: mint, isSigner: false, isWritable: false }, { pubkey: tokenProgram, isSigner: false, isWritable: false },
   ];
-  const data = createHash("sha256").update("global:sweep_held").digest().subarray(0, 8);
+  const data = createHash("sha256").update(`global:${oath.mint === NATIVE_SOL_MINT ? "sweep_held_sol" : "sweep_held"}`).digest().subarray(0, 8);
   const sig = await connection.sendTransaction(new Transaction().add(new TransactionInstruction({ programId, keys, data })), [signer]);
   await onSubmitted(sig);
   const confirmed = await connection.confirmTransaction(sig, "confirmed");
@@ -744,13 +777,18 @@ async function settleOnChain(address: string, oath: OathRead) {
   const vault = PublicKey.findProgramAddressSync([Buffer.from("vault"), oathPk.toBuffer()], programId)[0];
   const treasury = await configuredTreasury();
   const tokenProgram = await tokenProgramForMint(mint);
-  const keys = [
+  const keys = oath.mint === NATIVE_SOL_MINT ? [
+    { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },
+    { pubkey: treasury, isSigner: false, isWritable: false }, { pubkey: mint, isSigner: false, isWritable: false },
+    { pubkey: await configuredTreasuryAuthority(mint), isSigner: false, isWritable: true },
+    ...oath.members.map((wallet) => ({ pubkey: PublicKey.findProgramAddressSync([Buffer.from("keeper"), new PublicKey(wallet).toBuffer()], programId)[0], isSigner: false, isWritable: true })),
+  ] : [
     { pubkey: configPda, isSigner: false, isWritable: false }, { pubkey: oathPk, isSigner: false, isWritable: true },
     { pubkey: vault, isSigner: false, isWritable: true }, { pubkey: treasury, isSigner: false, isWritable: true },
     { pubkey: mint, isSigner: false, isWritable: false }, { pubkey: tokenProgram, isSigner: false, isWritable: false },
     ...oath.members.map((wallet) => ({ pubkey: PublicKey.findProgramAddressSync([Buffer.from("keeper"), new PublicKey(wallet).toBuffer()], programId)[0], isSigner: false, isWritable: true })),
   ];
-  const data = createHash("sha256").update("global:settle_oath").digest().subarray(0, 8);
+  const data = createHash("sha256").update(`global:${oath.mint === NATIVE_SOL_MINT ? "settle_oath_sol" : "settle_oath"}`).digest().subarray(0, 8);
   const tx = new Transaction().add(new TransactionInstruction({ programId, keys, data }));
   const sig = await connection.sendTransaction(tx, [signer]);
   const confirmed = await connection.confirmTransaction(sig, "confirmed");
@@ -762,7 +800,7 @@ async function settleOnChain(address: string, oath: OathRead) {
 
 
 type OathRead = {
-  oathId: string; creator: string; goalHash: string; status: number; isSolo: boolean; startTs: number; daySeconds: number; numDays: number; objectId: number;
+  oathId: string; creator: string; mint: string; goalHash: string; status: number; isSolo: boolean; startTs: number; daySeconds: number; numDays: number; objectId: number;
   members: string[]; daysKept: Record<string, number>;
   /** Base units as strings. `payouts` is what each member can claim once settled or cancelled. */
   stakeAmount: string; payouts: Record<string, string>; claimed: Record<string, boolean>;
@@ -785,7 +823,7 @@ async function readOath(address: string): Promise<OathRead | null> {
       const o = 139 + i * 44; const wallet = new PublicKey(d.subarray(o, o + 32)).toBase58();
       members.push(wallet); daysKept[wallet] = d.readUInt16LE(o + 33); claimed[wallet] = d[o + 35] === 1; payouts[wallet] = d.readBigUInt64LE(o + 36).toString();
     }
-    return { oathId, creator: new PublicKey(d.subarray(8, 40)).toBase58(), goalHash: d.subarray(88, 120).toString("hex"), status, isSolo: d[137] === 1, startTs, daySeconds, numDays, objectId, members, daysKept,
+    return { oathId, creator: new PublicKey(d.subarray(8, 40)).toBase58(), mint: new PublicKey(d.subarray(56, 88)).toBase58(), goalHash: d.subarray(88, 120).toString("hex"), status, isSolo: d[137] === 1, startTs, daySeconds, numDays, objectId, members, daysKept,
       stakeAmount: d.readBigUInt64LE(48).toString(), payouts, claimed, terms, rulesVersion: terms.rulesVersion };
   } catch { return null; }
 }

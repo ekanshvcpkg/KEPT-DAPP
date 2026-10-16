@@ -1,11 +1,11 @@
 // What the three intro pages show (A1·i). Every number is computed from the app's own rules in
 // packages/engine and packages/config, so the example can't drift from what an Oath really does. It is an
 // example, and the pages say so: nothing here is a statistic about real users.
-import { HP } from "@kept/config";
+import { HP, SOL_UNIT } from "@kept/config";
 import { keptRate, keptRatePercent, missCost, splitLost } from "@kept/engine";
 
-/** Page 1: the example Oath. Four friends, 1,000 SKR each, and one of them misses a day. */
-export const SAMPLE_OATH = { members: 4, stake: 1000n } as const;
+/** Page 1: the example Oath. Four friends, 0.05 SOL each, and one of them misses a day. */
+export const SAMPLE_OATH = { members: 4, stake: SOL_UNIT / 20n } as const;
 
 export function sampleMiss() {
   const lost = missCost(SAMPLE_OATH.stake);

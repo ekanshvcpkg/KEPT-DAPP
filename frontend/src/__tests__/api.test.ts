@@ -107,14 +107,14 @@ describe("mock api", () => {
   it("the balance follows what this session staked and claimed", async () => {
     const api = mockApi("judges");
     await api.inbox.list(); // seeds the account
-    const before = (await api.wallet.balances(MOCK_WALLET)).skr;
+    const before = (await api.wallet.balances(MOCK_WALLET)).sol;
     const hydra = (await api.oaths.list(MOCK_WALLET)).find((o) => o.name === "Hydra 14")!;
     const won = mockOaths.claim(hydra.id, MOCK_WALLET);
     const dawn = mockOaths.byCode("DAWN-R7Q2")!;
     mockOaths.join(dawn.id, MOCK_WALLET);
-    expect((await api.wallet.balances(MOCK_WALLET)).skr).toBe(before + won - dawn.stake);
+    expect((await api.wallet.balances(MOCK_WALLET)).sol).toBe(before + won - dawn.stake);
     mockOaths.leave(dawn.id, MOCK_WALLET);
-    expect((await api.wallet.balances(MOCK_WALLET)).skr).toBe(before + won);
+    expect((await api.wallet.balances(MOCK_WALLET)).sol).toBe(before + won);
   });
   it("faucet pays once", async () => {
     const api = mockApi();

@@ -25,6 +25,8 @@ export const OATH_STATUS = { open: 0, active: 1, settled: 2, cancelled: 3 } as c
 export const OathRead = z.object({
   oathId: z.string(),
   creator: Address,
+  /** SPL mint address, or the all-ones System Program address for native SOL escrow. */
+  mint: Address,
   goalHash: z.string().regex(/^[0-9a-f]{64}$/),
   status: OathStatusCode,
   startTs: z.number().int(),
@@ -65,7 +67,7 @@ export const PushTokenRequest = z.object({ token: z.string().min(1).max(4096) })
 export const NudgeRequest = z.object({ oath: Address, recipient: Address, dayIndex: z.number().int().nonnegative() });
 export const NudgeResponse = z.object({ ok: z.literal(true) });
 // GET /api/price
-export const PriceResponse = z.object({ usdPerSkr: z.number().positive(), skrForUsd10: z.number(), devnet: z.boolean(), label: z.string() });
+export const PriceResponse = z.object({ usdPerSol: z.number().positive(), usdPerSkr: z.number().positive(), skrForUsd10: z.number(), devnet: z.boolean(), label: z.string() });
 export type Price = z.infer<typeof PriceResponse>;
 // POST /api/faucet  (amount is whole SKR as a string, e.g. "5000")
 export const FaucetResponse = z.object({ signature: z.string(), amount: z.string().regex(/^\d+$/), mint: Address });

@@ -21,7 +21,7 @@ import { useGo, useSheetRoute } from "@/app/nav";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { listNames, memberColor, memberInitial, memberName, objectIcon, oathIcon, skrWhole, weekday } from "@/features/oaths/present";
+import { listNames, memberColor, memberInitial, memberName, objectIcon, oathAmount, oathIcon, weekday } from "@/features/oaths/present";
 import { TabScreen } from "../tabs/TabScreen";
 import { useResultMoments } from "../results/Results";
 import { useBounties, useStats } from "@/features/queries";
@@ -80,7 +80,7 @@ function Active({ items, pending, claim }: { items: OathView[]; pending: OathVie
     <TabScreen tab="today">
       {items.length ? <BodyText text={t("screens.B1.b0.text", { left: pending.length, total: items.length, time: `<m>${hms(reset)}</m>` })} /> : null}
       {claim ? (
-        <Banner tone="lime" icon="sack" title={t("screens.B1.b1.title", { amount: skrWhole(claim.claimable) })}
+        <Banner tone="lime" icon="sack" title={t("screens.B1.b1.title", { amount: oathAmount(claim.facts, claim.claimable) })}
           sub={t("screens.B1.b1.sub", { name: claim.facts.name, when: weekday(endOf(claim)) })} onPress={() => go("J1", { id: claim.facts.id })} />
       ) : null}
       {main ? <ScreenKeeper id="B1" lines={[k[1]!]} /> : null}
@@ -126,12 +126,12 @@ function TodayCard({ v, urgent }: { v: OathView; urgent?: boolean }) {
       line={partial && next ? t("additions.proof.linePartial", { done, total: v.habits.length, next: next.name }) : t("additions.proof.lineNone", { goal: capitalise(goal) })}
       onPress={() => go("D2", { id: v.facts.id })}
       tags={[
-        { text: t("screens.B1.b3.tag.0", { amount: skrWhole(mine.inPlay) }), icon: "sack", tone: "lime" },
+        { text: t("screens.B1.b3.tag.0", { amount: oathAmount(v.facts, mine.inPlay) }), icon: "sack", tone: "lime" },
         // reference/kept-screens-1.js › B1 / B4: the clock is always red, photo 1 violet.
         { text: t("screens.B1.b3.tag.1", { time: shortDuration(v.secondsToReset ?? 0) }), icon: "alarm", tone: "red" },
         ...(partial ? [{ text: t("screens.B1.b3.tag.2", { done, total: v.habits.length }), icon: "camera" as const, tone: "vio" as const }] : []),
       ]}
-      {...(urgent ? { warn: t("screens.B4.b1.warn", { cost: skrWhole(v.myMissCost), hp: v.facts.isSolo ? 35 : 20 }) } : {})}
+      {...(urgent ? { warn: t("screens.B4.b1.warn", { cost: oathAmount(v.facts, v.myMissCost), hp: v.facts.isSolo ? 35 : 20 }) } : {})}
       {...(keptOther && !urgent ? { float: { text: t("screens.B1.b3.float", { name: memberName(keptOther), time: "" }).trim(), initial: memberInitial(keptOther), bg: memberColor(keptOther) } } : {})}
       button={partial
         ? { label: t("screens.B1.b3.btn"), kind: "p", icon: "camera", onPress: () => go("F1", { id: v.facts.id, habit: next?.index ?? 0 }) }
@@ -158,7 +158,7 @@ function AllDone({ items }: { items: OathView[] }) {
   const k = keeperLines("B2")[0]!;
   const reset = Math.min(...items.map((v) => v.secondsToReset ?? Infinity));
   // Free Bounties have nothing at stake: leave their 0 out of "1,043 + 500".
-  const safe = items.map((v) => myToday(v)!.inPlay).filter((b) => b > 0n).map(skrWhole).join(" + ");
+  const safe = items.flatMap((v) => { const amount = myToday(v)!.inPlay; return amount > 0n ? [oathAmount(v.facts, amount)] : []; }).join(" + ");
   const stats = useStats();
   return (
     <TabScreen tab="today" layout="B2">
@@ -239,7 +239,7 @@ export function RecapSheet() {
             sub: missed.length
               ? t("screens.B5.b3.r0.s", { name: listNames(missed), before: d.hpBefore, damaged: d.hpBefore - d.damage, after: d.hpAfter })
               : t("screens.B5.b3.r1.s", { name: t("screens.D2.b6.r0.t"), hp: d.hpAfter }),
-            value: won > 0n ? t("screens.B5.b3.r0.r", { amount: skrWhole(won) }) : t("screens.B5.b3.r1.r"),
+            value: won > 0n ? t("screens.B5.b3.r0.r", { amount: oathAmount(v.facts, won) }) : t("screens.B5.b3.r1.r"),
             valueColor: won > 0n ? color.lime.base : color.text.secondary,
             leading: { kind: "icon" as const, icon: oathIcon(v.facts) },
             onPress: () => replace("D2", { id: v.facts.id }),

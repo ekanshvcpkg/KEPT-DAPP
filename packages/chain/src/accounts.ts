@@ -3,6 +3,8 @@ import { accountsCoder } from "./idl";
 
 export const OATH_STATUS = ["open", "active", "settled", "cancelled"] as const;
 export type OathChainStatus = (typeof OATH_STATUS)[number];
+/** Native SOL marker stored in `Oath.mint`; existing Oaths store their SPL mint here. */
+export const NATIVE_SOL_MINT = "11111111111111111111111111111111";
 
 export interface OathMember {
   wallet: string;

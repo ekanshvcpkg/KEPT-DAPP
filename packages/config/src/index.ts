@@ -48,6 +48,13 @@ export const STAKES_SKR = [500, 1000, 2500] as const;
 export type StakeSkr = (typeof STAKES_SKR)[number];
 export const stakeUnits = (skr: number): bigint => BigInt(skr) * SKR_UNIT;
 
+/** Native SOL uses lamports. New Oath stakes are selected by USD intent and quoted in SOL at creation. */
+export const SOL_DECIMALS = 9;
+export const LAMPORTS_PER_SOL = 10n ** BigInt(SOL_DECIMALS);
+export const SOL_UNIT = LAMPORTS_PER_SOL;
+export const STAKE_TIERS_USD = [5, 10, 25] as const;
+export type StakeTierUsd = (typeof STAKE_TIERS_USD)[number];
+
 export const GOAL_MAX = 60;
 export const OATH_NAME_MAX = 24;
 export const HABIT_COUNT_MAX = 8;

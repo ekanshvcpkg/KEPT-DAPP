@@ -1,5 +1,5 @@
 // Formatting at the edge. Amounts arrive as bigint base units and are only turned into text here.
-import { SKR_DECIMALS, SKR_UNIT } from "@kept/config";
+import { SKR_DECIMALS, SKR_UNIT, SOL_DECIMALS } from "@kept/config";
 
 /**
  * 1234567n → "1,234,567". By hand: Hermes' Intl.NumberFormat throws on BigInt ("Cannot convert
@@ -32,6 +32,12 @@ export function formatSkr(units: bigint, opts: { dp?: 0 | 2 | "auto"; sign?: boo
 /** "≈ $10" from base units and the price API's usdPerSkr. */
 export function formatUsd(units: bigint, usdPerSkr: number): string {
   const usd = (Number(units) / 10 ** SKR_DECIMALS) * usdPerSkr;
+  return "≈ $" + (usd >= 100 ? grouped.format(Math.round(usd)) : usd.toFixed(usd % 1 === 0 ? 0 : 2));
+}
+
+/** "≈ $42.80" from native lamports and the price API's usdPerSol. */
+export function formatUsdSol(lamports: bigint, usdPerSol: number): string {
+  const usd = (Number(lamports) / 10 ** SOL_DECIMALS) * usdPerSol;
   return "≈ $" + (usd >= 100 ? grouped.format(Math.round(usd)) : usd.toFixed(usd % 1 === 0 ? 0 : 2));
 }
 

@@ -996,12 +996,6 @@
    "amount": "250"
   }
  },
- "screens.M3.b1.sub": {
-  "template": "Signing costs about 0.000005 SOL. Your wallet has {sol}.",
-  "sample": {
-   "sol": "0"
-  }
- },
  "screens.M4.b0.title": {
   "template": "You need {amount} SKR.",
   "sample": {

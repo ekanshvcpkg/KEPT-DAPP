@@ -61,9 +61,9 @@ export function mockWallet(ctx: MockContext): WalletApi {
     balances: () => {
       const s = ctx.scenario();
       return respond(ctx, BalancesResponse, {
-        // W1 in the design: 4,280 SKR available.
-        skr: (BigInt(skr(s === "noSkr" ? 620 : 4280)) + addedSkr + mockOaths.walletDelta(ctx.wallet() ?? "")).toString(),
-        sol: s === "noSol" ? "0" : (840_000_000n - spentLamports).toString(),
+        // Legacy Bounty token balance; new Oaths use the native SOL balance below.
+        skr: (BigInt(skr(s === "noSkr" ? 620 : 4280)) + addedSkr + mockOaths.walletDelta(ctx.wallet() ?? "", "skr")).toString(),
+        sol: s === "noSol" ? "0" : (840_000_000n - spentLamports + mockOaths.walletDelta(ctx.wallet() ?? "", "sol")).toString(),
       });
     },
     swap: async (lamports) => {
@@ -79,7 +79,7 @@ export function mockWallet(ctx: MockContext): WalletApi {
       await ack(ctx);
       return { skr: (lamports * MOCK_SKR_PER_SOL * SKR_UNIT) / 1_000_000_000n, skrPerSol: Number(MOCK_SKR_PER_SOL), feeLamports: 5000n };
     },
-    price: () => respond(ctx, PriceResponse, { usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "placeholder rate" }),
+    price: () => respond(ctx, PriceResponse, { usdPerSol: 200, usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "Demo SOL/USD quote" }),
     faucet: async () => {
       if (faucetUsed) throw new ApiError("FAUCET_USED", "mock: faucet already used", 429);
       faucetUsed = true;
@@ -159,7 +159,7 @@ export function mockInbox(ctx: MockContext): InboxApi {
 
 export function mockInvites(ctx: MockContext): InvitesApi {
   const oath = () => ({
-    oathId: "1", creator: MOCK_WALLET, goalHash: "0".repeat(64), status: 0, startTs: 0, daySeconds: 86400, numDays: 7, objectId: 0,
+    oathId: "1", creator: MOCK_WALLET, mint: "11111111111111111111111111111111", goalHash: "0".repeat(64), status: 0, startTs: 0, daySeconds: 86400, numDays: 7, objectId: 0,
     members: [MOCK_WALLET], daysKept: {},
   });
   return {
