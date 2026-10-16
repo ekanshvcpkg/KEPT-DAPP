@@ -206,9 +206,6 @@ export function C8() {
   const p = useParams<{ id: string; code: string }>();
   const { view } = useOath(p.id);
   const facts = view?.facts;
-  const factsRef = useRef(facts);
-  useEffect(() => { factsRef.current = facts; }, [facts]);
-  const factsId = facts?.id;
   const [recoveredCode, setRecoveredCode] = useState<string | null>(null);
   const attemptedFor = useRef<string | null>(null);
   const recoveryRunning = useRef(false);
@@ -216,18 +213,22 @@ export function C8() {
   const [recoveryFailed, setRecoveryFailed] = useState(false);
   const code = p.code ?? recoveredCode ?? view?.facts.inviteCode ?? "";
   const recoverInvite = useCallback(async () => {
-    const current = factsRef.current;
-    if (!current || current.isSolo || recoveryRunning.current) return;
+    const id = p.id;
+    if (!id || recoveryRunning.current) return;
     recoveryRunning.current = true;
     setRecovering(true);
     setRecoveryFailed(false);
     try {
       const api = getApi();
-      const next = current.goal
-        ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal], habitsOf(current).map((h) => h.object))
-        : (await api.invites.create(current.id)).code;
+      const device = useDeviceOaths.getState();
+      const goal = facts?.goal ?? device.goals[id];
+      const habits = facts?.habits?.length ? facts.habits : device.habits[id]?.length ? device.habits[id] : goal ? [goal] : [];
+      const habitObjects = facts ? habitsOf(facts).map((h) => h.object) : device.habitObjects[id] ?? [];
+      const next = goal
+        ? await api.oaths.register({ id, isSolo: false, inviteCode: device.codes[id] }, goal, habits.length ? habits : [goal], habitObjects)
+        : (await api.invites.create(id)).code;
       if (!next) throw new Error("Invite registration returned no code");
-      useDeviceOaths.getState().remember(current.id, { code: next });
+      useDeviceOaths.getState().remember(id, { code: next });
       setRecoveredCode(next);
     } catch {
       setRecoveryFailed(true);
@@ -235,13 +236,12 @@ export function C8() {
       recoveryRunning.current = false;
       setRecovering(false);
     }
-  }, []);
+  }, [facts, p.id]);
   useEffect(() => {
-    const current = factsRef.current;
-    if (!current || current.isSolo || code || attemptedFor.current === current.id) return;
-    attemptedFor.current = current.id;
+    if (!p.id || code || attemptedFor.current === p.id) return;
+    attemptedFor.current = p.id;
     void recoverInvite();
-  }, [factsId, code, recoverInvite]);
+  }, [p.id, code, recoverInvite]);
   const deepLink = inviteUrl(code);
   const seats: Seat[] = view ? [
     ...view.members.map((m): Seat => ({ kind: "member", name: memberName(m), initial: memberInitial(m), color: memberColor(m), ...(m.facts.avatar ? { avatar: m.facts.avatar } : {}), status: t("screens.C8.b4.seat0") })),

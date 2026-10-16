@@ -765,14 +765,17 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
       wallet: WALLET, name: "Retry invite", goal: "read 10 pages", habits: ["read 10 pages"], habitObjects: ["book"],
       objectId: 1, numDays: 7, stake: 1000n * SKR_UNIT, isSolo: false, reviewMode: "ai_group",
     });
+    useDeviceOaths.getState().remember(oath.id, { goal: "read 10 pages", habits: ["read 10 pages"], habitObjects: ["book"] });
     const api = getApi();
-    const getSpy = jest.spyOn(api.oaths, "get").mockResolvedValue({ ...oath, inviteCode: null });
+    const getSpy = jest.spyOn(api.oaths, "get").mockRejectedValue(new Error("Devnet RPC rate limited"));
     const registerSpy = jest.spyOn(api.oaths, "register")
       .mockRejectedValueOnce(new Error("backend temporarily unavailable"))
       .mockResolvedValueOnce("RETRY-1234");
     try {
       await act(async () => { navigateTo("C8", { id: oath.id }); });
       expect(await screen.findByText(t("additions.oathCreate.inviteRecoveryFailed"), {}, slow)).toBeTruthy();
+      expect(registerSpy.mock.calls[0]?.[0]).toMatchObject({ id: oath.id, isSolo: false });
+      expect(registerSpy.mock.calls[0]?.slice(1)).toEqual(["read 10 pages", ["read 10 pages"], ["book"]]);
       expect(mockOaths.list(WALLET)).toHaveLength(1);
       await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.retryInvite") }));
       expect(await screen.findByText("RETRY-1234", {}, slow)).toBeTruthy();

@@ -3,7 +3,7 @@
     "name": "KEPT",
     "slug": "kept",
     "scheme": "kept",
-    "version": "0.1.0",
+    "version": "1.1.2",
     "orientation": "portrait",
     "icon": "./assets/brand/kept-app-icon.png",
     "userInterfaceStyle": "dark",
@@ -13,6 +13,7 @@
     ],
     "android": {
       "package": "app.kept.mobile",
+      "versionCode": 10102,
       "predictiveBackGestureEnabled": false,
       "intentFilters": [
         {

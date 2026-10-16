@@ -35,7 +35,7 @@ export function mockOathsApi(ctx: MockContext): OathsApi {
       const oath = mockOaths.inviteFor(code.trim(), wallet());
       return { oath, alreadyStarted: oath.status !== "open" };
     },
-    register: async (oath) => { await delay(ctx); return oath.inviteCode; },
+    register: async (oath) => { await delay(ctx); return oath.inviteCode ?? mockOaths.get(oath.id)?.inviteCode ?? null; },
     watch: async () => { await delay(ctx); },
   };
 }

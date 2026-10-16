@@ -109,7 +109,7 @@ export interface OathsApi {
    * After a confirmed create: store the goal text, make an invite (group), and register the Oath
    * with the settlement scheduler (docs/ARCHITECTURE.md §7, BACKEND_GAPS P0-9). Returns the code.
    */
-  register(oath: OathFacts, goal: string, habits: string[], habitObjects: string[]): Promise<string | null>;
+  register(oath: Pick<OathFacts, "id" | "isSolo"> & Partial<Pick<OathFacts, "inviteCode">>, goal: string, habits: string[], habitObjects: string[]): Promise<string | null>;
   /** After a confirmed join: register for settlement and reminders. */
   watch(oath: OathFacts): Promise<void>;
 }
