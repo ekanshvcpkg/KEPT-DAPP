@@ -30,6 +30,8 @@ describe("copy", () => {
   });
   it("t() reads screen keys whose ids contain · and +", () => {
     expect(t("screens.C7·no.pin.0" as CopyKey)).toBeTruthy();
+    expect(t("screens.J1.b1.caption", { asset: "SOL" })).toBe("SOL ready to claim");
+    expect(t("screens.J1.b1.caption", { asset: "SKR" })).toBe("SKR ready to claim");
     expect(t("screens.C4.b4.title", { cost: "0.005 SOL" })).toBe("A miss costs 0.005 SOL");
     expect(t("screens.D2.b1.text", { timeLeft: "3h 2m", cost: "0.005 SOL" })).toBe("3h 2m left today · a miss costs −0.005 SOL");
     expect(t("screens.D2.b7.sub", { shares: "You +0.001 SOL", fee: "0.001 SOL" })).toBe("You +0.001 SOL · KEPT 0.001 SOL");

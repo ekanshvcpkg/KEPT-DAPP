@@ -30,6 +30,7 @@
   "screens.M3.b1.title": "Not enough SOL.",
   "screens.M3.b1.sub": "Available: {sol} SOL. Add SOL for the Oath stake and network fee.",
   "screens.M3.b2.btn.0": "Receive SOL",
+  "screens.J1.b1.caption": "{asset} ready to claim",
   "screens.E3·skr.pin.0": "Receive SOL",
   "screens.D2.b5.sub": "A photo failed 3 times. Your vote counts.",
   "screens.N1.b1.rev1.s": "Iron Week · a photo failed 3 times · 41h left",

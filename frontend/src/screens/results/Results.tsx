@@ -21,7 +21,7 @@ import type { DesignId } from "@/app/routes";
 import { oathActions, useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { dayList, memberColor, memberInitial, memberName, oathAmount } from "@/features/oaths/present";
+import { dayList, memberColor, memberInitial, memberName, oathAmount, oathAsset } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { SigningScreen } from "../shared/Signing";
@@ -44,7 +44,7 @@ export function J1() {
   return (
     <Screen bar={<NavBar onBack={back} close title={t("screens.J1.nav.title")} />} bottomInset={amount > 0n ? pinned(1) : 0}
       pinned={amount > 0n ? <Button kind="l" icon="hand-coin-outline" label={t("screens.J1.pin.0")} onPress={() => replace("J1·p", { id })} /> : undefined}>
-      <MoneyMoment value={t("screens.J1.b1.value", { amount: oathAmount(view.facts, amount) })} caption={amount > 0n ? t("screens.J1.b1.caption") : t("additions.core.nothingToClaim")} tone="lime" />
+      <MoneyMoment value={t("screens.J1.b1.value", { amount: oathAmount(view.facts, amount) })} caption={amount > 0n ? t("screens.J1.b1.caption", { asset: oathAsset(view.facts).toUpperCase() }) : t("additions.core.nothingToClaim")} tone="lime" />
       <Breakdown label={t("screens.J1.b2.label", { name: view.facts.name.toUpperCase() })} rows={[
         { label: t("screens.J1.b2.row0.l"), value: t("screens.J1.b2.row0.v", { amount: oathAmount(view.facts, mine.start) }) },
         { label: t("screens.J1.b2.row1.l"), value: t("screens.J1.b2.row1.v", { amount: mine.lost > 0n ? oathAmount(view.facts, -mine.lost) : oathAmount(view.facts, 0n) }), ...(mine.lost > 0n ? { color: color.red.base } : {}) },

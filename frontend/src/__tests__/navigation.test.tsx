@@ -367,7 +367,7 @@ describe("onboarding on mocks", () => {
     expect(await screen.findByText(t("screens.L1.b1.title", { name: "Iron Week" }), {}, slow)).toBeTruthy();
     expect(useDeviceOaths.getState().shownResults).toHaveLength(1);
     await fireEvent.press(await screen.findByRole("button", { name: /Claim/ }));
-    expect(await screen.findByText(t("screens.J1.b1.caption"))).toBeTruthy();
+    expect(await screen.findByText(t("screens.J1.b1.caption", { asset: "SOL" }))).toBeTruthy();
     // D-86: claim → signed → "Done" is the one home, nothing stacked on or under it.
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.J1.pin.0") }));
     await fireEvent.press(await screen.findByRole("button", { name: t("screens.J1·ok.pin.0") }, slow));
