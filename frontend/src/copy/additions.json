@@ -38,7 +38,10 @@
     "noProofSub": "Pick one below, or search for another.",
     "unfinishedTitle": "A habit has no proof object yet",
     "unfinishedSub": "Tap it to choose the object that proves it.",
-    "proofForHabit": "Proof: {object}"
+    "proofForHabit": "Proof: {object}",
+    "inviteRecovering": "Your Oath is on chain. Setting up its invite link…",
+    "inviteRecoveryFailed": "Your Oath is on chain, but its invite link is not ready. Retry to finish setup; your stake will not be charged again.",
+    "retryInvite": "Retry invite setup"
   },
   "rematch": {
     "winBackHalf": "Win back half of what you had left."
@@ -173,6 +176,7 @@
   "wallet": {
     "$source": "phase 4",
     "faucetUsed": "The faucet gives 5,000 SKR once per wallet.",
+    "faucetGenesisRequired": "A verified Seeker Genesis wallet is required to claim test SKR.",
     "available": "SKR available",
     "lockedOne": "{amount} SKR · 1 Oath",
     "noWalletApp": "No wallet app found. Install Phantom or Solflare, or try the demo."

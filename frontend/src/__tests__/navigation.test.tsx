@@ -4,6 +4,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import copy from "../../../design/copy.json";
 import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
+import { getApi } from "@/api";
+import { SKR_UNIT } from "@kept/config";
 import { ToastHost } from "@/components/chrome";
 import { queryClient } from "@/api/queries";
 import { SLICES } from "@/api/types";
@@ -742,6 +744,45 @@ describe("Bounties, Rematch, review, profile and wallet on mocks", () => {
     await render(<App />);
     expect(await screen.findByRole("header", { name: t("screens.B1.header.title") }, slow)).toBeTruthy();
   }
+
+  it("explains that the Devnet faucet needs Genesis eligibility from Wallet and Settings", async () => {
+    await signedIn("fresh");
+    useSession.setState({ genesis: false });
+    await act(async () => { navigateTo("W2"); });
+    const required = t("additions.wallet.faucetGenesisRequired");
+    expect(await screen.findByText(required, {}, slow)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t("screens.W2.b1.r2.t") })).toBeNull();
+
+    resetStack(["Tabs"]);
+    await act(async () => { navigateTo("I4"); });
+    expect(await screen.findByText(required, {}, slow)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t("screens.I4.b2.r2.t") })).toBeNull();
+  }, 30000);
+
+  it("C8 can retry a failed invite registration without creating or charging for another Oath", async () => {
+    await signedIn("fresh");
+    const oath = mockOaths.create({
+      wallet: WALLET, name: "Retry invite", goal: "read 10 pages", habits: ["read 10 pages"], habitObjects: ["book"],
+      objectId: 1, numDays: 7, stake: 1000n * SKR_UNIT, isSolo: false, reviewMode: "ai_group",
+    });
+    const api = getApi();
+    const getSpy = jest.spyOn(api.oaths, "get").mockResolvedValue({ ...oath, inviteCode: null });
+    const registerSpy = jest.spyOn(api.oaths, "register")
+      .mockRejectedValueOnce(new Error("backend temporarily unavailable"))
+      .mockResolvedValueOnce("RETRY-1234");
+    try {
+      await act(async () => { navigateTo("C8", { id: oath.id }); });
+      expect(await screen.findByText(t("additions.oathCreate.inviteRecoveryFailed"), {}, slow)).toBeTruthy();
+      expect(mockOaths.list(WALLET)).toHaveLength(1);
+      await fireEvent.press(screen.getByRole("button", { name: t("additions.oathCreate.retryInvite") }));
+      expect(await screen.findByText("RETRY-1234", {}, slow)).toBeTruthy();
+      expect(registerSpy).toHaveBeenCalledTimes(2);
+      expect(mockOaths.list(WALLET)).toHaveLength(1);
+    } finally {
+      getSpy.mockRestore();
+      registerSpy.mockRestore();
+    }
+  }, 30000);
 
   it("Rematch: R1 → sign → R3 lobby", async () => {
     await signedIn("broken");

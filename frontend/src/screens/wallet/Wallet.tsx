@@ -101,11 +101,16 @@ export function W2() {
   const { back, replace } = useGo();
   const swap = useFeature("swap");
   const toast = useToast();
+  const genesis = useSession((s) => s.genesis);
   const insets = useSafeAreaInsets();
   const sheet = useSheetRoute();
   const faucet = async () => {
     try { const amount = await walletActions.faucet(); toast(t("toasts.21", { amount: skrWhole(amount) })); back(); }
-    catch (e) { toast(isApiError(e) && e.code === "FAUCET_USED" ? t("additions.wallet.faucetUsed") : t("screens.C7·fail.b2.title")); }
+    catch (e) {
+      toast(isApiError(e) && e.code === "FAUCET_USED" ? t("additions.wallet.faucetUsed")
+        : isApiError(e) && e.code === "NOT_ELIGIBLE" ? t("additions.wallet.faucetGenesisRequired")
+          : t("screens.C7·fail.b2.title"));
+    }
   };
   return (
     <View style={{ flex: 1 }}>
@@ -115,7 +120,11 @@ export function W2() {
           // Swap is a Devnet mock (D-21): Live leaves it out.
           ...(swap ? [{ title: t("screens.W2.b1.r0.t"), sub: t("screens.W2.b1.r0.s"), leading: { kind: "icon" as const, icon: "swap-horizontal" as const, bg: color.lime.base, fg: color.text.onLime }, chevron: true, onPress: () => replace("W3") }] : []),
           { title: t("screens.W2.b1.r1.t"), sub: t("screens.W2.b1.r1.s"), leading: { kind: "icon", icon: "qrcode" }, chevron: true, onPress: () => replace("W4") },
-          ...(env.cluster === "devnet" ? [{ title: t("screens.W2.b1.r2.t"), sub: t("screens.W2.b1.r2.s"), value: t("screens.W2.b1.r2.r"), valueColor: color.lime.base, leading: { kind: "icon" as const, icon: "water-outline" as const }, onPress: () => { void faucet(); } }] : []),
+          ...(env.cluster === "devnet" ? [{
+            title: t("screens.W2.b1.r2.t"), sub: genesis ? t("screens.W2.b1.r2.s") : t("additions.wallet.faucetGenesisRequired"),
+            ...(genesis ? { value: t("screens.W2.b1.r2.r"), valueColor: color.lime.base, onPress: () => { void faucet(); } } : { disabled: true }),
+            leading: { kind: "icon" as const, icon: "water-outline" as const },
+          }] : []),
         ]} />
         <Note text={t("screens.W2.b2.text")} icon="flask-outline" />
         <ButtonRow><Button kind="s" label={t("screens.W2.b3.btn.0")} onPress={back} /></ButtonRow>

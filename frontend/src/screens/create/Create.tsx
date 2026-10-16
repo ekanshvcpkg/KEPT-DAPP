@@ -10,7 +10,7 @@ import { keeperLines, t } from "@/copy";
 import type { CopyKey } from "@/copy";
 import { Button, ButtonRow } from "@/components/actions";
 import { NavBar, useToast } from "@/components/chrome";
-import { Banner, BodyText, Breakdown, Title } from "@/components/content/Basics";
+import { Banner, BodyText, Breakdown, Note, Title } from "@/components/content/Basics";
 import { OptionGrid, QRCard, SeatSlots, SentenceInput } from "@/components/content/Inputs";
 import type { Seat } from "@/components/content/Inputs";
 import { RowList } from "@/components/content/Rows";
@@ -211,29 +211,37 @@ export function C8() {
   const factsId = facts?.id;
   const [recoveredCode, setRecoveredCode] = useState<string | null>(null);
   const attemptedFor = useRef<string | null>(null);
+  const recoveryRunning = useRef(false);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
   const code = p.code ?? recoveredCode ?? view?.facts.inviteCode ?? "";
+  const recoverInvite = useCallback(async () => {
+    const current = factsRef.current;
+    if (!current || current.isSolo || recoveryRunning.current) return;
+    recoveryRunning.current = true;
+    setRecovering(true);
+    setRecoveryFailed(false);
+    try {
+      const api = getApi();
+      const next = current.goal
+        ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal], habitsOf(current).map((h) => h.object))
+        : (await api.invites.create(current.id)).code;
+      if (!next) throw new Error("Invite registration returned no code");
+      useDeviceOaths.getState().remember(current.id, { code: next });
+      setRecoveredCode(next);
+    } catch {
+      setRecoveryFailed(true);
+    } finally {
+      recoveryRunning.current = false;
+      setRecovering(false);
+    }
+  }, []);
   useEffect(() => {
     const current = factsRef.current;
     if (!current || current.isSolo || code || attemptedFor.current === current.id) return;
     attemptedFor.current = current.id;
-    let active = true;
-    const recover = async () => {
-      try {
-        const api = getApi();
-        const next = current.goal
-          ? await api.oaths.register(current, current.goal, current.habits?.length ? current.habits : [current.goal], habitsOf(current).map((h) => h.object))
-          : (await api.invites.create(current.id)).code;
-        if (next && active) {
-          useDeviceOaths.getState().remember(current.id, { code: next });
-          setRecoveredCode(next);
-        }
-      } catch {
-        // The Oath is already created. Keep this screen usable and let the user retry by reopening it.
-      }
-    };
-    void recover();
-    return () => { active = false; };
-  }, [factsId, code]);
+    void recoverInvite();
+  }, [factsId, code, recoverInvite]);
   const deepLink = inviteUrl(code);
   const seats: Seat[] = view ? [
     ...view.members.map((m): Seat => ({ kind: "member", name: memberName(m), initial: memberInitial(m), color: memberColor(m), ...(m.facts.avatar ? { avatar: m.facts.avatar } : {}), status: t("screens.C8.b4.seat0") })),
@@ -243,6 +251,10 @@ export function C8() {
     <Screen bar={<NavBar onBack={back} close title={t("screens.C8.nav.title")} />} bottomInset={pinnedOne}
       pinned={<Button kind="p" label={t("screens.C8.pin.0")} onPress={() => replace("D1", { id: p.id! })} />}>
       <Title heading={t("screens.C8.b0.title")} sub={view ? t("screens.C8.b0.sub", { amount: skrWhole(view.facts.stake) }) : undefined} />
+      {!code && (recovering || recoveryFailed) ? <Note icon={recoveryFailed ? "alert-outline" : "loading"}
+        text={t(recoveryFailed ? "additions.oathCreate.inviteRecoveryFailed" : "additions.oathCreate.inviteRecovering")} /> : null}
+      {!code && recoveryFailed ? <Button kind="s" icon="refresh" label={t("additions.oathCreate.retryInvite")}
+        onPress={() => { void recoverInvite(); }} /> : null}
       {code ? <QRCard code={code} link={deepLink} /> : null}
       {code ? <ButtonRow>
         <Button kind="s" size="row" icon="content-copy" label={t("screens.C8.b2.btn.0")} onPress={() => { void Clipboard.setStringAsync(deepLink).then(() => toast(t("toasts.0"))); }} />

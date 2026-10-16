@@ -186,12 +186,17 @@ export function I4() {
   const { back, go } = useGo();
   const toast = useToast();
   const wallet = useSession((s) => s.wallet);
+  const genesis = useSession((s) => s.genesis);
   const notify = useSettings((s) => s.notify);
   const setNotify = useSettings((s) => s.setNotify);
   const stats = useStats();
   const faucet = async () => {
     try { const amount = await walletActions.faucet(); toast(t("toasts.17", { amount: skrWhole(amount) })); }
-    catch (e) { toast(isApiError(e) && e.code === "FAUCET_USED" ? t("additions.wallet.faucetUsed") : e instanceof Error ? e.message : String(e)); }
+    catch (e) {
+      toast(isApiError(e) && e.code === "FAUCET_USED" ? t("additions.wallet.faucetUsed")
+        : isApiError(e) && e.code === "NOT_ELIGIBLE" ? t("additions.wallet.faucetGenesisRequired")
+          : e instanceof Error ? e.message : String(e));
+    }
   };
   const demo = useIsDemo();
   const canCreate = useFeature("createBounty");
@@ -232,7 +237,11 @@ export function I4() {
       <RowList label={t("screens.I4.b2.label")} rows={[
         ...account,
         { title: t("screens.I4.b2.r1.t"), sub: env.cluster === "devnet" ? t("screens.I4.b2.r1.s") : env.cluster, value: t("screens.I4.b2.r1.r"), valueColor: color.orange.base, leading: { kind: "icon", icon: "web" } },
-        ...(env.cluster === "devnet" ? [{ title: t("screens.I4.b2.r2.t"), sub: t("screens.I4.b2.r2.s"), value: t("screens.I4.b2.r2.r"), valueColor: color.lime.base, leading: { kind: "icon" as const, icon: "water" as const }, onPress: () => { void faucet(); } }] : []),
+        ...(env.cluster === "devnet" ? [{
+          title: t("screens.I4.b2.r2.t"), sub: genesis ? t("screens.I4.b2.r2.s") : t("additions.wallet.faucetGenesisRequired"),
+          ...(genesis ? { value: t("screens.I4.b2.r2.r"), valueColor: color.lime.base, onPress: () => { void faucet(); } } : { disabled: true }),
+          leading: { kind: "icon" as const, icon: "water" as const },
+        }] : []),
       ]} />
     </Screen>
   );
