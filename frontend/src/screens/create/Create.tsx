@@ -28,7 +28,7 @@ import { screenFor } from "@/features/oaths/route";
 import { oathName } from "@/features/oaths/names";
 import { useDraft } from "@/state/drafts";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { inviteUrl } from "@/config/env";
+import { inviteUrl, liveNativeSolOathsEnabled } from "@/config/env";
 import { useNow } from "@/features/time";
 import { useSession } from "@/state/session";
 import { useUi } from "@/state/ui";
@@ -68,6 +68,7 @@ export function C1() {
     filled.current = true;
     set(SHOWCASE_DRAFT);
   }, [demo, prefill, set]);
+  if (!demo && !liveNativeSolOathsEnabled()) return <LiveOathsUnavailable />;
   return (
     <Step n={1} close next={() => go("C2")} disabled={!draft.name.trim()}>
       <Title heading={t("additions.oathCreate.nameTitle")} sub={t("additions.oathCreate.nameSub")} />
@@ -75,6 +76,16 @@ export function C1() {
         placeholder={t("additions.oathCreate.namePlaceholder")} />
       <ScreenKeeper id="C1" lines={k} />
     </Step>
+  );
+}
+
+function LiveOathsUnavailable() {
+  const { back } = useGo();
+  return (
+    <Screen bar={<NavBar onBack={back} close />}>
+      <Title heading={t("additions.liveOaths.title")} sub={t("additions.liveOaths.sub")} />
+      <Banner tone="grey" icon="lock-outline" title={t("additions.liveOaths.status")} />
+    </Screen>
   );
 }
 
@@ -106,7 +117,7 @@ export function C4() {
   const { draft, set } = useDraft();
   const genesis = useSession((s) => s.genesis);
   const api = useApi();
-  const price = useQuery({ queryKey: qk.price, queryFn: () => api.wallet.price(), retry: false });
+  const price = useQuery({ queryKey: qk.price, queryFn: () => api.wallet.price(), retry: 1 });
   const quoted = price.data ? lamportsForUsd(draft.stakeUsd, price.data.usdPerSol) : null;
   useEffect(() => {
     if (quoted !== null && draft.stakeLamports !== quoted.toString()) set({ stakeLamports: quoted.toString() });
@@ -119,7 +130,8 @@ export function C4() {
   return (
     <Step n={4} next={() => go(draft.isSolo ? "C6" : "C5")} disabled={quoted === null}>
       <Title heading={t("screens.C4.b0.title")} />
-      {quoted === null ? <Note icon="alert-outline" text={t("additions.stake.priceUnavailable")} /> : null}
+      {quoted === null ? <Banner tone="grey" icon="alert-outline" title={t("additions.stake.priceUnavailable")}
+        sub={t("additions.stake.retryPrice")} onPress={() => { void price.refetch(); }} /> : null}
       <OptionGrid mode="row2" value={draft.isSolo ? 0 : 1} onChange={pickMode}
         items={[{ title: t("screens.C4.b1.o0.t"), sub: t("screens.C4.b1.o0.s"), icon: "account" }, { title: t("screens.C4.b1.o1.t"), sub: t("screens.C4.b1.o1.s"), icon: genesis ? "account-group" : "lock-outline" }]} />
       <BodyText mono text={t("screens.C4.b2.text")} />

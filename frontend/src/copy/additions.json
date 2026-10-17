@@ -11,7 +11,14 @@
     "usdTier": "≈ ${amount}",
     "solAmount": "{amount} SOL",
     "quoteHint": "SOL amount uses the current spot price.",
-    "priceUnavailable": "SOL price is unavailable. Check your connection and try again."
+    "priceUnavailable": "SOL price is unavailable. Check your connection and try again.",
+    "retryPrice": "Tap to try the quote again."
+  },
+  "liveOaths": {
+    "$source": "owner: keep Live native-SOL Oaths unavailable until the matching API and on-chain program deployment is verified.",
+    "title": "Live Oaths are not ready yet",
+    "sub": "The Live payment service and on-chain program are waiting for a matching release. You can explore Oaths in Demo meanwhile.",
+    "status": "No Live Oath transaction will be sent from this screen."
   },
   "oathCreate": {
     "$source": "owner: name the Oath first, then add each daily habit with its proof object in a Save / Cancel editor (2026-10-11, DECISIONS D-95, D-96)",

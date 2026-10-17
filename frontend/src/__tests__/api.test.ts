@@ -16,7 +16,7 @@ import { createMockWallet } from "@/chain/mock";
 import { signIn } from "@/features/auth";
 import { defaultFlags } from "@/state/dev";
 import { useSession } from "@/state/session";
-import { Address, NonceResponse } from "@kept/shared";
+import { Address, NonceResponse, PriceResponse } from "@kept/shared";
 
 const allMock = Object.fromEntries(SLICES.map((s) => [s, "mock"])) as Record<Slice, SliceMode>;
 function mockApi(scenario: Scenario = "activeGroup") {
@@ -58,6 +58,16 @@ describe("http client", () => {
     await expect(down.get("/api/me", NonceResponse)).rejects.toMatchObject({ code: "OFFLINE" });
     const odd = createHttpClient(() => null, "http://api", (() => ok({ nope: 1 })) as unknown as typeof fetch);
     await expect(odd.get("/api/me", NonceResponse)).rejects.toMatchObject({ code: "SERVER" });
+  });
+  it("rejects the old placeholder quote shape used by the stale API build", async () => {
+    const oldQuote = { usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "placeholder rate" };
+    const c = createHttpClient(() => "token", "http://api", (() => ok(oldQuote)) as unknown as typeof fetch);
+    await expect(c.get("/api/price", PriceResponse)).rejects.toMatchObject({ code: "SERVER" });
+  });
+  it("accepts the current signed-in SOL quote shape", async () => {
+    const quote = { usdPerSol: 100, usdPerSkr: 0.01, skrForUsd10: 1000, devnet: true, label: "Coinbase SOL/USD spot" };
+    const c = createHttpClient(() => "token", "http://api", (() => ok(quote)) as unknown as typeof fetch);
+    await expect(c.get("/api/price", PriceResponse)).resolves.toEqual(quote);
   });
 });
 

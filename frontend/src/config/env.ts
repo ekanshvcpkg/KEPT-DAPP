@@ -23,6 +23,9 @@ export const env = {
   },
 } as const;
 
+/** Live native-SOL Oath transactions stay off until the matching API and program have both been deployed. */
+export const liveNativeSolOathsEnabled = (): boolean => process.env.EXPO_PUBLIC_LIVE_NATIVE_SOL_OATHS === "1";
+
 /** Live needs a reachable API: reject local addresses in release builds. */
 export const liveConfigured = (url: string = env.apiUrl, dev: boolean = __DEV__): boolean =>
   dev || !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\]|10\.0\.2\.2)(:|\/|$)/.test(url);

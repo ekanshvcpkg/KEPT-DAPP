@@ -2,7 +2,7 @@
 // Bounty funding and Rematch have no program support yet (BACKEND_GAPS P1-10, P1-2).
 import { PublicKey } from "@solana/web3.js";
 import { cancelOathIx, claimIx, claimSolIx, createOathSolIx, joinOathIx, joinOathSolIx, NATIVE_SOL_MINT, settleOathIx, settleOathSolIx, startOathIx } from "@kept/chain";
-import { env } from "@/config/env";
+import { env, liveNativeSolOathsEnabled } from "@/config/env";
 import { useSession } from "@/state/session";
 import { signAndSend } from "./mwa";
 import { programEnv, readOath, tokenAccount } from "./program";
@@ -18,8 +18,15 @@ function me(): PublicKey {
 /** A u64 oath_id unique per creator: milliseconds plus a random suffix. */
 const newOathId = () => BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
 
+function requireLiveNativeSolOaths() {
+  if (!liveNativeSolOathsEnabled()) {
+    throw new TxFailure("failed", "Live SOL Oath transactions are disabled until the matching API and program are deployed.");
+  }
+}
+
 export const realTx: TxService = {
   async createOath(i) {
+    requireLiveNativeSolOaths();
     const e = await programEnv();
     const creator = me();
     const oathId = i.oathId ?? newOathId();
@@ -44,10 +51,11 @@ export const realTx: TxService = {
     }
   },
   async joinOath(oath) {
-    const e = await programEnv();
     const member = me();
     const before = await readOath(oath);
     if (!before) throw new TxFailure("failed", `Oath ${oath} not found`);
+    if (before.mint === NATIVE_SOL_MINT) requireLiveNativeSolOaths();
+    const e = await programEnv();
     const ix = before.mint === NATIVE_SOL_MINT
       ? joinOathSolIx(e, { oath: new PublicKey(oath), member })
       : joinOathIx(e, { oath: new PublicKey(oath), member, memberToken: tokenAccount(e, member) });
@@ -62,9 +70,10 @@ export const realTx: TxService = {
     return { signature: await signAndSend(me(), [cancelOathIx(e, { oath: new PublicKey(oath), creator: me() })]) };
   },
   async settle(oath) {
-    const e = await programEnv();
     const o = await readOath(oath);
     if (!o) throw new TxFailure("failed", `Oath ${oath} not found`);
+    if (o.mint === NATIVE_SOL_MINT) requireLiveNativeSolOaths();
+    const e = await programEnv();
     const members = o.members.map((m) => new PublicKey(m.wallet));
     const ix = o.mint === NATIVE_SOL_MINT
       ? settleOathSolIx(e, { oath: new PublicKey(oath), members })
@@ -72,11 +81,12 @@ export const realTx: TxService = {
     return { signature: await signAndSend(me(), [ix]) };
   },
   async claim(oath) {
-    const e = await programEnv();
     const member = me();
     const before = await readOath(oath);
     const amount = before?.members.find((m) => m.wallet === member.toBase58())?.payout ?? 0n;
     if (!before) throw new TxFailure("failed", `Oath ${oath} not found`);
+    if (before.mint === NATIVE_SOL_MINT) requireLiveNativeSolOaths();
+    const e = await programEnv();
     const ix = before.mint === NATIVE_SOL_MINT
       ? claimSolIx(e, { oath: new PublicKey(oath), member })
       : claimIx(e, { oath: new PublicKey(oath), member, destination: tokenAccount(e, member) });

@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import copy from "../../../design/copy.json";
 import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
+import { liveNativeSolOathsEnabled } from "@/config/env";
 import { getApi } from "@/api";
 import { ToastHost } from "@/components/chrome";
 import { queryClient } from "@/api/queries";
@@ -37,8 +38,12 @@ import { AppState } from "react-native";
 import { mwaWallet } from "@/chain/mwa";
 import { fakeBackend, fakeWallet, installFakeBackend, installFakeWallet, resetWallet } from "@/testing/fakeLive";
 
+jest.mock("@/config/env", () => ({ ...jest.requireActual("@/config/env"), liveNativeSolOathsEnabled: jest.fn(() => true) }));
+
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 24, left: 0, right: 0, bottom: 16 } };
 const slow = { timeout: 8000 };
+
+beforeEach(() => { jest.mocked(liveNativeSolOathsEnabled).mockReturnValue(true); });
 
 function App() {
   return (
@@ -703,6 +708,22 @@ describe("onboarding on Live", () => {
     expect(backend.calls).toEqual(["POST /api/auth/nonce", "POST /api/auth/verify", "GET /api/me"]);
     // A4 is where Today starts; Today on Live needs the rest of the backend, so the test stops here.
     expect(await screen.findByRole("button", { name: t("screens.A4.pin.0") })).toBeTruthy();
+  }, 30000);
+
+  it("shows Live Oaths as unavailable when the native SOL rollout flag is off", async () => {
+    jest.mocked(liveNativeSolOathsEnabled).mockReturnValue(false);
+    const backend = fakeBackend();
+    restoreFetch = installFakeBackend(backend);
+    await setAppMode("live");
+    useSession.setState({ token: null, wallet: null, genesis: false, onboarded: false, avatar: null, invite: null });
+    useIntro.setState({ seen: true });
+    await render(<App />);
+    expect(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow)).toBeTruthy();
+    await act(async () => { navigateTo("C1"); });
+    expect(await screen.findByText(t("additions.liveOaths.title"), {}, slow)).toBeTruthy();
+    expect(screen.getByText(t("additions.liveOaths.status"))).toBeTruthy();
+    expect(screen.queryByRole("button", { name: t("screens.C1.pin.0") })).toBeNull();
+    expect(backend.calls).toEqual([]);
   }, 30000);
 
   it("a declined wallet prompt lands on A2·e and never calls the backend", async () => {
