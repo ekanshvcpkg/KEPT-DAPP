@@ -17,9 +17,10 @@ Run it with `pnpm mobile:android` (first install) or `pnpm mobile:start`. See th
 
 ## Release signing
 
-Release builds are signed with your own upload key when `frontend/keystore.properties` exists, and with
-the debug key otherwise (`plugins/withReleaseSigning.js` writes this into the generated `android/` on every
-prebuild). The key and the properties file are git-ignored; never commit either.
+Release builds require your private upload key in `frontend/keystore.properties`. If it is missing,
+release packaging stops with an error; debug builds still work. `plugins/withReleaseSigning.js` writes
+the signing config into generated `android/` on every prebuild. The key and properties file are
+git-ignored; never commit either.
 
 One-time setup (JDK 17's `keytool`; keep the passwords in a password manager):
 

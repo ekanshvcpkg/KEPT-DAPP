@@ -208,7 +208,7 @@
     "manyOaths": "{n} Oaths",
     "lockedOne": "{amount} SKR · 1 Oath",
     "receiveSol": "Receive SOL",
-    "noWalletApp": "No wallet app found. Install Phantom or Solflare, or try the demo."
+    "noWalletApp": "No wallet found. Install Phantom or Solflare."
   },
   "profile": {
     "privateOaths": "{name} keeps their Oaths private"

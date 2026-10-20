@@ -1,8 +1,10 @@
 // Drives the dev build with adb to walk design/flows.md's happy paths (Phase 4.5).
-//   node scripts/drive.mts [flowName…]
+//   node scripts/drive.mts --demo [flowName…]
 // Each step taps an element by its visible text or accessibility label (uiautomator), or types, then
 // checks which screen is on top by a text that only that screen shows. Screens are checked by copy,
-// so a wrong destination fails the step. Shots of every step go to artifacts/flows/<flow>/.
+// so a wrong destination fails the step. These flows always use mock Demo; they do not verify Live.
+// The required --demo flag prevents the runner from silently switching the attached app out of Live.
+// Shots of every step go to artifacts/flows/<flow>/.
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -124,7 +126,12 @@ async function run(name: string, steps: Step[]) {
   return true;
 }
 
-const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(FLOWS);
+const args = process.argv.slice(2);
+if (!args.includes("--demo")) {
+  console.error("This runner switches the app to mock Demo and does not verify Live. Pass --demo to opt in.");
+  process.exit(2);
+}
+const names = args.filter((arg) => arg !== "--demo").length ? args.filter((arg) => arg !== "--demo") : Object.keys(FLOWS);
 let failed = 0;
 for (const n of names) if (!(await run(n, FLOWS[n]!))) failed++;
 console.log(`\n${names.length - failed}/${names.length} flows passed`);

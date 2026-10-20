@@ -11,6 +11,7 @@ import { BrandSplash } from "@/components/brand/Brand";
 import { BottomSheet, NavBar, useToast } from "@/components/chrome";
 import { Breakdown, Chip, ChipRow, Note, Title } from "@/components/content/Basics";
 import { RowList } from "@/components/content/Rows";
+import type { RowProps } from "@/components/content/Rows";
 import { AvatarBuilder } from "@/components/content/Social";
 import { SignStatus } from "@/components/content/Status";
 import { randomAvatar } from "@/components/avatar/palette";
@@ -104,7 +105,7 @@ const CHIP_TILT = { ok: [0, -3, 2], no: [-2, 2, -1] } as const;
 export function A1() {
   const { go } = useGo();
   const k = keeperLines("A1")[0]!;
-  // Get started picks the mode (A1·m), unless a join link already chose Live.
+  // Dev builds offer the mode picker; store builds go through its Live-only choice.
   const start = () => (useMode.getState().mode === "live" && useSession.getState().invite !== null ? go("A2") : go("A1·m"));
   // "I have an invite" is always Live (D-80); E1 opens after onboarding with an empty code.
   const invite = () => { void startLiveWithInvite(useSession.getState().invite ?? "").then(() => go("A2")); };
@@ -143,6 +144,17 @@ export function A1m() {
     }
     void startLive().then(() => replace("A2"));
   };
+  const modeRows: RowProps[] = [];
+  if (__DEV__) modeRows.push({
+    title: t("additions.mode.demo"), chevron: true,
+    leading: { kind: "icon", icon: "play-circle-outline", bg: color.lime.base, fg: color.text.onLime },
+    onPress: demo,
+  });
+  modeRows.push({
+    title: t("additions.mode.live"), chevron: true,
+    leading: { kind: "icon", icon: "wallet-outline" },
+    onPress: () => { void live(); },
+  });
   return (
     <View style={{ flex: 1 }}>
       <BottomSheet {...sheet} bottomInset={insets.bottom}>
@@ -157,10 +169,7 @@ export function A1m() {
             }} />
         </> : <>
           <Title heading={t("additions.mode.title")} pt={0} fs={26} />
-          <RowList rows={[
-            { title: t("additions.mode.demo"), chevron: true, leading: { kind: "icon", icon: "play-circle-outline", bg: color.lime.base, fg: color.text.onLime }, onPress: demo },
-            { title: t("additions.mode.live"), chevron: true, leading: { kind: "icon", icon: "wallet-outline" }, onPress: () => { void live(); } },
-          ]} />
+          <RowList rows={modeRows} />
         </>}
         <Button kind="s" label={t("screens.+.b3.btn.0")} onPress={back} />
       </BottomSheet>

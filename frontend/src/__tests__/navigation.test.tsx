@@ -151,7 +151,7 @@ describe("onboarding on mocks", () => {
     expect(useSession.getState().invite).toBe("");
   }, 30000);
 
-  it("Live needs the on-device models (the sheet shows the download, not the wallet step); Demo never does", async () => {
+  it("Live needs the on-device models; release onboarding never offers Demo", async () => {
     const missing = { supported: true, gestureReady: false, visionReady: false, modelBytes: 1, downloadedBytes: 0, totalBytes: 1 };
     (getDeviceModelsStatus as jest.Mock).mockResolvedValue(missing);
     // Development builds let "Not now" through to Live (so an emulator can be used); a release build goes back.
@@ -164,11 +164,11 @@ describe("onboarding on mocks", () => {
       expect(await screen.findByText(t("additions.mode.modelTitle"), {}, slow)).toBeTruthy();
       expect(screen.queryByText(t("screens.A2.b0.title"))).toBeNull();
       expect(useMode.getState().mode).not.toBe("live");
-      // Not now → back to the mode choice, and Demo goes on without a download.
+      // Not now returns to the choice. A store build has only Live, even when proof models are missing.
       await fireEvent.press(await screen.findByRole("button", { name: t("additions.mode.modelNotNow") }));
-      await fireEvent.press(await screen.findByText(t("additions.mode.demo"), {}, slow));
-      expect(await screen.findByRole("button", { name: t("screens.A4.pin.0") }, slow)).toBeTruthy();
-      expect(useMode.getState().mode).toBe("demo");
+      expect(await screen.findByText(t("additions.mode.live"), {}, slow)).toBeTruthy();
+      expect(screen.queryByText(t("additions.mode.demo"))).toBeNull();
+      expect(useMode.getState().mode).not.toBe("demo");
     } finally {
       (globalThis as { __DEV__?: boolean }).__DEV__ = dev;
       (getDeviceModelsStatus as jest.Mock).mockResolvedValue({ ...missing, gestureReady: true, visionReady: true });
