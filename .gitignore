@@ -16,10 +16,21 @@ coverage/
 .env
 .env.*
 !.env.example
-*.keypair.json
-*-keypair.json
+*keypair.json
 id.json
 .aura-minter.json
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+keystore.properties
+gitleaks-report.*
 
 # Expo / Android
 .expo/
@@ -37,8 +48,18 @@ target/
 test-ledger/
 
 # Local data
-prisma/dev.db
-prisma/dev.db-journal
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 .claude/
 
 # Phase 4.5 screenshots and compare page (local only)

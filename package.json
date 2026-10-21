@@ -6,6 +6,9 @@
     "node": ">=20"
   },
   "scripts": {
+    "security:scan": "node scripts/check-secrets.cjs",
+    "security:staged": "node scripts/check-secrets.cjs --staged",
+    "security:test": "node --test scripts/security.test.cjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",

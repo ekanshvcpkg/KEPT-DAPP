@@ -5,9 +5,8 @@
 # always serves the newest build (the README's Download button links there).
 #
 # Signing: with the repo secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
-# ANDROID_KEY_PASSWORD set, the APK is signed with that key (plugins/withReleaseSigning.js). Without them it
-# is signed with the standard React Native debug key, the same as a local `./gradlew assembleRelease`, so it
-# installs over APKs that were already handed out. Don't switch keys later: Android refuses to update an app
+# ANDROID_KEY_PASSWORD set, the APK is signed with that key (plugins/withReleaseSigning.js). All four are
+# required; missing credentials stop the release before building. Don't switch keys later: Android refuses to update an app
 # signed with a different key (people would have to uninstall first).
 #
 # Build-time settings (all optional, defaults in frontend/src/config/env.ts): set repository variables
@@ -28,14 +27,19 @@ on:
         default: false
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
+  secrets:
+    uses: ./.github/workflows/secrets.yml
   apk:
+    needs: secrets
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -57,6 +61,8 @@ jobs:
           df -h /
 
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
         with:
@@ -90,21 +96,13 @@ jobs:
             console.log(app.expo.version, app.expo.android.versionCode);
           '
 
-      - name: Release signing key (optional)
-        working-directory: frontend
+      - name: Prepare private release signing files
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "No ANDROID_KEYSTORE_BASE64 secret: signing with the debug key."
-            exit 0
-          fi
-          echo "$KEYSTORE_BASE64" | base64 -d > kept-release.keystore
-          printf 'storeFile=kept-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+        run: node scripts/prepare-android-signing.cjs
 
       - name: Prebuild (generate android/)
         working-directory: frontend
@@ -115,6 +113,10 @@ jobs:
       - name: Build the release APK
         working-directory: frontend/android
         run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+
+      - name: Remove private signing files
+        if: always()
+        run: rm -f frontend/kept-release.keystore frontend/keystore.properties
 
       - name: Collect the APK
         run: |

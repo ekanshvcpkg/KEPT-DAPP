@@ -270,7 +270,7 @@ You can also run it by hand: **Actions › Release APK › Run workflow**, enter
 
 <br>
 
-- **Signing.** Set the repository secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` to sign with your own key ([`frontend/plugins/withReleaseSigning.js`](frontend/plugins/withReleaseSigning.js)). Without them the APK is signed with the standard debug key, like a local build. Pick one and keep it: Android won't update an app signed with a different key.
+- **Signing.** All four repository secrets are required: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` ([`frontend/plugins/withReleaseSigning.js`](frontend/plugins/withReleaseSigning.js)). Missing credentials stop the release before building. CI writes private signing files with owner-only permissions and removes them after the build, including on failure. Keep the same signing key: Android won't update an app signed with a different key.
 - **Build settings.** Repository variables `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_STAKE_MINT`, `EXPO_PUBLIC_RPC_URL` and `EXPO_PUBLIC_PROGRAM_ID` override the defaults in [`frontend/src/config/env.ts`](frontend/src/config/env.ts). Live native-SOL Oaths require `EXPO_PUBLIC_LIVE_NATIVE_SOL_OATHS=1`, which must stay off until the matching API and program are deployed and verified. By default Live uses the hosted Devnet API at `https://kepttestapp.onrender.com`; a release build pointing at `localhost` refuses Live with a message.
 - **Local release build.**
   ```bash
@@ -280,6 +280,8 @@ You can also run it by hand: **Actions › Release APK › Run workflow**, enter
 </details>
 
 ## 📚 Docs
+
+See [SECURITY.md](SECURITY.md) for secret scanning, the local commit hook, and credential storage.
 
 | Doc | What |
 |---|---|
