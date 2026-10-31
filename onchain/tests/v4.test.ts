@@ -5,7 +5,7 @@ import path from "node:path";
 import { PublicKey } from "@solana/web3.js";
 import { AccountLayout, AccountState, MintLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Clock, FailedTransactionMetadata, LiteSVM } from "litesvm";
-import { AccountRole, Address, KeyPairSigner, address, appendTransactionMessageInstruction, createTransactionMessage, generateKeyPairSigner, lamports, pipe, setTransactionMessageFeePayerSigner, signTransactionMessageWithSigners } from "@solana/kit";
+import { AccountRole, type Address, type KeyPairSigner, address, appendTransactionMessageInstruction, createTransactionMessage, generateKeyPairSigner, lamports, pipe, setTransactionMessageFeePayerSigner, signTransactionMessageWithSigners } from "@solana/kit";
 const idlJson = JSON.parse(readFileSync(path.join(__dirname, "..", "target", "idl", "kept_test.json"), "utf8"));
 
 const PROGRAM = new PublicKey(idlJson.address);
