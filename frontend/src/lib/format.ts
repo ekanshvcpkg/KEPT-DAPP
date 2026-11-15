@@ -64,9 +64,10 @@ export function ago(seconds: number): string {
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 }
-/** Lamports → "0.84", "0.000005", "1" (SOL amounts, no trailing zeros). */
+/** Lamports → "0.84", "0.000005", "1", "−0.005" (SOL amounts, no trailing zeros; losses use the true minus "−"). */
 export function formatSol(lamports: bigint): string {
-  const whole = lamports / 1_000_000_000n;
-  const frac = (lamports % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole.toString();
+  const abs = lamports < 0n ? -lamports : lamports;
+  const whole = abs / 1_000_000_000n;
+  const frac = (abs % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
+  return (lamports < 0n ? "−" : "") + (frac ? `${whole}.${frac}` : whole.toString());
 }

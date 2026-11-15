@@ -4,7 +4,7 @@ import { __amendments, __lookup, __templates, interpolate, keeperLines, t } from
 import designCopy from "../../../design/copy.json";
 import type { CopyKey } from "@/copy";
 import { angleToPoints, hpSegmentColor, splitShadow, type as typeStyles } from "@/theme";
-import { clock, formatSkr, formatUsd, formatUsdSol, shortDuration } from "@/lib/format";
+import { clock, formatSkr, formatSol, formatUsd, formatUsdSol, shortDuration } from "@/lib/format";
 
 const root = join(__dirname, "..", "..");
 
@@ -93,6 +93,14 @@ describe("format", () => {
     expect(formatSkr(-1_000_000_000n)).toBe("−1,000");
     expect(formatSkr(186_000_000n, { sign: true })).toBe("+186");
     expect(formatSkr(1_468_750_000n, { dp: 0 })).toBe("1,469");
+  });
+  it("formats SOL at the edge, losses with the true minus", () => {
+    expect(formatSol(840_000_000n)).toBe("0.84");
+    expect(formatSol(1_000_000_000n)).toBe("1");
+    expect(formatSol(0n)).toBe("0");
+    expect(formatSol(-5_000_000n)).toBe("−0.005");
+    expect(formatSol(-57_916_664n)).toBe("−0.057916664");
+    expect(formatSol(-1_250_000_000n)).toBe("−1.25");
   });
   it("formats USD and time", () => {
     expect(formatUsd(1_000_000_000n, 0.01)).toBe("≈ $10");
