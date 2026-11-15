@@ -31,8 +31,11 @@ const myToday = (v: OathView) => (v.me >= 0 ? v.members[v.me]! : null);
 const keptToday = (v: OathView) => myToday(v)?.pendingToday === false;
 
 /** The Oaths that have a proof due today, mine first by deadline. */
-function todayItems(views: OathView[]) {
-  return views.filter((v) => v.life === "active" && v.dayIndex !== null && v.me >= 0).sort((a, b) => (a.secondsToReset ?? 0) - (b.secondsToReset ?? 0));
+// A Bounty you've missed a day of has knocked you out (H4): it has nothing left for you to prove today.
+const outOfBounty = (v: OathView) => !!v.facts.bountyId && v.members[v.me]!.missed.length > 0;
+
+export function todayItems(views: OathView[]) {
+  return views.filter((v) => v.life === "active" && v.dayIndex !== null && v.me >= 0 && !outOfBounty(v)).sort((a, b) => (a.secondsToReset ?? 0) - (b.secondsToReset ?? 0));
 }
 
 export function TodayTab() {
@@ -208,14 +211,23 @@ function Deadline({ v, left }: { v: OathView; left: number }) {
 }
 
 // ── B5 Daily recap ──
-interface RecapRow { v: OathView; missed: string[]; won: bigint }
-function recapOf(views: OathView[]): RecapRow[] {
-  return views.filter((v) => v.lastDay && v.me >= 0 && (v.life === "active" || v.life === "broken") && v.dayIndex === (v.lastDay.day + 1)).map((v) => ({
-    v,
-    missed: v.members.filter((m) => !m.isMe && (v.lastDay!.lost[m.index] ?? 0n) > 0n).map(memberName),
-    // A projection is not a win: only demo Oaths show what the day paid (D-93; the chain pays at settlement).
-    won: v.estimated ? 0n : (v.lastDay!.won[v.me] ?? 0n),
-  }));
+export interface RecapRow { v: OathView; missed: string[]; meMissed: boolean; lost: bigint; won: bigint }
+export function recapOf(views: OathView[]): RecapRow[] {
+  return views.filter((v) => v.lastDay && v.me >= 0 && (v.life === "active" || v.life === "broken") && v.dayIndex === (v.lastDay.day + 1)
+    // Knocked out of a Bounty on an earlier day: yesterday wasn't yours to play.
+    && !(v.facts.bountyId && v.members[v.me]!.missed.some((d) => d < v.lastDay!.day))).map((v) => {
+    const day = v.lastDay!.day;
+    // Who missed comes from the days each member missed, not from money lost: a free Bounty costs nothing.
+    const missers = v.members.filter((m) => m.missed.includes(day));
+    return {
+      v,
+      missed: missers.map(memberName),
+      meMissed: missers.some((m) => m.isMe),
+      lost: v.estimated ? 0n : (v.lastDay!.lost[v.me] ?? 0n),
+      // A projection is not a win: only demo Oaths show what the day paid (D-93; the chain pays at settlement).
+      won: v.estimated ? 0n : (v.lastDay!.won[v.me] ?? 0n),
+    };
+  });
 }
 
 export function RecapSheet() {
@@ -225,22 +237,25 @@ export function RecapSheet() {
   const sheet = useSheetRoute();
   const rows = recapOf(views);
   const k = keeperLines("B5")[0]!;
-  const lead = rows.find((r) => r.missed.length);
+  // "Arjun blinked. You didn't." only leads with an Oath where you kept.
+  const lead = rows.find((r) => r.missed.length && !r.meMissed);
   return (
     <View style={{ flex: 1 }}>
       <BottomSheet {...sheet} bottomInset={insets.bottom}>
         <BodyText mono text={t("screens.B5.b0.text")} />
         {lead ? <Title heading={t("screens.B5.b1.title", { name: listNames(lead.missed) })} pt={0} fs={28} /> : null}
         <ScreenKeeper id="B5" lines={[k]} />
-        <RowList rows={rows.map(({ v, missed, won }) => {
+        <RowList rows={rows.map(({ v, missed, meMissed, lost, won }) => {
           const d = v.lastDay!;
           return {
             title: v.facts.name,
             sub: missed.length
               ? t("screens.B5.b3.r0.s", { name: listNames(missed), before: d.hpBefore, damaged: d.hpBefore - d.damage, after: d.hpAfter })
               : t("screens.B5.b3.r1.s", { name: t("screens.D2.b6.r0.t"), hp: d.hpAfter }),
-            value: won > 0n ? t("screens.B5.b3.r0.r", { amount: oathAmount(v.facts, won) }) : t("screens.B5.b3.r1.r"),
-            valueColor: won > 0n ? color.lime.base : color.text.secondary,
+            // Your own miss is never "safe": show what it cost, or that it counted as missed when nothing was staked.
+            value: meMissed ? (lost > 0n ? oathAmount(v.facts, -lost) : t("common.gridLegend.missed"))
+              : won > 0n ? t("screens.B5.b3.r0.r", { amount: oathAmount(v.facts, won) }) : t("screens.B5.b3.r1.r"),
+            valueColor: meMissed ? color.red.base : won > 0n ? color.lime.base : color.text.secondary,
             leading: { kind: "icon" as const, icon: oathIcon(v.facts) },
             onPress: () => replace("D2", { id: v.facts.id }),
           };
