@@ -352,7 +352,8 @@ export function F5() {
   const pending = view ? view.members.filter((m) => !m.isMe && m.pendingToday && m.facts.proofToday !== "review") : [];
   const day = view?.dayNumber ?? 1;
   useEffect(() => { playFx(undefined, "kept"); }, [playFx, day]);
-  const time = new Date().toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
+  // The stamp records when the day was kept: fixed at arrival (on the app's clock), not re-read on every render.
+  const [time] = useState(() => new Date(nowSeconds() * 1000).toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" }));
   return (
     <Screen bar={<NavBar onBack={() => close()} close />} bottomInset={pinned(1)}
       pinned={<><Button kind="p" label={t("screens.F5.pin.0")} onPress={() => go("B1")} /></>}>
