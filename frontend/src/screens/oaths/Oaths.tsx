@@ -22,7 +22,7 @@ import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOath, useOathList, oathActions } from "@/features/oaths/hooks";
 import type { MemberView, OathView } from "@/features/oaths/model";
 import { isLowHp } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, oathObjects, objectIcon, reviewText, shortDate, weekday, startsTitle } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, oathNumber, oathObjects, objectIcon, reviewText, shortDate, weekday, startsTitle } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { TabScreen } from "../tabs/TabScreen";
@@ -87,7 +87,10 @@ export function OathsTab() {
         const delta = mine ? mine.final - mine.start : 0n;
         return {
           title: v.facts.name,
-          sub: v.life === "broken" ? t("screens.D0.b5.r1.s", { day: (v.state.brokeOnDay ?? 0) + 1 }) : t("screens.D0.b5.r0.s", { when: weekday(endOf(v)).slice(0, 3) }),
+          // "· claim ready" only while there is something to claim; once claimed it just ended (D4's chip).
+          sub: v.life === "broken" ? t("screens.D0.b5.r1.s", { day: (v.state.brokeOnDay ?? 0) + 1 })
+            : v.claimable > 0n ? t("screens.D0.b5.r0.s", { when: weekday(endOf(v)).slice(0, 3) })
+            : t("screens.D4.b0.chip.0", { date: weekday(endOf(v)).slice(0, 3) }),
           value: t("screens.D0.b5.r0.r", { delta: delta === 0n ? "±0" : delta > 0n ? `+${oathAmount(v.facts, delta)}` : oathAmount(v.facts, delta) }),
           valueColor: delta > 0n ? color.lime.base : delta < 0n ? color.red.base : color.text.secondary,
           // reference/kept-screens-2.js › D0: finished rows show the outcome, not the object.
@@ -387,7 +390,7 @@ function Ended({ v }: { v: OathView }) {
         return {
           title: memberName(m),
           sub: t("screens.D4.b3.r0.s", { start: oathAmount(f, r.start), lost: r.lost > 0n ? oathAmount(f, -r.lost) : oathAmount(f, 0n), won: r.won > 0n ? `+${oathAmount(f, r.won)}` : oathAmount(f, 0n) }),
-          value: t("screens.D4.b3.r0.r", { amount: oathAmount(f, r.final) }), valueSub: t("screens.D4.b3.r0.rs"),
+          value: t("screens.D4.b3.r0.r", { amount: oathNumber(f, r.final) }), valueSub: oathAsset(f),
           leading: { kind: "initial" as const, initial: memberInitial(m), bg: memberColor(m) },
         };
       })} />

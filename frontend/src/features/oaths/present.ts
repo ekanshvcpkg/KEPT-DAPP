@@ -18,8 +18,11 @@ export const skrText = (units: bigint, sign = false) => formatSkr(units, sign ? 
 export const skrWhole = (units: bigint) => formatSkr(units, { dp: 0 });
 
 /** Amount and asset label for an Oath; native SOL uses exact lamport precision at the display edge. */
+/** The number alone ("0.0525", "1,186"), for rows that show the unit beside it (D4's final balances). */
+export const oathNumber = (f: Pick<OathFacts, "asset">, units: bigint): string => (f.asset === "sol" ? formatSol(units) : formatSkr(units, { dp: 0 }));
+
 export function oathAmount(f: Pick<OathFacts, "asset">, units: bigint): string {
-  return t(f.asset === "sol" ? "additions.core.solAmount" : "additions.core.skrAmount", { amount: f.asset === "sol" ? formatSol(units) : formatSkr(units, { dp: 0 }) });
+  return t(f.asset === "sol" ? "additions.core.solAmount" : "additions.core.skrAmount", { amount: oathNumber(f, units) });
 }
 
 export const oathAsset = (f: Pick<OathFacts, "asset">) => t(f.asset === "sol" ? "additions.core.sol" : "additions.core.skr");
