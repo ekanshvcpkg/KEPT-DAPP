@@ -252,7 +252,8 @@ post("/api/proof/habit", async (req: AuthedRequest, res) => {
     return res.status(422).json({ error: "That photo check was for a different Oath, day or habit", expected });
   }
   try {
-    await prisma.habitProof.create({ data: { oath, wallet: req.wallet, dayIndex: day, habit: h, proofHash: v.proofHash, verificationId: v.id, object: expected.object } });
+    // The Keeper receipt hash (not the bare photo hash) is what is combined and recorded on chain, so the day can be audited.
+    await prisma.habitProof.create({ data: { oath, wallet: req.wallet, dayIndex: day, habit: h, proofHash: v.receiptHash ?? v.proofHash, verificationId: v.id, object: expected.object } });
   } catch {
     await releaseVerification(v.id);
     return res.status(409).json({ error: "That habit is already proven today" });

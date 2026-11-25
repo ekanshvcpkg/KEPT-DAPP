@@ -163,6 +163,9 @@ model GestureChallenge {
   dayIndex  Int
   gesture   String
   issuedAt  DateTime @default(now())
+  /// The Solana slot and blockhash the gesture was derived from (null if the RPC was unreachable).
+  slot      Int?
+  blockhash String?
   @@index([oath, wallet, dayIndex])
 }
 
@@ -254,6 +257,14 @@ model ProofVerification {
   sessionId        Int?
   usedAt           DateTime?
   createdAt        DateTime  @default(now())
+  /// The Keeper's server-side check: SHA-256 of the uploaded photo, the public receipt, its SHA-256 (what goes on
+  /// chain), the model that judged it, and the Memo signature that published a failed verdict.
+  photoHash        String?
+  receipt          Json?
+  receiptHash      String?   @unique
+  model            String?
+  memoSignature    String?
+  @@index([wallet, photoHash])
   @@index([wallet, createdAt])
   @@index([wallet, oath, dayIndex])
   @@index([wallet, oath, dayIndex, habit])

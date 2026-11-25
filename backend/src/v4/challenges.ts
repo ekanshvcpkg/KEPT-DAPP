@@ -1,8 +1,9 @@
 import { prisma } from "../db.js";
 import { CHALLENGE_GESTURES, challengeUsable, CHALLENGE_TTL_MS, pickChallenge } from "./rules.js";
 import { endChallengeValid, sessionPhase, sessionWaitSeconds } from "./session.js";
+import { slotChallenge } from "./keeper.js";
 
-type Challenge = { gesture: string; issuedAt: Date };
+type Challenge = { gesture: string; issuedAt: Date; slot?: number | null; blockhash?: string | null };
 type Session = NonNullable<Awaited<ReturnType<typeof prisma.proofSession.findUnique>>>;
 
 /** Challenges are keyed by an Oath address, or `bounty:<id>` for bounties. */
@@ -20,11 +21,13 @@ export async function issueChallenge(key: string, wallet: string, dayIndex: numb
   const allowed = latest && CHALLENGE_GESTURES.includes(latest.gesture as (typeof CHALLENGE_GESTURES)[number]) && challengeUsable(latest.issuedAt.getTime(), Date.now());
   if (allowed && (!session || endChallengeValid(latest, session))) return latest;
   const exclude = session ? session.startGesture : latest?.gesture ?? null;
-  return prisma.gestureChallenge.create({ data: { oath: key, wallet, dayIndex, gesture: pickChallenge(exclude) } });
+  // The gesture comes from the latest Solana blockhash (not from the server's choice), so a photo that shows it was taken after that slot.
+  const { gesture, slot, blockhash } = await slotChallenge(CHALLENGE_GESTURES.filter((g) => g !== exclude), () => pickChallenge(exclude));
+  return prisma.gestureChallenge.create({ data: { oath: key, wallet, dayIndex, gesture, slot, blockhash } });
 }
 
 export function challengeJson(c: Challenge) {
-  return { gesture: c.gesture, issuedAt: c.issuedAt.toISOString(), expiresAt: new Date(c.issuedAt.getTime() + CHALLENGE_TTL_MS).toISOString() };
+  return { gesture: c.gesture, issuedAt: c.issuedAt.toISOString(), expiresAt: new Date(c.issuedAt.getTime() + CHALLENGE_TTL_MS).toISOString(), slot: c.slot ?? null };
 }
 
 export function findSession(key: string, wallet: string, dayIndex: number) {

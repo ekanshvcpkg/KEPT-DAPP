@@ -16,4 +16,10 @@ export const config = {
   bountyPayer: process.env.BOUNTY_PAYER || "faucet",
   /** Default minutes between the start and end photo (Oaths without their own minMinutes). */
   sessionMinMinutes: Number(process.env.SESSION_MIN_MINUTES) || 30,
+  /** The Keeper's vision model: an OpenAI-compatible chat-completions endpoint (OpenRouter by default). */
+  openApiKey: process.env.OPEN_API_KEY || "",
+  visionApiUrl: process.env.VISION_API_URL || "https://openrouter.ai/api/v1/chat/completions",
+  visionModel: process.env.VISION_MODEL || "google/gemma-3-27b-it",
+  /** Keep well under a 120 s demo day: upload + judge + record_checkin must all fit. */
+  visionTimeoutMs: Number(process.env.VISION_TIMEOUT_MS) || 25_000,
 };
