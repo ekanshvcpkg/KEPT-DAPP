@@ -67,6 +67,15 @@ if (!configInfo) {
 }
 const signature = await connection.sendTransaction(new Transaction().add(instruction), [admin]);
 await connection.confirmTransaction(signature, "confirmed");
+// Native SOL Oaths pay the protocol share into the treasury wallet. A wallet below the rent-exempt minimum makes a small
+// share fail settlement ("insufficient funds for rent"), so make sure it is funded.
+const rentMin = await connection.getMinimumBalanceForRentExemption(0);
+const treasuryLamports = await connection.getBalance(treasuryOwner, "confirmed");
+if (treasuryLamports < rentMin) {
+  const topUp = await connection.sendTransaction(new Transaction().add(SystemProgram.transfer({ fromPubkey: admin.publicKey, toPubkey: treasuryOwner, lamports: rentMin - treasuryLamports })), [admin]);
+  await connection.confirmTransaction(topUp, "confirmed");
+  console.log(`Funded the treasury wallet to the rent-exempt minimum: ${topUp}`);
+}
 const mintState = await getMint(connection, mint, "confirmed", tokenProgram);
 const faucetAta = await getAssociatedTokenAddress(mint, admin.publicKey, false, tokenProgram);
 console.log("KEPT V4 treasury setup complete");

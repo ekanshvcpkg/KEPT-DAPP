@@ -1,0 +1,62 @@
+20:16:14 program 7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj | verifier 6tcCGfLheQD5Fq9c7W4jtStwA7WbpszNsvwTL9zJ3xcZ | treasury wallet BWsQ8zyb2RY1o1GJdGLo67EzpRYq5vUU8DiErXXJEJwP
+20:16:15 funded members https://explorer.solana.com/tx/3Lho8aDDck9zAPWfMJbtr4HZhtqokcfuyzAaumjhDqDkG8CT4TSn9Yp4gDx2SLvvFLgNJAxk3VJqQvch1qVTQYTF?cluster=devnet
+20:16:16 create_oath_sol 2CN2S6K8CU97M3SkShsETNFm6GZWvyYsxiF6HSonxcpJ https://explorer.solana.com/tx/AqrCADh6mxktq9jzcHEYKNEyego7XYUeB2VawEMe9hJjQBYP6Gep7n8pL9vV5zJygPakuy1V36c2XuxunXCpqYt?cluster=devnet
+20:16:17 join_oath_sol https://explorer.solana.com/tx/YH9XDLNWex2KrCt6Q9w99yXm65nmGvf3nD9d11dkWBbciLaer9FKbZYwV4T8qrA8AyV9pwHb4v6AWDjzYKq4Sek?cluster=devnet
+20:16:18 join_oath_sol https://explorer.solana.com/tx/o1z1ZG5sBpUwf8umhVQLiBkz72r9ApFcHGf2AA1QcJMgoPHCemU8U9wGqwaXL8UBqyYNgsWazLo2cuQnpPDzTMn?cluster=devnet
+20:16:19 start_oath https://explorer.solana.com/tx/2sYisNM4ob2NSkHGSPaU4gopTb2863kuowWBsRKfPEidGgDGy9xBZMnUAEMwTQ3TfXv6kPTpnB8W36esrunEaPFr?cluster=devnet
+Server responded with 429 Too Many Requests.  Retrying after 500ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 500ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 1000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 1000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 2000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 2000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 4000ms delay...
+Server responded with 429 Too Many Requests.  Retrying after 4000ms delay...
+20:16:29 record_checkin day 1 (kkk) https://explorer.solana.com/tx/3RTovBZBdPa3EhFu5U3fXvrG3dhemyHRpxRfY9UWLbqmb64kaMqRPBDtvq63udc39ijGgwQyH4ypTsW24fJMxr3s?cluster=devnet
+20:16:29 waiting 111s for day 2
+20:16:39 waiting 101s for day 2
+20:16:50 waiting 90s for day 2
+20:17:00 waiting 80s for day 2
+20:17:10 waiting 70s for day 2
+20:17:21 waiting 59s for day 2
+20:17:31 waiting 49s for day 2
+20:17:41 waiting 39s for day 2
+20:17:52 waiting 28s for day 2
+20:18:02 waiting 18s for day 2
+20:18:12 waiting 8s for day 2
+20:18:21 record_checkin day 2 (kkm) https://explorer.solana.com/tx/37ePFceUDK1VutQCWWz8Ca9S56PyACLgPVRGk3XW2zZLWescU2zkB83aoxCUbwrhpb3SurHctScYhcZT4TSc1Xgn?cluster=devnet
+20:18:21 waiting 118s for day 3
+20:18:32 waiting 108s for day 3
+20:18:42 waiting 98s for day 3
+20:18:52 waiting 88s for day 3
+20:19:03 waiting 77s for day 3
+20:19:13 waiting 67s for day 3
+20:19:23 waiting 57s for day 3
+20:19:34 waiting 46s for day 3
+20:19:44 waiting 36s for day 3
+20:19:54 waiting 25s for day 3
+20:20:05 waiting 15s for day 3
+20:20:15 waiting 5s for day 3
+20:20:21 record_checkin day 3 (kkk) https://explorer.solana.com/tx/5DhXDU5vGPnfrDTjxaR47Des4znM2zjPBUQyV5Wd7EKYuXg7AifoFL1XZdbyAtW2KBroPuCPDMdv3LqKAk2YUa2c?cluster=devnet
+20:20:22 waiting 118s for the Oath to end
+20:20:32 waiting 108s for the Oath to end
+20:20:42 waiting 98s for the Oath to end
+20:20:53 waiting 87s for the Oath to end
+20:21:03 waiting 77s for the Oath to end
+20:21:13 waiting 66s for the Oath to end
+20:21:24 waiting 56s for the Oath to end
+20:21:34 waiting 46s for the Oath to end
+20:21:44 waiting 35s for the Oath to end
+20:21:55 waiting 25s for the Oath to end
+20:22:05 waiting 15s for the Oath to end
+20:22:16 waiting 4s for the Oath to end
+20:22:21 settle_oath_sol https://explorer.solana.com/tx/2usvhEzdt8ewESzQHYAQHsFiYBww5SCGKSmSsaSdsAaSRxV7b1LWb4D9JnfTvrJv1kUd111YNgSzkK1wUR5k8QmE?cluster=devnet
+20:22:21 PASS payout A 0.010333333 SOL
+20:22:21 PASS payout B 0.010333333 SOL
+20:22:21 PASS payout C 0.009 SOL
+20:22:21 PASS treasury wallet received 0.000333334 SOL
+20:22:22 claim_sol A https://explorer.solana.com/tx/2n6SvetZxqwhudxgrAK9Sx2mGXgdTBpaNS3TNXBP6raGpPfBXXg3M4rys7AKtKMs1AUg2TxEJhG7fcEnaBwdUonh?cluster=devnet (wallet change 0.010328333 SOL, includes fee)
+20:22:23 claim_sol B https://explorer.solana.com/tx/58k8egcM66DDbXMzzvE2LbLhHqeU5bumgav2RhUUpEjHBebcbLjbzXyeJBJgP8UuwXzDDowh4dHLcxKGFqJ4miW5?cluster=devnet (wallet change 0.010328333 SOL, includes fee)
+20:22:24 claim_sol C https://explorer.solana.com/tx/2H2ytXBTpWtjdG6trj8nNokM3pen8sZC9svwRCaVngNKBTggymcPD1CQr5w45MuLXz4Eyk7ps7VLrNdnJxWD9eZz?cluster=devnet (wallet change 0.008995 SOL, includes fee)
+20:22:24 PASS conservation: payouts + treasury = all stakes 0.03 SOL
+20:22:24 ALL CHECKS PASSED | Oath https://explorer.solana.com/address/2CN2S6K8CU97M3SkShsETNFm6GZWvyYsxiF6HSonxcpJ?cluster=devnet
