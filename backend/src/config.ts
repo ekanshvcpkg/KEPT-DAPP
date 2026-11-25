@@ -1,7 +1,7 @@
 export const config = {
   port: Number(process.env.PORT ?? 3000),
   devnetRpcUrl: process.env.DEVNET_RPC_URL ?? "https://api.devnet.solana.com",
-  programId: process.env.KEEPER_PROGRAM_ID || "6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh",
+  programId: process.env.KEEPER_PROGRAM_ID || "7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj",
   sessionSecret: process.env.SESSION_SECRET || "",
   verifierSecretKey: process.env.VERIFIER_SECRET_KEY || "",
   faucetSecretKey: process.env.FAUCET_SECRET_KEY || "",

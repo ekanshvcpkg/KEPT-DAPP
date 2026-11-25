@@ -10,7 +10,7 @@ import type { ProgramEnv } from "./instructions";
 import { configPda, keeperPda, oathPda, vaultPda } from "./pda";
 import { classifyTxError } from "./errors";
 
-const programId = new PublicKey("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh");
+const programId = new PublicKey("7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj");
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 const env: ProgramEnv = { programId, stakeMint: Keypair.generate().publicKey, treasury: Keypair.generate().publicKey, treasuryAuthority: Keypair.generate().publicKey, tokenProgram: TOKEN_2022 };
 const disc = (s: string) => createHash("sha256").update(s).digest().subarray(0, 8);

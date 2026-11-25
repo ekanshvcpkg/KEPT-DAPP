@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-kept_test = "6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh"
+kept_test = "7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj"
 
 [programs.localnet]
 kept_test = "11111111111111111111111111111111"

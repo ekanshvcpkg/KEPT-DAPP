@@ -7,12 +7,14 @@ import { Connection, Keypair, PublicKey, SystemProgram, Transaction, Transaction
 import { TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID, createMint, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, getMint, mintTo } from "@solana/spl-token";
 
 const rpc = process.env.DEVNET_RPC_URL || "https://api.devnet.solana.com";
-const programId = new PublicKey(process.env.KEEPER_PROGRAM_ID || "6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh");
+const programId = new PublicKey(process.env.KEEPER_PROGRAM_ID || "7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj");
 const treasuryOwner = new PublicKey(process.env.TREASURY_OWNER || "52eWttmzYBJn4awLjEMB42bw5oTFvL4XC1gDqFAQgPxJ");
 const keyPath = process.env.ADMIN_KEYPAIR || path.join(homedir(), ".config/solana/id.json");
 const secret = JSON.parse(await readFile(keyPath, "utf8")) as number[];
 const admin = Keypair.fromSecretKey(Uint8Array.from(secret));
 const connection = new Connection(rpc, "confirmed");
+// The verifier signs check-ins from the backend. Use a separate key so the server never holds the admin/upgrade key.
+const verifier = process.env.VERIFIER_PUBKEY ? new PublicKey(process.env.VERIFIER_PUBKEY) : admin.publicKey;
 const [configPda] = PublicKey.findProgramAddressSync([Buffer.from("config")], programId);
 const configInfo = await connection.getAccountInfo(configPda, "confirmed");
 let mint: PublicKey;
@@ -56,7 +58,7 @@ if (!configInfo) {
     { pubkey: programData, isSigner: false, isWritable: false }, { pubkey: mint, isSigner: false, isWritable: false },
     { pubkey: treasury.address, isSigner: false, isWritable: true }, { pubkey: tokenProgram, isSigner: false, isWritable: false },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
-  ], data: Buffer.concat([configDisc, admin.publicKey.toBuffer(), fee]) });
+  ], data: Buffer.concat([configDisc, verifier.toBuffer(), fee]) });
 } else {
   instruction = new TransactionInstruction({ programId, keys: [
     { pubkey: configPda, isSigner: false, isWritable: true }, { pubkey: admin.publicKey, isSigner: true, isWritable: false },
@@ -75,6 +77,7 @@ console.log(`TREASURY_TOKEN_ACCOUNT=${treasury.address.toBase58()}`);
 console.log(`FAUCET_TOKEN_ACCOUNT=${faucetAta.toBase58()}`);
 console.log(`TOKEN_PROGRAM_ID=${tokenProgram.toBase58()}`);
 console.log(`CONFIG_PDA=${configPda.toBase58()}`);
+console.log(`VERIFIER=${verifier.toBase58()}`);
 console.log(`MINT_DECIMALS=${mintState.decimals}`);
 console.log(`SETUP_SIGNATURE=${signature}`);
 console.log("Set FAUCET_SECRET_KEY to the admin keypair that owns FAUCET_TOKEN_ACCOUNT and VERIFIER_SECRET_KEY to the configured verifier keypair; do not commit either value.");

@@ -47,7 +47,7 @@ jobs:
       EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
       EXPO_PUBLIC_STAKE_MINT: ${{ vars.EXPO_PUBLIC_STAKE_MINT }}
       EXPO_PUBLIC_RPC_URL: ${{ vars.EXPO_PUBLIC_RPC_URL || 'https://api.devnet.solana.com' }}
-      EXPO_PUBLIC_PROGRAM_ID: ${{ vars.EXPO_PUBLIC_PROGRAM_ID || '6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh' }}
+      EXPO_PUBLIC_PROGRAM_ID: ${{ vars.EXPO_PUBLIC_PROGRAM_ID || '7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj' }}
       EXPO_PUBLIC_CLUSTER: devnet
     steps:
       - name: Check the tag

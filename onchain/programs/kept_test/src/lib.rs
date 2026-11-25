@@ -7,7 +7,7 @@ use state::{Config, Keeper, Member, Oath, OathStatus, MAX_MEMBERS};
 pub mod economics;
 use economics::*;
 
-declare_id!("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh");
+declare_id!("7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj");
 
 const CONFIG_SEED: &[u8] = b"config";
 const OATH_SEED: &[u8] = b"oath";

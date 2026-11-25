@@ -7,7 +7,7 @@ import { useSession } from "@/state/session";
 
 const key = () => Keypair.generate().publicKey;
 const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-const mockEnv = { programId: new PublicKey("6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh"), stakeMint: key(), treasury: key(), treasuryAuthority: key(), tokenProgram: TOKEN_2022 };
+const mockEnv = { programId: new PublicKey("7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj"), stakeMint: key(), treasury: key(), treasuryAuthority: key(), tokenProgram: TOKEN_2022 };
 
 jest.mock("@/chain/mwa", () => ({ signAndSend: jest.fn(async () => "sig"), mwaWallet: {} }));
 jest.mock("@/chain/program", () => ({ ...jest.requireActual("@/chain/program"), programEnv: async () => mockEnv }));
