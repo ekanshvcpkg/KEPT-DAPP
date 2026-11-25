@@ -1,0 +1,13 @@
+$ cd backend && npx tsx scripts/keeper_e2e_devnet.ts   (stand-in vision model; real backend, Postgres, program, verifier)
+20:38:04 backend up on http://127.0.0.1:3199 | program 7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj | stand-in vision model
+20:38:08 Oath started https://explorer.solana.com/address/EhXHrZCqvEjk1ZRWsPeWFei5T4Buf8bfRzGXVNsFjfxe?cluster=devnet
+20:38:11 PASS forged verdict without a photo is refused HTTP 400
+20:38:12 PASS challenge issued from a Solana slot slot 526271715, gesture Victory, object book
+20:38:12 PASS the Keeper passes the photo and returns a receipt receipt 08e19be3946699a164fd8fb00c551b26880c179ea1e4c899d5a25bb588c74e42
+20:38:13 PASS the day is recorded on chain by the verifier https://explorer.solana.com/tx/5U1f84eZrkZBwEzKbcXaY9g9GiSdsrAd8DPZY1E6HaXsqMri3cMrPx9ZvCjmmbKpHJADuyhMxtGmuN2ncNq2nKjh?cluster=devnet
+20:38:13 PASS the public receipt re-hashes to its published hash
+20:38:13 PASS the on-chain proof_hash equals the combined receipt hashes chain 5a86d6edfbae6b09642c8e71c8a57662230751b91b231017750baf53f349d2d5
+20:38:13 PASS the receipt names the photo hash, the slot challenge and the model
+20:38:13 PASS a rejected photo stays rejected whatever the app claims This is a photo of a screen.
+20:38:15 PASS the failed verdict's receipt hash is published in an SPL Memo https://explorer.solana.com/tx/22kQ2Eq7Gp7MYN3kCSGXvewJZrNo3e16ZCVPJfcfkzE6RkSGS9x3yRMWMnrGK7K2xLaa8yvmjDZkGmyDYNvvpSuv?cluster=devnet
+20:38:15 ALL KEEPER CHECKS PASSED
