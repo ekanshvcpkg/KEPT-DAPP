@@ -151,3 +151,14 @@ test('GET /keeper/oaths/:oath/days/:day lists the receipt hashes and their combi
     restore.forEach((fn) => fn());
   }
 });
+
+test('no new photo challenge in the last seconds of a day (120 s demo days and 24 h days)', async () => {
+  const { dayClosing } = await import('../src/v4/rules.js');
+  // 120 s days: the cutoff is 30 s.
+  assert.equal(dayClosing({ startTs: 1000, daySeconds: 120, day: 0, now: 1000 + 89 }), false);
+  assert.equal(dayClosing({ startTs: 1000, daySeconds: 120, day: 0, now: 1000 + 91 }), true);
+  assert.equal(dayClosing({ startTs: 1000, daySeconds: 120, day: 1, now: 1000 + 125 }), false);
+  // 24 h days: only the last 30 s.
+  assert.equal(dayClosing({ startTs: 0, daySeconds: 86400, day: 0, now: 86400 - 31 }), false);
+  assert.equal(dayClosing({ startTs: 0, daySeconds: 86400, day: 0, now: 86400 - 29 }), true);
+});

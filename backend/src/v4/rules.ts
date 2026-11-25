@@ -10,6 +10,17 @@ export function proofRejection(input: ProofGate): string | null {
   return null;
 }
 
+/**
+ * No new photo challenge this close to the end of the day: upload + the Keeper's check + record_checkin must land
+ * before the boundary (the program has no grace period), or an honest proof turns into a miss. Matters for short
+ * demo days (120 s); with 86,400 s days it only closes the last 30 seconds.
+ */
+export const CHALLENGE_CUTOFF_SECONDS = 30;
+export function dayClosing(input: { now: number; startTs: number; daySeconds: number; day: number }): boolean {
+  const end = input.startTs + (input.day + 1) * input.daySeconds;
+  return end - input.now < Math.min(CHALLENGE_CUTOFF_SECONDS, input.daySeconds / 4);
+}
+
 export function nudgeRejection(input: { member: boolean; recipientMember: boolean; self: boolean; day: number; currentDay: number; alreadyCheckedIn: boolean }): string | null {
   if (!input.member || !input.recipientMember || input.self) return "invalid_member";
   if (input.day !== input.currentDay) return "wrong_day";

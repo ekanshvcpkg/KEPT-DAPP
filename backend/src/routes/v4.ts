@@ -10,7 +10,7 @@ import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verif
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
 import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
 import { BREAK_HOLD_BPS, HELD_WINDOW_DAYS, MISS_BPS, replayV3, RULES_V2, RULES_V3 } from "../shared/payout.js";
-import { CHALLENGE_UPLOAD_GRACE_MS, GESTURE_TEXT, OBJECT_IDS, OBJECT_TEXT, nudgeRejection, nudgeTargets, proofRequestKind, REVIEW_PHOTO_TTL_MS, reviewPhotoExpired, reviewRequestRejection, type ChallengeGesture, proofRejection, reviewOutcome } from "../v4/rules.js";
+import { CHALLENGE_UPLOAD_GRACE_MS, dayClosing, GESTURE_TEXT, OBJECT_IDS, OBJECT_TEXT, nudgeRejection, nudgeTargets, proofRequestKind, REVIEW_PHOTO_TTL_MS, reviewPhotoExpired, reviewRequestRejection, type ChallengeGesture, proofRejection, reviewOutcome } from "../v4/rules.js";
 import { challengeJson, currentChallenge, dayChallenge, findSession, issueChallenge, startSession } from "../v4/challenges.js";
 import { combinedHabitsHash, habitChallengeKey, habitObjectTexts, habitRejection, parseHabitObjects } from "../v4/habits.js";
 import { combinedProofHash, sessionPhase, validMinMinutes } from "../v4/session.js";
@@ -206,6 +206,9 @@ post("/api/proof/challenge", async (req: AuthedRequest, res) => {
   const rejected = proofRejection({ status: state.status, member: state.members.includes(req.wallet), day, numDays: state.numDays, startTs: state.startTs, daySeconds: state.daySeconds, now: Math.floor(Date.now() / 1000), alreadyRecorded: (state.daysKept[req.wallet] & (1 << day)) !== 0 });
   if (rejected === "non_member") return res.status(403).json({ error: "Wallet is not an Oath member" });
   if (rejected) return res.status(409).json({ error: `No proof can be taken now (${rejected})` });
+  if (dayClosing({ now: Math.floor(Date.now() / 1000), startTs: state.startTs, daySeconds: state.daySeconds, day })) {
+    return res.status(409).json({ error: "The day is about to close; no new photo can be checked in time", dayClosing: true });
+  }
   if (req.body?.habit !== undefined) {
     // One photo proves one habit: that habit's own object, and a gesture of its own.
     const [details, doneRows] = await Promise.all([prisma.oathDetails.findUnique({ where: { oath } }), prisma.habitProof.findMany({ where: { oath, wallet: req.wallet, dayIndex: day } })]);
