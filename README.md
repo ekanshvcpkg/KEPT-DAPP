@@ -32,7 +32,9 @@
 
 **KEPT** is an Android app for the **Solana Seeker** that turns habits into commitments with real stakes.
 
-You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on it, and prove each habit every day with a **live photo**. An AI model running **on your phone** checks the photo for the habit's object and a hand gesture, so the photo never leaves the device (the backend records the verdict and a hash of the photo; it cannot re-check the photo itself). Keep your word and you get paid; miss a day and the ones who kept take your share.
+You swear an **Oath** (a daily habit, alone or with friends), stake **SOL** on it, and prove each habit every day with a **live photo** of the habit's object and a hand gesture drawn from a recent Solana blockhash. **The Keeper**, an AI judge on the server, checks every photo and writes a receipt; the receipt's hash goes on chain with the kept day, and a failed check is published in an SPL Memo, so anyone can audit a verdict. Keep your word and you get paid; miss a day and the ones who kept take your share.
+
+> **Habit apps trust your word. Crypto habit apps trust your phone. KEPT trusts neither.**
 
 - 🤝 **Oaths.** Solo or group, 3, 7 or 14 days, stakes escrowed by an Anchor program on Solana.
 - ❤️ **Oath HP.** Every Oath shares one health bar. Misses hurt it, kept days heal it, and at 0 the Oath breaks.
@@ -97,11 +99,11 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | Real on Devnet | How |
 |---|---|
 | Sign-in | Sign-In With Solana message signed in your wallet, checked by the backend; Seeker Genesis Token check |
-| Create, join, start, cancel, settle, claim an Oath | Transactions to the Anchor program `kept_test` ([`6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh`](https://explorer.solana.com/address/6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh?cluster=devnet)); stakes (a Devnet test SKR mint) are escrowed on chain. Settle is sent by the backend's scheduler |
-| Daily proof | On-device check (MediaPipe gesture model + Gemma, downloaded on first use, about 2.6 GB, on a physical 64-bit phone). The photo stays on the phone; the verdict and photo hash go to the backend, which accepts the phone's verdict and cannot re-check the photo ([`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md) P0-1). One-time, expiring challenges stop a check being reused |
+| Create, join, start, cancel, settle, claim an Oath | Transactions to the Anchor program `kept_test` ([`7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj`](https://explorer.solana.com/address/7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj?cluster=devnet)); native SOL stakes are escrowed in the Oath account. Settle is permissionless (the backend's scheduler or the app's Settle button). See [Devnet addresses](#-devnet-addresses-and-evidence) |
+| Daily proof | The photo is uploaded and judged by **the Keeper** on the server (a vision model; the app's own verdict is ignored). The receipt's SHA-256 is recorded on chain by `record_checkin` (signed by the verifier key, which cannot upgrade the program); failed checks are published in an SPL Memo. Challenges are one-time, expire, and take their gesture from a recent blockhash. See [The Keeper keeps receipts](#-the-keeper-keeps-receipts) |
 | Balances, test SKR | Read from RPC; the faucet sends test SKR once per wallet |
 | Invites, nudges, inbox, kept rate | The backend (kept rate is the backend's plain kept / (kept + missed), "New" under 10 days) |
-| Bounties | The backend's current Bounty: list, detail and join (proving a Bounty day is not available yet: it ends on "Check unavailable") |
+| Bounties | The backend's current Bounty: list and detail. Joining is hidden in Live until Bounty proof runs through the Keeper |
 
 **Not in Live yet** (hidden or shown as unavailable, never faked): Rematch, creating a Bounty, Bounties with several tasks (Live's Bounty has one), swap, creator pages, group review of habit photos and proving a Bounty day. HP and cost-per-miss on Oath screens are computed in the app by [`packages/engine`](packages/engine). Oaths created since the rules v3 upgrade (2026-10-11) settle on chain by the same rules, tested against the same vectors (`packages/engine/test-vectors/oath-vectors.json`); Oaths created earlier keep the program's v1 rules. Addresses, transactions and what is and isn't verified: [`docs/SUBMISSION_EVIDENCE.md`](docs/SUBMISSION_EVIDENCE.md). Gaps: [`docs/BACKEND_GAPS.md`](docs/BACKEND_GAPS.md).
 
@@ -112,7 +114,7 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 | | Rule |
 |---|---|
 | **Swear** | Name the Oath, add habits (each with its own proof object), pick 3, 7 or 14 days, solo or group, and a stake per person. Sign once; the stake goes into escrow. |
-| **Prove** | Each habit, each day: one live photo of the object plus the hand gesture KEPT asks for. Camera only, no gallery. Checked on the phone. |
+| **Prove** | Each habit, each day: one live photo of the object plus the hand gesture KEPT asks for (drawn from a recent Solana blockhash). Camera only, no gallery. Judged by the Keeper on the server, with a public receipt. |
 | **HP** | Every Oath starts at 100 HP. At the end of each day: −20 per member who missed (−35 solo), then +10 heal, capped at 100. At 0 the Oath breaks. |
 | **Miss** | A miss costs 10% of your stake, shared between that day's keepers and KEPT. |
 | **Review** | Choose *AI only* or *AI + group review*: after 3 failed checks of a photo, the group votes. Group review runs in Demo only for now; in Live, 3 failed checks end the day as missed. |
@@ -122,20 +124,57 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SKR** on i
 
 Product rules in full: [`design/rules.md`](design/rules.md), with amendments in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 🔍 The Keeper keeps receipts
+
+Up to four friends share one HP bar, so a faked day takes money from the friends who were honest. KEPT's answer is a judge that can be checked:
+
+1. **Challenge.** `POST /api/proof/challenge` derives the hand gesture from the latest Solana blockhash (`sha256(blockhash)[0] mod 3`, never the previous gesture) and records the slot, so the photo provably comes after that slot.
+2. **Judge.** The app uploads the photo to `POST /proof/verify`. The server hashes it, asks the vision model whether the object and the gesture are there and whether it is a photo of a screen or a printout, and **ignores any verdict the app sends**. A photo that already passed can't be reused.
+3. **Receipt.** The verdict becomes a receipt (`wallet, oath, day, habit, photoSha256, challenge {gesture, slot, blockhash}, model, verdict, pass`). Its SHA-256 over canonical JSON is public at `GET /keeper/receipts/:hash`.
+4. **On chain.** When every habit of the day has a passing receipt, the verifier key signs `record_checkin` with `proof_hash = sha256(receipt hashes in habit order)`. A failed check's receipt hash is published in an SPL Memo (`kept:fail:<hash>`) from the same key.
+5. **Audit.** In the app, **Audit the Keeper** (on the "day kept" screen) fetches the receipts, re-hashes them on the phone, and compares the result with the `CheckinRecorded` event in the check-in transaction.
+
+**Verify one yourself:** `GET /keeper/oaths/<oath>/days/<day>?wallet=<wallet>` returns the receipt hashes, their combined hash and the transaction signature. Hash each receipt from `/keeper/receipts/<hash>` (keys sorted, no whitespace), concatenate the hashes, SHA-256 them, and compare with `proof_hash` in the transaction's `CheckinRecorded` event.
+
+**What this does and does not prove.** It proves which photo (by hash) was judged, against which challenge, by which model, with which verdict, and that the verdict the chain acted on is that one. It does not make the model infallible: a model false negative still costs a day (Live has no appeal yet), and the photo itself is not public.
+
+## ⛓ Devnet addresses and evidence
+
+| What | Address |
+|---|---|
+| Program `kept_test` | [`7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj`](https://explorer.solana.com/address/7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj?cluster=devnet) (upgrade authority `A7eD3kFxPTMa4SELVbYneJ7yTYPVhmH66Lb3i84wrcmA`) |
+| Config PDA | [`BY6a5bNCuaVeSXD67GSVkjAwDKed1cthPTc2vZCtBpr6`](https://explorer.solana.com/address/BY6a5bNCuaVeSXD67GSVkjAwDKed1cthPTc2vZCtBpr6?cluster=devnet) |
+| Verifier (the Keeper's key; can only record check-ins) | [`6tcCGfLheQD5Fq9c7W4jtStwA7WbpszNsvwTL9zJ3xcZ`](https://explorer.solana.com/address/6tcCGfLheQD5Fq9c7W4jtStwA7WbpszNsvwTL9zJ3xcZ?cluster=devnet) |
+| Treasury wallet (native SOL fees) | [`BWsQ8zyb2RY1o1GJdGLo67EzpRYq5vUU8DiErXXJEJwP`](https://explorer.solana.com/address/BWsQ8zyb2RY1o1GJdGLo67EzpRYq5vUU8DiErXXJEJwP?cluster=devnet) |
+| Treasury token account / test-SKR mint (Token-2022) | [`HSLLjdHi1oPpZKv99jigvSU4n7p1Jq1WJhVeoirAf6JM`](https://explorer.solana.com/address/HSLLjdHi1oPpZKv99jigvSU4n7p1Jq1WJhVeoirAf6JM?cluster=devnet) / [`CDGRQc6aj7r6Kk41gvzeH2ta7vzL5rAXeogLJm7nkSqu`](https://explorer.solana.com/address/CDGRQc6aj7r6Kk41gvzeH2ta7vzL5rAXeogLJm7nkSqu?cluster=devnet) |
+| Legacy program (inherited codebase, older build) | `6iXXBqsdiCnUTSVf8CW3Uuw8c7iYvZSj5haz64QMuMUh` |
+
+**Native SOL escrow, end to end** ([`onchain/scripts/e2e_devnet_sol.ts`](onchain/scripts/e2e_devnet_sol.ts), [log](docs/notes/e2e-devnet-sol-2026-11-26.log)): 3 members × 0.01 SOL, 3 two-minute days, member C misses day 2. Every payout matches the rules replay: A and B get 0.010333333 SOL, C gets 0.009 SOL, the treasury 0.000333334 SOL, and the totals conserve the 0.03 SOL staked.
+[create](https://explorer.solana.com/tx/AqrCADh6mxktq9jzcHEYKNEyego7XYUeB2VawEMe9hJjQBYP6Gep7n8pL9vV5zJygPakuy1V36c2XuxunXCpqYt?cluster=devnet) ·
+[join](https://explorer.solana.com/tx/YH9XDLNWex2KrCt6Q9w99yXm65nmGvf3nD9d11dkWBbciLaer9FKbZYwV4T8qrA8AyV9pwHb4v6AWDjzYKq4Sek?cluster=devnet) ·
+[start](https://explorer.solana.com/tx/2sYisNM4ob2NSkHGSPaU4gopTb2863kuowWBsRKfPEidGgDGy9xBZMnUAEMwTQ3TfXv6kPTpnB8W36esrunEaPFr?cluster=devnet) ·
+[check-ins day 2](https://explorer.solana.com/tx/37ePFceUDK1VutQCWWz8Ca9S56PyACLgPVRGk3XW2zZLWescU2zkB83aoxCUbwrhpb3SurHctScYhcZT4TSc1Xgn?cluster=devnet) ·
+[settle](https://explorer.solana.com/tx/2usvhEzdt8ewESzQHYAQHsFiYBww5SCGKSmSsaSdsAaSRxV7b1LWb4D9JnfTvrJv1kUd111YNgSzkK1wUR5k8QmE?cluster=devnet) ·
+[claim](https://explorer.solana.com/tx/2n6SvetZxqwhudxgrAK9Sx2mGXgdTBpaNS3TNXBP6raGpPfBXXg3M4rys7AKtKMs1AUg2TxEJhG7fcEnaBwdUonh?cluster=devnet)
+
+**The Keeper pipeline** ([`backend/scripts/keeper_e2e_devnet.ts`](backend/scripts/keeper_e2e_devnet.ts), [log](docs/notes/keeper-e2e-devnet-2026-11-26.log); stand-in vision model): the audit's 3-call forgery is refused; a passing photo's receipt hash is what [`record_checkin`](https://explorer.solana.com/tx/5U1f84eZrkZBwEzKbcXaY9g9GiSdsrAd8DPZY1E6HaXsqMri3cMrPx9ZvCjmmbKpHJADuyhMxtGmuN2ncNq2nKjh?cluster=devnet) puts on chain; a photo of a screen is rejected and its receipt hash is published in an [SPL Memo](https://explorer.solana.com/tx/22kQ2Eq7Gp7MYN3kCSGXvewJZrNo3e16ZCVPJfcfkzE6RkSGS9x3yRMWMnrGK7K2xLaa8yvmjDZkGmyDYNvvpSuv?cluster=devnet).
+
+**Known limits (Devnet build):** the program is built with `debug-tools`, which allows 2-minute days for demos (production uses 86,400 s); Seeker Genesis verification is mocked on Devnet with an allowlist (Genesis Tokens live on mainnet); Rematch recovery and on-chain Bounties are Demo-only; there is no `set_verifier` instruction yet. The full audit that drove these fixes is in [`docs/notes/AUDIT_2026-11-26.md`](docs/notes/AUDIT_2026-11-26.md).
+
 ## 🧱 Architecture
 
 ```mermaid
 flowchart LR
   subgraph Phone["📱 Android · Solana Seeker"]
     App["KEPT app<br/>Expo · React Native · TS"]
-    AI["On-device check<br/>MediaPipe + Gemma"]
     Wallet["Wallet<br/>Mobile Wallet Adapter"]
-    App --> AI
     App <--> Wallet
   end
-  App -- "REST (zod-validated)" --> API["Backend<br/>Express · Prisma · Postgres"]
+  App -- "photo + REST (zod-validated)" --> API["Backend<br/>Express · Prisma · Postgres"]
+  API -- "photo" --> Keeper["The Keeper<br/>vision model judge"]
+  Keeper -- "verdict → public receipt" --> API
   Wallet -- "signed transactions" --> Program["Anchor program<br/>kept_test · Devnet"]
-  API --> Program
+  API -- "record_checkin(receipt hash) · Memo(fail receipt)" --> Program
   App -. "RPC reads" .-> Program
 ```
 
@@ -144,7 +183,8 @@ flowchart LR
 | **App** | Expo SDK 57 (development build), React Native 0.86 (New Architecture, Hermes), TypeScript strict, React Navigation, TanStack Query, Zustand, Zod, Reanimated 4, Skia, react-native-svg, expo-camera |
 | **Wallet and chain** | Solana Mobile Wallet Adapter, `@solana/web3.js`, Anchor IDL client in [`packages/chain`](packages/chain) |
 | **Rules engine** | Pure TypeScript in [`packages/engine`](packages/engine): HP, cost per miss, daily distribution, Rematch recovery, kept rate, odds, with JSON test vectors shared with the Rust tests |
-| **On-device AI** | A local Expo module ([`frontend/modules/kept-gesture`](frontend/modules/kept-gesture)) running MediaPipe gesture recognition and Gemma (LiteRT-LM) |
+| **The Keeper** | Server-side judge ([`backend/src/v4/keeper.ts`](backend/src/v4/keeper.ts)): any OpenAI-compatible vision model (OpenRouter by default), canonical-JSON receipts, SPL Memo for failures, blockhash-derived challenges. The app re-checks receipts against chain with [`packages/chain/src/keeper.ts`](packages/chain/src/keeper.ts) |
+| **On-device AI (optional)** | A local Expo module ([`frontend/modules/kept-gesture`](frontend/modules/kept-gesture)) running MediaPipe gesture recognition and Gemma (LiteRT-LM); no longer required for Live proof |
 | **Backend** | Express + Prisma + Postgres ([`backend/`](backend)) |
 | **Program** | Anchor (Rust), [`onchain/programs/kept_test`](onchain) |
 | **Design** | 116 screens, tokens, copy and motion from the design handoff in [`design/`](design); theme and strings are generated from it, never hardcoded |
@@ -178,6 +218,12 @@ cp backend/.env.example backend/.env   # then fill it in (see backend/.env.examp
 pnpm --filter kept-backend exec prisma migrate deploy
 pnpm api:dev                           # http://localhost:3000
 ```
+
+The Keeper needs a vision model: set `OPEN_API_KEY` (an OpenRouter key by default; `VISION_API_URL` and `VISION_MODEL` point it at any OpenAI-compatible endpoint). Without it, photo checks answer `503 check_unavailable` and the app offers a retry.
+
+**Your own program instance** (what this repo runs on Devnet): build and deploy `onchain/` (`pnpm program:build`, then `solana program deploy --program-id <program keypair> target/deploy/kept_test.so`), then initialize it with `ADMIN_KEYPAIR=<upgrade authority> VERIFIER_PUBKEY=<verifier> TREASURY_OWNER=<treasury wallet> KEEPER_PROGRAM_ID=<id> pnpm --filter kept-backend exec tsx scripts/v4-setup.ts` (it creates a test mint, the treasury account and the Config, and funds the treasury wallet to the rent-exempt minimum). Put the printed values and the verifier key in `backend/.env`.
+
+**End-to-end checks on Devnet:** `cd onchain && npx tsx scripts/e2e_devnet_sol.ts` (escrow: create → join → check-ins → settle → claim, every payout checked) and `cd backend && npx tsx scripts/keeper_e2e_devnet.ts` (the Keeper: forgery refused, receipt hash on chain, failed verdict in a Memo).
 
 ### App on an Android phone
 
