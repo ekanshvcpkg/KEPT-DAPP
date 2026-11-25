@@ -39,6 +39,11 @@ import { ModelGate } from "@/features/models/ModelGate";
 
 /** Splash shows at least this long so the brand sequence can play (motion.md › splash). */
 const SPLASH_MIN_MS = 1200;
+/**
+ * Live proof is judged on the server by the Keeper (backend/src/v4/keeper.ts), so Live no longer needs the ~2.6 GB
+ * on-device models before it can start. The gate stays for an optional on-device pre-check.
+ */
+const LIVE_NEEDS_DEVICE_MODELS = false;
 
 // ── A0 Splash ── waits for the stored session, re-checks it, then routes.
 export function A0() {
@@ -63,7 +68,7 @@ export function A0() {
     })));
     void Promise.all([hydrated, new Promise((r) => setTimeout(r, SPLASH_MIN_MS))]).then(async () => {
       if (cancelled || useDevHold.getState().hold) return; // the dev deep link can hold the splash
-      if (useMode.getState().mode === "live") {
+      if (LIVE_NEEDS_DEVICE_MODELS && useMode.getState().mode === "live") {
         const models = await getDeviceModelsStatus();
         if (!modelsReady(models)) {
           setModelUnsupported(!models.supported);
@@ -136,8 +141,8 @@ export function A1m() {
   // A release build still pointing at localhost can't run Live (no server on the phone).
   const live = async () => {
     if (!liveConfigured()) { toast(t("additions.mode.noServer")); return; }
-    const models = await getDeviceModelsStatus();
-    if (!modelsReady(models)) {
+    const models = LIVE_NEEDS_DEVICE_MODELS ? await getDeviceModelsStatus() : null;
+    if (models && !modelsReady(models)) {
       setModelUnsupported(!models.supported);
       setModelStep(true);
       return;

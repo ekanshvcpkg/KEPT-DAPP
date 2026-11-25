@@ -1,7 +1,6 @@
 // Live proof, below the screens: the backend's challenge as the app reads it, and what the shutter hands on. One photo proves
 // one habit, of that habit's own object (DECISIONS D-98).
 import { analyzeDevicePhoto } from "kept-gesture";
-import type { DevicePhotoVerdict } from "kept-gesture";
 import { httpProof } from "@/api/http/oaths";
 import { gestureText } from "@/features/oaths/present";
 import { createHttpClient } from "@/api/http/client";
@@ -44,71 +43,58 @@ describe("challenge from the backend", () => {
   });
 });
 
-describe("checking a photo", () => {
-  const verdict = (over: Partial<DevicePhotoVerdict> = {}): DevicePhotoVerdict => ({
-    proofHash: "b".repeat(64), objectPresent: true, objectConfidence: 0.9, gestureSeen: "Thumb_Up", gestureMatches: true,
-    looksLikeScreenOrPrintout: false, reason: "ok", model: "test", ms: 12, inconclusive: false, ...over,
-  });
+describe("checking a photo: the Keeper judges on the server", () => {
   const challenge: Challenge = { habit: 0, dayIndex: 2, object: "dumbbell", gesture: "thumbs_up", expiresAt: 0 };
-  /** Records every request; answers by path. */
+  /** Records every request; answers by path (a number answers with that HTTP status). */
   function backend(replies: Record<string, unknown>) {
     const calls: { path: string; body: Record<string, unknown> }[] = [];
     const f = (async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname;
       calls.push({ path, body: JSON.parse(String(init?.body ?? "{}")) });
-      return new Response(JSON.stringify(replies[path] ?? {}), { status: 200 });
+      const reply = replies[path];
+      if (typeof reply === "number") return new Response(JSON.stringify({ error: "check_unavailable", retryable: true }), { status: reply });
+      return new Response(JSON.stringify(reply ?? {}), { status: 200 });
     }) as unknown as typeof fetch;
     return { calls, proof: httpProof(createHttpClient(() => "t", "http://api", f)) };
   }
 
-  it("sends the verdict and the photo's hash, never the photo, and one habit's proof ends the check", async () => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
-    const { calls, proof } = backend({ "/proof/verify": { pass: true, verificationId: "v1" }, "/api/proof/habit": { habit: 0, done: [0], dayKept: false } });
+  it("uploads the photo with what it must show, sends no verdict of its own, and one habit's proof ends the check", async () => {
+    const { calls, proof } = backend({ "/proof/verify": { pass: true, verificationId: "v1", receiptHash: "r".repeat(64) }, "/api/proof/habit": { habit: 0, done: [0], dayKept: false } });
     const base64 = "QUJD".repeat(50);
     const r = await proof.submit(oath, challenge, base64, "file:///cache/photo.jpg");
     expect(r).toEqual({ status: "pass", dayKept: false });
-    expect(analyzeDevicePhoto).toHaveBeenLastCalledWith("file:///cache/photo.jpg", "dumbbell", "thumbs up");
+    expect(analyzeDevicePhoto).not.toHaveBeenCalled();
     expect(calls.map((c) => c.path)).toEqual(["/proof/verify", "/api/proof/habit"]);
-    expect(Object.keys(calls[0]!.body).sort()).toEqual([
-      "dayIndex", "expectedGesture", "expectedObject", "gestureMatches", "gestureSeen", "habit", "looksLikeScreenOrPrintout",
-      "ms", "model", "objectConfidence", "objectPresent", "oath", "proofHash", "reason",
-    ].sort());
-    for (const c of calls) {
-      expect(JSON.stringify(c.body)).not.toContain(base64);
-      expect(JSON.stringify(c.body)).not.toContain("photo.jpg");
-    }
+    expect(calls[0]!.body).toEqual({ photo: base64, expectedObject: "dumbbell", expectedGesture: "thumbs up", oath: oath.id, dayIndex: 2, habit: 0 });
     expect(calls[1]!.body).toEqual({ oath: oath.id, dayIndex: 2, habit: 0, verificationId: "v1" });
     expect(useDeviceOaths.getState().habitsDone[oath.id]).toEqual([2, [0]]);
   });
 
   it("the last habit of the day says the day is kept", async () => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
     const { proof } = backend({ "/proof/verify": { pass: true, verificationId: "v1" }, "/api/proof/habit": { habit: 1, done: [0, 1], dayKept: true, signature: "s" } });
-    await expect(proof.submit(oath, { ...challenge, habit: 1, object: "book" }, "x", "file:///p.jpg")).resolves.toEqual({ status: "pass", dayKept: true });
+    await expect(proof.submit(oath, { ...challenge, habit: 1, object: "book" }, "x")).resolves.toEqual({ status: "pass", dayKept: true });
   });
 
-  it("a model that gave no usable answer is a retry (F2b), not a failed photo, and sends nothing", async () => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict({ inconclusive: true, objectPresent: false }));
-    const { calls, proof } = backend({});
-    await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).resolves.toEqual({ status: "unavailable" });
-    expect(calls).toEqual([]);
-  });
-
-  it("a rejected verdict counts as a failed try; a missing photo file or a native error is unavailable or thrown", async () => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict({ gestureMatches: false }));
-    const { proof } = backend({ "/proof/verify": { pass: false, verificationId: null, failedChecks: 2 } });
-    await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).resolves.toEqual({ status: "fail", attempts: 2, objectPresent: true, gestureMatches: false });
+  it("the Keeper being unavailable (503) is a retry (F2b), not a failed photo", async () => {
+    const { calls, proof } = backend({ "/proof/verify": 503 });
     await expect(proof.submit(oath, challenge, "x")).resolves.toEqual({ status: "unavailable" });
-    (analyzeDevicePhoto as jest.Mock).mockRejectedValueOnce(new Error("model failed to load"));
-    await expect(proof.submit(oath, challenge, "x", "file:///p.jpg")).rejects.toThrow("model failed to load");
+    expect(calls.map((c) => c.path)).toEqual(["/proof/verify"]);
+  });
+
+  it("a rejected photo counts as a failed try, with the Keeper's own reasons; no photo is unavailable", async () => {
+    const { calls, proof } = backend({ "/proof/verify": { pass: false, verificationId: null, failedChecks: 2, objectPresent: true, gestureMatches: false } });
+    await expect(proof.submit(oath, challenge, "x")).resolves.toEqual({ status: "fail", attempts: 2, objectPresent: true, gestureMatches: false });
+    await expect(proof.submit(oath, challenge, "")).resolves.toEqual({ status: "unavailable" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("other server errors are thrown to the screen (F2b / M2), not swallowed", async () => {
+    const { proof } = backend({ "/proof/verify": 500 });
+    await expect(proof.submit(oath, challenge, "x")).rejects.toMatchObject({ status: 500 });
   });
 });
 
-describe("what the phone checks: the habit's own object and the server's gesture", () => {
-  const verdict = (): DevicePhotoVerdict => ({
-    proofHash: "c".repeat(64), objectPresent: true, objectConfidence: 0.9, gestureSeen: "Victory", gestureMatches: true,
-    looksLikeScreenOrPrintout: false, reason: "ok", model: "test", ms: 9, inconclusive: false,
-  });
+describe("what the Keeper is asked: the habit's own object and the server's gesture", () => {
   function backend() {
     const calls: { path: string; body: Record<string, unknown> }[] = [];
     const f = (async (url: string, init?: RequestInit) => {
@@ -120,30 +106,26 @@ describe("what the phone checks: the habit's own object and the server's gesture
     return { calls, proof: httpProof(createHttpClient(() => "t", "http://api", f)) };
   }
 
-  // Any object the catalog has, not just the program's eight: the model is asked for it by name and the backend compares the same text.
-  it.each(["dumbbell", "book", "water bottle", "running shoes", "kettlebell", "sheet music", "notebook"])("%s: the model is asked for it and /proof/verify is sent it", async (object) => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
+  // Any object the catalog has, not just the program's eight: the backend asks the model for the same text.
+  it.each(["dumbbell", "book", "water bottle", "running shoes", "kettlebell", "sheet music", "notebook"])("%s is sent to /proof/verify by name", async (object) => {
     const { calls, proof } = backend();
-    await proof.submit(oath, { habit: 0, dayIndex: 1, object, gesture: "victory", expiresAt: 0 }, "x", "file:///p.jpg");
-    expect(analyzeDevicePhoto).toHaveBeenLastCalledWith("file:///p.jpg", object, expect.any(String));
+    await proof.submit(oath, { habit: 0, dayIndex: 1, object, gesture: "victory", expiresAt: 0 }, "x");
     expect(calls.find((x) => x.path === "/proof/verify")!.body.expectedObject).toBe(object);
   });
 
-  it("a challenge without an object is never checked (unavailable, not some other object)", async () => {
+  it("a challenge without an object is never sent (unavailable, not some other object)", async () => {
     const { calls, proof } = backend();
-    await expect(proof.submit(oath, { habit: 0, dayIndex: 1, object: "", gesture: "victory", expiresAt: 0 }, "x", "file:///p.jpg")).resolves.toEqual({ status: "unavailable" });
+    await expect(proof.submit(oath, { habit: 0, dayIndex: 1, object: "", gesture: "victory", expiresAt: 0 }, "x")).resolves.toEqual({ status: "unavailable" });
     expect(calls).toEqual([]);
   });
 
-  it.each([["thumbs_up"], ["victory"], ["open_palm"]] as const)("the server's %s is shown, and the same gesture goes to MediaPipe and /proof/verify", async (gesture) => {
-    (analyzeDevicePhoto as jest.Mock).mockResolvedValueOnce(verdict());
+  it.each([["thumbs_up"], ["victory"], ["open_palm"]] as const)("the server's %s is shown and is the gesture /proof/verify is asked about", async (gesture) => {
     const random = jest.spyOn(Math, "random");
     try {
       const { calls, proof } = backend();
       expect(gestureText(gesture)).toEqual(expect.any(String)); // what F1 shows the user
-      await proof.submit(oath, { habit: 0, dayIndex: 1, object: "book", gesture, expiresAt: 0 }, "x", "file:///p.jpg");
-      const [, , expected] = (analyzeDevicePhoto as jest.Mock).mock.calls.at(-1)!;
-      expect(expected).toBe(calls.find((x) => x.path === "/proof/verify")!.body.expectedGesture);
+      await proof.submit(oath, { habit: 0, dayIndex: 1, object: "book", gesture, expiresAt: 0 }, "x");
+      expect(calls.find((x) => x.path === "/proof/verify")!.body.expectedGesture).toEqual(expect.stringContaining(gesture === "thumbs_up" ? "thumbs up" : gesture === "victory" ? "victory" : "open palm"));
       expect(random).not.toHaveBeenCalled(); // no gesture is drawn on the phone
     } finally { random.mockRestore(); }
   });

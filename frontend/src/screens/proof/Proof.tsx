@@ -31,6 +31,8 @@ import { gestureKey, gestureText, listNames, memberName, oathAmount } from "@/fe
 import { nowSeconds } from "@/features/time";
 import { useUi } from "@/state/ui";
 import { haptic } from "@/lib/haptics";
+import { auditDay, explorerTx } from "@/features/keeper/audit";
+import type { KeeperAudit } from "@/features/keeper/audit";
 
 /** "lift for 20 minutes" → "Lift for 20 minutes" (a habit starts a sentence on F3). */
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -368,7 +370,36 @@ export function F5() {
         title: memberName(m), sub: t("screens.F5.b4.r0.s"), value: t("screens.F5.b4.r0.r"),
         onPress: () => { void oathActions.nudge(view.facts, [m.facts.wallet], view.dayIndex ?? 0).catch(() => undefined).then(() => toast(t("toasts.3", { name: memberName(m) }))); },
       }))} /> : null}
+      {view && me && view.facts.source === "chain" && view.dayIndex !== null ? <KeeperAuditRows oath={view.facts.id} dayIndex={view.dayIndex} wallet={me.facts.wallet} /> : null}
       <BrandStamp text={t("screens.F5.brand.stamp", { day, time })} />
     </Screen>
+  );
+}
+
+/** Live only: re-hash this day's Keeper receipts on the phone and compare them with the proof_hash on Solana. */
+function KeeperAuditRows({ oath, dayIndex, wallet }: { oath: string; dayIndex: number; wallet: string }) {
+  const [audit, setAudit] = useState<KeeperAudit | "checking" | null>(null);
+  const run = () => {
+    setAudit("checking");
+    void auditDay(oath, dayIndex, wallet).then(setAudit, () => setAudit({ status: "unavailable" }));
+  };
+  if (audit === null) return <RowList rows={[{ title: t("additions.keeper.audit"), sub: t("additions.keeper.auditSub"), chevron: true, leading: { kind: "icon", icon: "shield-check-outline" }, onPress: run }]} />;
+  if (audit === "checking") return <RowList rows={[{ title: t("additions.keeper.checking"), leading: { kind: "icon", icon: "timer-sand" } }]} />;
+  if (audit.status === "unavailable") return <RowList rows={[{ title: t("additions.keeper.unavailable"), leading: { kind: "icon", icon: "alert-circle-outline" }, onPress: run }]} />;
+  const head = audit.status === "verified"
+    ? { title: t("additions.keeper.verified"), sub: t("additions.keeper.verifiedSub", { n: audit.receipts.length }), leading: { kind: "icon" as const, icon: "check-decagram" as const, fg: color.lime.base }, titleColor: color.lime.base }
+    : audit.status === "pending"
+      ? { title: t("additions.keeper.pending"), sub: t("additions.keeper.pendingSub"), leading: { kind: "icon" as const, icon: "timer-sand" as const }, onPress: run }
+      : { title: t("additions.keeper.mismatch"), sub: t("additions.keeper.mismatchSub"), leading: { kind: "icon" as const, icon: "alert-circle-outline" as const, fg: color.red.base }, titleColor: color.red.base };
+  const sig = audit.signature;
+  return (
+    <RowList label={t("additions.keeper.audit")} rows={[
+      head,
+      ...audit.receipts.map((r, i) => ({
+        title: t("additions.keeper.receiptRow", { n: i + 1 }), sub: t("additions.keeper.receiptSub", { model: r.model, slot: r.slot ?? "—" }),
+        value: `${r.hash.slice(0, 6)}…${r.hash.slice(-4)}`, valueColor: r.matches ? color.lime.base : color.red.base,
+      })),
+      ...(sig ? [{ title: t("additions.keeper.explorer"), leading: { kind: "icon" as const, icon: "link-variant" as const }, chevron: true, onPress: () => { void Linking.openURL(explorerTx(sig)); } }] : []),
+    ]} />
   );
 }

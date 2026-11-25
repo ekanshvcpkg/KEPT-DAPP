@@ -524,5 +524,21 @@
     "proof": "Proof: {object}",
     "metaOne": "{object} · 1 photo",
     "metaMany": "{n} tasks · 1 photo each"
+  },
+  "keeper": {
+    "$source": "hackathon 2026-11-26: the Keeper judges proof on the server and publishes receipts (docs/notes/HACKATHON_PLAN.md)",
+    "audit": "Audit the Keeper",
+    "auditSub": "Re-check today's receipts against Solana",
+    "checking": "Checking the receipts…",
+    "verified": "Verified on Solana",
+    "verifiedSub": "{n} receipt(s) hash to the proof recorded on chain",
+    "mismatch": "Doesn't match the chain",
+    "mismatchSub": "A receipt or the on-chain proof differs",
+    "pending": "Not on chain yet",
+    "pendingSub": "The check-in is still being recorded",
+    "unavailable": "No receipts for this day",
+    "receiptRow": "Receipt {n}",
+    "receiptSub": "{model} · slot {slot}",
+    "explorer": "View the check-in on Explorer"
   }
 }

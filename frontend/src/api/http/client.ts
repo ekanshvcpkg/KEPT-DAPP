@@ -11,6 +11,8 @@ export function setUnauthorizedHandler(f: (() => void) | null): void { onUnautho
 
 /** A request that hasn't answered by then is given up on, like no network: M2 offers the retry. */
 const REQUEST_TIMEOUT_MS = 15_000;
+/** The Keeper's photo check uploads the photo and waits for the vision model (the server gives the model 25 s). */
+const SLOW_PATHS: Record<string, number> = { "/proof/verify": 45_000 };
 
 export interface HttpClient {
   get<S extends z.ZodType>(path: string, schema: S): Promise<z.output<S>>;
@@ -24,7 +26,8 @@ export function createHttpClient(getToken: TokenSource, baseUrl = env.apiUrl, fe
   async function request(method: "GET" | "POST" | "PUT", path: string, body?: unknown): Promise<unknown> {
     const token = getToken();
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    const limit = SLOW_PATHS[path] ?? timeoutMs;
+    const timer = setTimeout(() => abort.abort(), limit);
     let res: Response;
     let raw: string;
     try {
@@ -38,7 +41,7 @@ export function createHttpClient(getToken: TokenSource, baseUrl = env.apiUrl, fe
     } catch (e) {
       // fetch only rejects when the request never got a whole response: no network, DNS, refused, or
       // our own timeout.
-      const why = abort.signal.aborted ? `No answer after ${timeoutMs / 1000} s` : e instanceof Error ? e.message : String(e);
+      const why = abort.signal.aborted ? `No answer after ${limit / 1000} s` : e instanceof Error ? e.message : String(e);
       throw new ApiError("OFFLINE", why, 0, true);
     } finally {
       clearTimeout(timer);

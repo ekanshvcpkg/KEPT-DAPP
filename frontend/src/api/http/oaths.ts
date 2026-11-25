@@ -10,7 +10,6 @@ import type { OathFacts } from "@/features/oaths/model";
 import { oathName } from "@/features/oaths/names";
 import { clock } from "@/lib/clock";
 import { z } from "zod";
-import { analyzeDevicePhoto } from "kept-gesture";
 import { useSession } from "@/state/session";
 import { ApiError, fromRpcError, isApiError } from "../errors";
 import type { GestureLabel, OathsApi, ProofApi } from "../types";
@@ -142,11 +141,15 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
 /** The backend's MediaPipe labels → the app's gesture names (the design's three, rules.md §5). */
 const GESTURE: Record<string, GestureLabel> = { Thumb_Up: "thumbs_up", Victory: "victory", Open_Palm: "open_palm", Closed_Fist: "closed_fist", Pointing_Up: "pointing_up" };
 const GESTURE_TEXT: Record<GestureLabel, string> = { thumbs_up: "thumbs up", victory: "victory sign (index and middle finger in a V)", open_palm: "open palm facing the camera", closed_fist: "closed fist", pointing_up: "pointing up" };
-const VerifyResponse = z.object({ pass: z.boolean(), verificationId: z.string().nullable(), failedChecks: z.number().int().optional() });
+const VerifyResponse = z.object({
+  pass: z.boolean(), verificationId: z.string().nullable(), failedChecks: z.number().int().optional(),
+  objectPresent: z.boolean().optional(), gestureMatches: z.boolean().optional(), receiptHash: z.string().optional(),
+});
 
 /**
- * Live proof uses the on-device MediaPipe + Gemma module before posting the verdict and photo hash. One photo proves one habit:
- * the habit's own object is what the model looks for and what /proof/verify must say; the server picks the gesture.
+ * Live proof: the Keeper judges on the server. The photo is uploaded with what it must show (the habit's own object and
+ * the server's gesture); the server hashes it, asks the vision model and records a public receipt. Nothing the phone
+ * concludes is trusted, so nothing is sent but the photo and its context. One photo proves one habit.
  */
 export function httpProof(c: HttpClient): ProofApi {
   return {
@@ -159,24 +162,25 @@ export function httpProof(c: HttpClient): ProofApi {
       // read them as milliseconds (1970) and every challenge expired the moment it arrived (F2c).
       return { habit, dayIndex, object: r.object, gesture: GESTURE[r.gesture]!, expiresAt: r.expiresAt };
     },
-    submit: async (oath, challenge, _image, imageUri) => {
-      if (oath.bountyId || !imageUri) return { status: "unavailable" };
+    submit: async (oath, challenge, image) => {
+      if (oath.bountyId || !image) return { status: "unavailable" };
       const object = challenge.object;
       const gesture = GESTURE_TEXT[challenge.gesture];
       if (!object || !gesture) return { status: "unavailable" };
-      const verdict = await analyzeDevicePhoto(imageUri, object, gesture);
-      // The model gave no usable answer: not the user's miss. Nothing is sent (a failed check counts toward review); they retry.
-      if (verdict.inconclusive) return { status: "unavailable" };
-      // The photo stays on the phone: the server gets its hash, the verdict and what it was checked for.
-      const checked = await c.post("/proof/verify", {
-        proofHash: verdict.proofHash, objectPresent: verdict.objectPresent, objectConfidence: verdict.objectConfidence,
-        gestureSeen: verdict.gestureSeen, gestureMatches: verdict.gestureMatches, looksLikeScreenOrPrintout: verdict.looksLikeScreenOrPrintout,
-        reason: verdict.reason, model: verdict.model, ms: verdict.ms,
-        expectedObject: object, expectedGesture: gesture, oath: oath.id, dayIndex: challenge.dayIndex, habit: challenge.habit,
-      }, VerifyResponse);
+      let checked: z.output<typeof VerifyResponse>;
+      try {
+        checked = await c.post("/proof/verify", {
+          photo: image, expectedObject: object, expectedGesture: gesture, oath: oath.id, dayIndex: challenge.dayIndex, habit: challenge.habit,
+        }, VerifyResponse);
+      } catch (e) {
+        // The Keeper could not judge (model down or slow): not the user's miss and not a counted try. They retry (F2b).
+        if (isApiError(e) && e.status === 503) return { status: "unavailable" };
+        throw e;
+      }
       if (!checked.pass || !checked.verificationId) return {
         status: "fail", attempts: checked.failedChecks ?? 1,
-        objectPresent: verdict.objectPresent, gestureMatches: verdict.gestureMatches,
+        ...(checked.objectPresent !== undefined ? { objectPresent: checked.objectPresent } : {}),
+        ...(checked.gestureMatches !== undefined ? { gestureMatches: checked.gestureMatches } : {}),
       };
       const r = await c.post("/api/proof/habit", { oath: oath.id, dayIndex: challenge.dayIndex, habit: challenge.habit, verificationId: checked.verificationId }, HabitProofResponse);
       useDeviceOaths.getState().setHabitsDone(oath.id, challenge.dayIndex, r.done);

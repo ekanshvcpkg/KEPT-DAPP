@@ -151,24 +151,20 @@ describe("onboarding on mocks", () => {
     expect(useSession.getState().invite).toBe("");
   }, 30000);
 
-  it("Live needs the on-device models; release onboarding never offers Demo", async () => {
+  it("Live starts without the on-device models (the Keeper judges proof on the server); release onboarding never offers Demo", async () => {
     const missing = { supported: true, gestureReady: false, visionReady: false, modelBytes: 1, downloadedBytes: 0, totalBytes: 1 };
     (getDeviceModelsStatus as jest.Mock).mockResolvedValue(missing);
-    // Development builds let "Not now" through to Live (so an emulator can be used); a release build goes back.
     const dev = (globalThis as { __DEV__?: boolean }).__DEV__;
     (globalThis as { __DEV__?: boolean }).__DEV__ = false;
     try {
       await render(<App />);
       await fireEvent.press(await screen.findByRole("button", { name: t("screens.A1.pin.0") }, slow));
-      await fireEvent.press(await screen.findByText(t("additions.mode.live"), {}, slow));
-      expect(await screen.findByText(t("additions.mode.modelTitle"), {}, slow)).toBeTruthy();
-      expect(screen.queryByText(t("screens.A2.b0.title"))).toBeNull();
-      expect(useMode.getState().mode).not.toBe("live");
-      // Not now returns to the choice. A store build has only Live, even when proof models are missing.
-      await fireEvent.press(await screen.findByRole("button", { name: t("additions.mode.modelNotNow") }));
       expect(await screen.findByText(t("additions.mode.live"), {}, slow)).toBeTruthy();
       expect(screen.queryByText(t("additions.mode.demo"))).toBeNull();
-      expect(useMode.getState().mode).not.toBe("demo");
+      await fireEvent.press(screen.getByText(t("additions.mode.live")));
+      expect(await screen.findByText(t("screens.A2.b0.title"), {}, slow)).toBeTruthy();
+      expect(screen.queryByText(t("additions.mode.modelTitle"))).toBeNull();
+      expect(useMode.getState().mode).toBe("live");
     } finally {
       (globalThis as { __DEV__?: boolean }).__DEV__ = dev;
       (getDeviceModelsStatus as jest.Mock).mockResolvedValue({ ...missing, gestureReady: true, visionReady: true });
