@@ -189,7 +189,8 @@
     "coverLater": "Cover images arrive with Bounty hosting on the server.",
     "noRequirements": "Verified Seeker only",
     "liveUntilDay1": "It's in Discover now. Joins close when day 1 ends.",
-    "liveBrand": "KEPT"
+    "liveBrand": "KEPT",
+    "joinLiveSoon": "Joining opens when Bounty proof is live"
   },
   "wallet": {
     "$source": "phase 4",

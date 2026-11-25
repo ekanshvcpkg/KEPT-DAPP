@@ -4,8 +4,10 @@ import type { Slice } from "@/api/types";
 import { flags, useDev } from "@/state/dev";
 import { useMode } from "@/state/mode";
 
-type Feature = "rematch" | "createBounty" | "swap" | "creatorPages";
-const SLICE: Record<Feature, Slice> = { rematch: "rematch", createBounty: "bounties", swap: "wallet", creatorPages: "profile" };
+// joinBounty: Live can list and join the backend's Bounty, but proving a Bounty day isn't wired to the Keeper yet,
+// so a Live joiner would be out after day 1. Hidden in Live until it is.
+type Feature = "rematch" | "createBounty" | "swap" | "creatorPages" | "joinBounty";
+const SLICE: Record<Feature, Slice> = { rematch: "rematch", createBounty: "bounties", swap: "wallet", creatorPages: "profile", joinBounty: "bounties" };
 
 /** True while the feature's slice is the mock; the http slices don't have these yet. */
 export const featureAvailable = (f: Feature): boolean => flags()[SLICE[f]] === "mock";

@@ -171,6 +171,7 @@ function Created() {
 export function H2() {
   const { back, go, replace } = useGo();
   const creatorPages = useFeature("creatorPages");
+  const joinable = useFeature("joinBounty");
   const toast = useToast();
   const { id } = useParams<{ id: string }>();
   const { data: b } = useBounty(id);
@@ -190,6 +191,7 @@ export function H2() {
   return (
     <Screen bar={<NavBar onBack={back} title={t("screens.H2.nav.title")} />} bottomInset={pinned(el.ok ? 1 : 2)} pinned={
       joined ? <Button kind="p" label={t("screens.H1·j.b1.tag.0")} onPress={() => go("H3", { id: b.id })} />
+      : el.ok && !joinable ? <Button kind="l" icon="trophy-outline" label={t("additions.bounty.joinLiveSoon")} disabled onPress={() => undefined} />
       : el.ok ? <Button kind="l" icon="trophy-outline" label={t("screens.H2.pin.0")} disabled={!open} loading={busy} onPress={() => { void join(); }} />
       : <>
         <Button kind="p" label={t("screens.H2·no.pin.0")} onPress={() => go("H1")} />
