@@ -18,8 +18,8 @@ const eventLog = (proofHash: string, day = 1) => "Program data: " + Buffer.conca
   new PublicKey(OATH).toBuffer(), new PublicKey(WALLET).toBuffer(), Buffer.from([day]), Buffer.from(proofHash, "hex"),
 ]).toString("base64");
 
-function setup(opts: { tamper?: boolean; chainHash?: string; signature?: string | null; missing?: boolean } = {}) {
-  const receipts = [receipt(0), receipt(1)];
+function setup(opts: { tamper?: boolean; chainHash?: string; signature?: string | null; missing?: boolean; swapHabits?: boolean } = {}) {
+  const receipts = opts.swapHabits ? [receipt(1), receipt(0)] : [receipt(0), receipt(1)];
   const hashes = receipts.map(receiptHashOf);
   const served = opts.tamper ? [{ ...receipts[0], pass: false }, receipts[1]] : receipts;
   const f = (async (url: string) => {
@@ -53,6 +53,17 @@ it("a receipt edited after the fact no longer matches its hash", async () => {
 it("receipts that don't combine to what the chain recorded are a mismatch", async () => {
   const { http } = setup({ chainHash: "f".repeat(64) });
   expect((await auditDay(OATH, 1, WALLET, http)).status).toBe("mismatch");
+});
+
+it("a receipt that hashes correctly but is for another habit (or not a pass) does not verify the day", async () => {
+  const { http } = setup({ swapHabits: true });
+  expect((await auditDay(OATH, 1, WALLET, http)).status).toBe("mismatch");
+});
+
+it("a check-in the RPC hasn't indexed yet is pending, not a mismatch", async () => {
+  const { http, getTransaction } = setup();
+  getTransaction.mockResolvedValueOnce(null as never);
+  expect((await auditDay(OATH, 1, WALLET, http)).status).toBe("pending");
 });
 
 it("no check-in transaction yet is pending; no receipts at all is unavailable", async () => {

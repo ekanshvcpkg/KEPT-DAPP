@@ -128,7 +128,7 @@ Product rules in full: [`design/rules.md`](design/rules.md), with amendments in 
 
 Up to four friends share one HP bar, so a faked day takes money from the friends who were honest. KEPT's answer is a judge that can be checked:
 
-1. **Challenge.** `POST /api/proof/challenge` derives the hand gesture from the latest Solana blockhash (`sha256(blockhash)[0] mod 3`, never the previous gesture) and records the slot, so the photo provably comes after that slot.
+1. **Challenge.** `POST /api/proof/challenge` derives the hand gesture from the latest Solana blockhash (`sha256(blockhash)[0] mod 3`, never the previous gesture) and records the slot, so the server can't pick it. It expires in two minutes, and the photo must answer that exact challenge.
 2. **Judge.** The app uploads the photo to `POST /proof/verify`. The server hashes it, asks the vision model whether the object and the gesture are there and whether it is a photo of a screen or a printout, and **ignores any verdict the app sends**. A photo that already passed can't be reused.
 3. **Receipt.** The verdict becomes a receipt (`wallet, oath, day, habit, photoSha256, challenge {gesture, slot, blockhash}, model, verdict, pass`). Its SHA-256 over canonical JSON is public at `GET /keeper/receipts/:hash`.
 4. **On chain.** When every habit of the day has a passing receipt, the verifier key signs `record_checkin` with `proof_hash = sha256(receipt hashes in habit order)`. A failed check's receipt hash is published in an SPL Memo (`kept:fail:<hash>`) from the same key.
@@ -136,7 +136,7 @@ Up to four friends share one HP bar, so a faked day takes money from the friends
 
 **Verify one yourself:** `GET /keeper/oaths/<oath>/days/<day>?wallet=<wallet>` returns the receipt hashes, their combined hash and the transaction signature. Hash each receipt from `/keeper/receipts/<hash>` (keys sorted, no whitespace), concatenate the hashes, SHA-256 them, and compare with `proof_hash` in the transaction's `CheckinRecorded` event.
 
-**What this does and does not prove.** It proves which photo (by hash) was judged, against which challenge, by which model, with which verdict, and that the verdict the chain acted on is that one. It does not make the model infallible: a model false negative still costs a day (Live has no appeal yet), and the photo itself is not public.
+**What this does and does not prove.** It proves which photo (by hash) was judged, against which challenge, by which model, with which verdict, and that the verdict the chain acted on is that one. It does not make the model infallible: a model false negative still costs a day (Live has no appeal yet), and the photo itself is not public. With only three gestures the challenge is not proof of freshness on its own: an identical photo can pass only once (any wallet), but a determined cheater with a stored photo per gesture and a modified client could re-encode it. The next step is a high-entropy challenge (a short code from the blockhash written next to the object) plus perceptual-hash deduplication.
 
 ## ⛓ Devnet addresses and evidence
 

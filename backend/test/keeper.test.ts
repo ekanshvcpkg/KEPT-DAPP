@@ -39,7 +39,8 @@ test('POST /proof/verify: the Keeper judges the uploaded photo; the client verdi
   const wallet = '11111111111111111111111111111111';
   const oath = programId.toBase58();
   const old = { ...config };
-  Object.assign(config, { sessionSecret: 'keeper-test', sgtMock: true, sgtMockAllowlist: [wallet], devnetRpcUrl: 'https://api.devnet.solana.com', verifierSecretKey: '' });
+  const other = '11111111111111111111111111111112';
+  Object.assign(config, { sessionSecret: 'keeper-test', sgtMock: true, sgtMockAllowlist: [wallet, other], devnetRpcUrl: 'https://api.devnet.solana.com', verifierSecretKey: '' });
   const originalJudge = keeper.judge;
   let judge: Judge = async () => ({ verdict: { objectPresent: true, objectConfidence: 0.9, gestureSeen: 'thumbs up', gestureMatches: true, looksLikeScreenOrPrintout: false, reason: 'ok' }, model: 'test-model' });
   keeper.judge = (p, e) => judge(p, e);
@@ -51,18 +52,20 @@ test('POST /proof/verify: the Keeper judges the uploaded photo; the client verdi
   const stub = (obj: any, key: string, fn: any) => { const original = obj[key]; obj[key] = fn; restore.push(() => { obj[key] = original; }); };
   stub(prisma.sessionSeat, 'upsert', async () => ({}));
   stub(prisma.proofSession, 'findUnique', async () => null);
-  stub(prisma.gestureChallenge, 'findFirst', async () => ({ gesture: 'Thumb_Up', issuedAt: new Date('2026-11-26T00:00:00Z'), slot: 777, blockhash: 'bh' }));
-  stub(prisma.proofVerification, 'create', async ({ data }: any) => { const r = { id: String(nextId++), status: 'PENDING', createdAt: new Date(), ...data }; rows.set(r.id, r); return r; });
+  const issuedAt = new Date(Date.now() - 5_000);
+  let challengeRow: any = { gesture: 'Thumb_Up', issuedAt, slot: 777, blockhash: 'bh' };
+  stub(prisma.gestureChallenge, 'findFirst', async () => challengeRow);
+  stub(prisma.proofVerification, 'create', async ({ data }: any) => { const r = { id: String(nextId++), status: 'PENDING', usedAt: null, oath: null, dayIndex: null, habit: null, createdAt: new Date(), ...data }; rows.set(r.id, r); return r; });
   stub(prisma.proofVerification, 'count', async ({ where }: any) => [...rows.values()].filter((r) => r.wallet === where.wallet && (!where.status || r.status === where.status)).length);
   stub(prisma.proofVerification, 'update', async ({ where, data }: any) => { const r = { ...rows.get(where.id), ...data }; rows.set(where.id, r); return r; });
   stub(prisma.proofVerification, 'delete', async ({ where }: any) => { const r = rows.get(where.id); rows.delete(where.id); return r; });
-  stub(prisma.proofVerification, 'findFirst', async ({ where }: any) => [...rows.values()].find((r) => r.wallet === where.wallet && r.photoHash === where.photoHash && r.status === where.status) ?? null);
+  stub(prisma.proofVerification, 'findFirst', async ({ where }: any) => [...rows.values()].find((r) => Object.entries(where).every(([k, v]) => r[k] === v)) ?? null);
   stub(prisma.proofVerification, 'findUnique', async ({ where }: any) => [...rows.values()].find((r) => (where.receiptHash ? r.receiptHash === where.receiptHash : r.id === where.id)) ?? null);
 
   const server = createApp().listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
-  const verify = async (body: object) => {
-    const r = await fetch(base + '/proof/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${issueSession(wallet)}` }, body: JSON.stringify({ oath, dayIndex: 0, habit: 0, expectedObject: 'water bottle', expectedGesture: 'thumbs up', ...body }) });
+  const verify = async (body: object, as = wallet) => {
+    const r = await fetch(base + '/proof/verify', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${issueSession(as)}` }, body: JSON.stringify({ oath, dayIndex: 0, habit: 0, expectedObject: 'water bottle', expectedGesture: 'thumbs up', ...body }) });
     return { status: r.status, body: await r.json() as any };
   };
   try {
@@ -87,17 +90,37 @@ test('POST /proof/verify: the Keeper judges the uploaded photo; the client verdi
     assert.equal(sha(canonicalJson(fetched.receipt)), ok.body.receiptHash, 'anyone can re-hash the receipt and get the on-chain hash');
     assert.equal(receiptHash(fetched.receipt), ok.body.receiptHash);
     assert.equal(fetched.receipt.photoSha256, sha(photo));
-    assert.deepEqual(fetched.receipt.challenge, { gesture: 'Thumb_Up', slot: 777, blockhash: 'bh', issuedAt: '2026-11-26T00:00:00.000Z' });
+    assert.deepEqual(fetched.receipt.challenge, { gesture: 'Thumb_Up', slot: 777, blockhash: 'bh', issuedAt: issuedAt.toISOString() });
     assert.equal(fetched.receipt.wallet, wallet); assert.equal(fetched.receipt.target, oath); assert.equal(fetched.receipt.pass, true);
 
-    // The same photo cannot pass twice.
+    // Retrying the very same check (recording failed, the verification is unused) returns it without a new model call.
+    let calls = 0; const counting = judge; judge = async (p, e) => { calls++; return counting(p, e); };
+    const again = await verify({ photo: photo.toString('base64') });
+    assert.equal(again.status, 200); assert.equal(again.body.verificationId, ok.body.verificationId); assert.equal(again.body.retry, true); assert.equal(calls, 0);
+    // Once used, or from another wallet, or for another habit, the same photo is refused.
+    assert.equal((await verify({ photo: photo.toString('base64') }, other)).status, 409);
+    assert.equal((await verify({ photo: photo.toString('base64'), habit: 1 })).status, 409);
+    rows.get(ok.body.verificationId).usedAt = new Date();
     assert.equal((await verify({ photo: photo.toString('base64') })).status, 409);
+
+    // The gesture must be the current challenge's, and the challenge must still be usable.
+    const wrong = await verify({ photo: jpeg(7).toString('base64'), expectedGesture: 'victory sign (index and middle finger in a V)' });
+    assert.equal(wrong.status, 400);
+    challengeRow = { ...challengeRow, issuedAt: new Date(Date.now() - 60 * 60_000) };
+    const expired = await verify({ photo: jpeg(8).toString('base64') });
+    assert.equal(expired.status, 409); assert.equal(expired.body.challengeExpired, true);
+    challengeRow = { ...challengeRow, issuedAt };
 
     // Model down: 503, and the attempt does not count toward the daily limit.
     const before = rows.size;
     judge = async () => { throw new CheckUnavailableError('down'); };
     const down = await verify({ photo: jpeg(4).toString('base64') });
     assert.equal(down.status, 503); assert.equal(down.body.error, 'check_unavailable'); assert.equal(rows.size, before);
+    // An answer the model gave but that isn't a verdict was a paid call: it counts toward the daily limit.
+    const { UnusableVerdictError } = await import('../src/v4/keeper.js');
+    judge = async () => { throw new UnusableVerdictError('gibberish'); };
+    const unusable = await verify({ photo: jpeg(6).toString('base64') });
+    assert.equal(unusable.status, 503); assert.equal(rows.size, before + 1); assert.equal([...rows.values()].at(-1).status, 'UNAVAILABLE');
 
     assert.equal((await fetch(`${base}/keeper/receipts/${'0'.repeat(64)}`)).status, 404);
     assert.equal((await fetch(`${base}/keeper/receipts/nothex`)).status, 400);

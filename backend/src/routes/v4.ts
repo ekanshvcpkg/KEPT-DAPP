@@ -249,8 +249,8 @@ post("/api/proof/habit", async (req: AuthedRequest, res) => {
   const check = await claimVerification(verificationId, req.wallet, expected);
   if ("error" in check) return res.status(422).json({ error: check.error, expected });
   const v = check.verification;
-  // A check that names an Oath, day or habit must be for this one.
-  if ((v.oath !== null && (v.oath !== oath || v.dayIndex !== day)) || (v.habit !== null && v.habit !== h)) {
+  // The check must be for this Oath, day and habit, and made for the current challenge (not before it was issued).
+  if (v.oath !== oath || v.dayIndex !== day || v.habit !== h || v.createdAt.getTime() < challenge.issuedAt.getTime()) {
     await releaseVerification(v.id);
     return res.status(422).json({ error: "That photo check was for a different Oath, day or habit", expected });
   }

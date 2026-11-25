@@ -4,12 +4,13 @@ import { authenticate, AuthedRequest } from "../auth.js";
 import { requireGenesis } from "../genesis.js";
 import { verdictPasses } from "../v4/verdict.js";
 import { DAILY_PHOTO_CHECKS, reviewFailures, verificationRejection, type ReviewContext } from "../v4/rules.js";
-import { findSession, latestChallenge } from "../v4/challenges.js";
+import { currentChallenge, findSession, latestChallenge } from "../v4/challenges.js";
+import { CHALLENGE_UPLOAD_GRACE_MS, GESTURE_TEXT, type ChallengeGesture } from "../v4/rules.js";
 import { combinedHabitsHash, habitChallengeKey } from "../v4/habits.js";
 import { config } from "../config.js";
 import { keypairFromEnv } from "../solana.js";
 import { CheckUnavailableError } from "../v4/verdict.js";
-import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, type Receipt } from "../v4/keeper.js";
+import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
 
 export const proofVerifyRouter = Router();
 const asyncRoute = (fn: (req: any, res: Response) => unknown): RequestHandler => (req, res, next) => {
@@ -43,8 +44,26 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   const image = decodePhoto(photo);
   if ("error" in image) return res.status(400).json({ error: image.error, photoRequired: true });
   const photoHash = sha256Hex(image.bytes);
-  if (await prisma.proofVerification.findFirst({ where: { wallet: req.wallet, photoHash, status: "PASS" } })) {
-    return res.status(409).json({ error: "That photo was already used; take a new one" });
+
+  // A photo of a habit answers one challenge: the current one for that habit, and the gesture it names (not a gesture
+  // the app picks). Checks sent without a habit (the legacy two-photo and Bounty flows) are bound when they are claimed.
+  const challenge = habit !== undefined
+    ? await currentChallenge(habitChallengeKey(oath, habit), req.wallet, dayIndex, null, CHALLENGE_UPLOAD_GRACE_MS)
+    : withContext ? await latestChallenge(oath, req.wallet, dayIndex) : null;
+  if (habit !== undefined) {
+    if (!challenge) return res.status(409).json({ error: "Gesture challenge expired; a new one is needed", challengeExpired: true });
+    if (expectedGesture !== GESTURE_TEXT[challenge.gesture as ChallengeGesture]) return res.status(400).json({ error: "expectedGesture must be the current challenge's gesture" });
+  }
+
+  // The same photo (exact bytes, any wallet) can pass only once. The one exception is retrying the very same check
+  // after recording failed: it gets back its unused verification instead of a new model call.
+  const prior = await prisma.proofVerification.findFirst({ where: { photoHash, status: "PASS" } });
+  if (prior) {
+    const retry = prior.wallet === req.wallet && prior.usedAt === null && prior.oath === (withContext ? oath : null) && prior.dayIndex === (withContext ? dayIndex : null)
+      && prior.habit === (habit ?? null) && prior.expectedObject === expectedObject && prior.expectedGesture === expectedGesture;
+    if (!retry) return res.status(409).json({ error: "That photo was already used; take a new one" });
+    return res.json({ pass: true, verificationId: prior.id, proofHash: photoHash, receiptHash: prior.receiptHash, objectPresent: prior.objectPresent, objectConfidence: prior.objectConfidence,
+      gestureSeen: prior.gestureSeen, gestureMatches: prior.gestureMatches, looksLikeScreenOrPrintout: prior.looksLikeScreen, reason: prior.reason, model: prior.model, ms: 0, retry: true });
   }
 
   const session = withContext && habit === undefined ? await findSession(oath, req.wallet, dayIndex) : null;
@@ -56,13 +75,15 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     return res.status(429).json({ error: "daily_limit", detail: `${DAILY_PHOTO_CHECKS} photo checks per wallet per day; try again tomorrow (UTC)` });
   }
 
-  const challenge = withContext ? await latestChallenge(habit !== undefined ? habitChallengeKey(oath, habit) : oath, req.wallet, dayIndex) : null;
   const started = Date.now();
   let judged: Awaited<ReturnType<typeof keeper.judge>>;
   try {
     judged = await keeper.judge(image, { object: expectedObject, gesture: expectedGesture });
   } catch (e) {
-    await prisma.proofVerification.delete({ where: { id: row.id } }).catch(() => undefined); // not a try: does not count
+    // The model answered but unusably: it was a paid call, so it counts toward the daily limit (not as a failed try).
+    // No answer at all (down, timed out): it does not count.
+    if (e instanceof UnusableVerdictError) await prisma.proofVerification.update({ where: { id: row.id }, data: { status: "UNAVAILABLE", reason: e.message.slice(0, 200) } }).catch(() => undefined);
+    else await prisma.proofVerification.delete({ where: { id: row.id } }).catch(() => undefined);
     if (e instanceof CheckUnavailableError) return res.status(503).json({ error: "check_unavailable", detail: e.message, retryable: true });
     throw e;
   }

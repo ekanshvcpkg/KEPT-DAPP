@@ -72,7 +72,8 @@ function useChallenge(v: OathView | null, habit: number, fresh = false) {
   const stored = useProof((s) => (v ? s.challenges[key(v.facts.id, habit)] : undefined));
   // An expired stored challenge is replaced, not shown: Shoot sends an expired one to F2c, which is for a challenge that ran out while shooting.
   const [c, setC] = useState<Challenge | undefined>(() => (!fresh && stored && stored.expiresAt > nowSeconds() ? stored : undefined));
-  const { replace } = useGo();
+  const { replace, close } = useGo();
+  const toast = useToast();
   // F2c "Take a new photo" lands back on a Shoot that was never unmounted (history.ts goes back to it, same key), still
   // holding the challenge that ran out. The fresh one F2c stored takes its place, or Shoot would bounce straight to F2c again.
   const usable = (x: Challenge | undefined) => (x && x.expiresAt > nowSeconds() ? x : undefined);
@@ -83,8 +84,12 @@ function useChallenge(v: OathView | null, habit: number, fresh = false) {
     void getApi().proof.challenge(v.facts, habit, v.dayIndex, cur?.gesture).then((n) => {
       useProof.getState().set({ challenges: { ...useProof.getState().challenges, [key(v.facts.id, habit)]: n } });
       setC(n);
-    }, (e: unknown) => replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id: v.facts.id, habit }));
-  }, [v, habit, cur, replace]);
+    }, (e: unknown) => {
+      // The server stops new challenges in the last 30 s of a day (no check could land in time): say so, don't offer a retry.
+      if (isApiError(e) && e.status === 409 && /about to close/.test(e.message)) { toast(t("additions.keeper.dayClosing")); close(); return; }
+      replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id: v.facts.id, habit });
+    });
+  }, [v, habit, cur, replace, close, toast]);
   return cur;
 }
 
@@ -353,6 +358,8 @@ export function F5() {
   // Someone in group review has done their part (D-47): not "hasn't proved today".
   const pending = view ? view.members.filter((m) => !m.isMe && m.pendingToday && m.facts.proofToday !== "review") : [];
   const day = view?.dayNumber ?? 1;
+  // The day that was just kept, pinned on arrival: with 2-minute demo days the clock-derived day moves on quickly.
+  const [keptDayIndex] = useState(() => view?.dayIndex ?? null);
   useEffect(() => { playFx(undefined, "kept"); }, [playFx, day]);
   // The stamp records when the day was kept: fixed at arrival (on the app's clock), not re-read on every render.
   const [time] = useState(() => new Date(nowSeconds() * 1000).toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" }));
@@ -370,7 +377,7 @@ export function F5() {
         title: memberName(m), sub: t("screens.F5.b4.r0.s"), value: t("screens.F5.b4.r0.r"),
         onPress: () => { void oathActions.nudge(view.facts, [m.facts.wallet], view.dayIndex ?? 0).catch(() => undefined).then(() => toast(t("toasts.3", { name: memberName(m) }))); },
       }))} /> : null}
-      {view && me && view.facts.source === "chain" && view.dayIndex !== null ? <KeeperAuditRows oath={view.facts.id} dayIndex={view.dayIndex} wallet={me.facts.wallet} /> : null}
+      {view && me && view.facts.source === "chain" && keptDayIndex !== null ? <KeeperAuditRows oath={view.facts.id} dayIndex={keptDayIndex} wallet={me.facts.wallet} /> : null}
       <BrandStamp text={t("screens.F5.brand.stamp", { day, time })} />
     </Screen>
   );
@@ -390,7 +397,7 @@ function KeeperAuditRows({ oath, dayIndex, wallet }: { oath: string; dayIndex: n
     ? { title: t("additions.keeper.verified"), sub: t("additions.keeper.verifiedSub", { n: audit.receipts.length }), leading: { kind: "icon" as const, icon: "check-decagram" as const, fg: color.lime.base }, titleColor: color.lime.base }
     : audit.status === "pending"
       ? { title: t("additions.keeper.pending"), sub: t("additions.keeper.pendingSub"), leading: { kind: "icon" as const, icon: "timer-sand" as const }, onPress: run }
-      : { title: t("additions.keeper.mismatch"), sub: t("additions.keeper.mismatchSub"), leading: { kind: "icon" as const, icon: "alert-circle-outline" as const, fg: color.red.base }, titleColor: color.red.base };
+      : { title: t("additions.keeper.mismatch"), sub: t("additions.keeper.mismatchSub"), leading: { kind: "icon" as const, icon: "alert-circle-outline" as const, fg: color.red.base }, titleColor: color.red.base, onPress: run };
   const sig = audit.signature;
   return (
     <RowList label={t("additions.keeper.audit")} rows={[

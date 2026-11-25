@@ -540,6 +540,7 @@
     "unavailable": "No receipts for this day",
     "receiptRow": "Receipt {n}",
     "receiptSub": "{model} · slot {slot}",
-    "explorer": "View the check-in on Explorer"
+    "explorer": "View the check-in on Explorer",
+    "dayClosing": "Today closes in under 30 seconds: too late for a photo to be checked in time."
   }
 }

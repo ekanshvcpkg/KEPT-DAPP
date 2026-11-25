@@ -86,7 +86,10 @@ console.log(`TREASURY_TOKEN_ACCOUNT=${treasury.address.toBase58()}`);
 console.log(`FAUCET_TOKEN_ACCOUNT=${faucetAta.toBase58()}`);
 console.log(`TOKEN_PROGRAM_ID=${tokenProgram.toBase58()}`);
 console.log(`CONFIG_PDA=${configPda.toBase58()}`);
-console.log(`VERIFIER=${verifier.toBase58()}`);
+// An existing Config keeps its verifier (there is no instruction to change it): print that one.
+const configuredVerifier = configInfo ? new PublicKey(configInfo.data.subarray(40, 72)) : verifier;
+if (configInfo && process.env.VERIFIER_PUBKEY && !configuredVerifier.equals(verifier)) console.warn(`WARNING: the Config's verifier is ${configuredVerifier.toBase58()}, not VERIFIER_PUBKEY; it cannot be changed`);
+console.log(`VERIFIER=${configuredVerifier.toBase58()}`);
 console.log(`MINT_DECIMALS=${mintState.decimals}`);
 console.log(`SETUP_SIGNATURE=${signature}`);
 console.log("Set FAUCET_SECRET_KEY to the admin keypair that owns FAUCET_TOKEN_ACCOUNT and VERIFIER_SECRET_KEY to the configured verifier keypair; do not commit either value.");
