@@ -33,3 +33,9 @@ description = "Existing isolated backend test session credentials only"
 condition = "AND"
 paths = ['''(^|/)(backend|apps/api)/test/(photoRoutes|recentlyOut)\.test\.ts$''']
 regexes = ['''^(photo-routes|recently-out)-test-secret$''']
+
+[[rules.allowlists]]
+description = "Placeholder key for the local stand-in vision server in the Keeper Devnet integration script"
+condition = "AND"
+paths = ['''(^|/)backend/scripts/keeper_e2e_devnet\.ts$''']
+regexes = ['''^stand-in$''']
