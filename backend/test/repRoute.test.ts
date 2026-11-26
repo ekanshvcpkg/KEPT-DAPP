@@ -38,6 +38,8 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
   // A blockhash for which the server's freeze pick is rep 4, where the vector's freeze is.
   const blockhash = Array.from({ length: 400 }, (_, i) => `bh${i}`).find((bh) => freezeAfterRep({ blockhash: bh, issuedAt }, 8) === 4)!;
   stub(prisma.gestureChallenge, 'findFirst', async () => ({ gesture: 'Thumb_Up', issuedAt, slot: 777, blockhash }));
+  let savedObjects: string[] | null = null; // the Oath's saved habit objects (null: none saved)
+  stub(prisma.oathDetails, 'findUnique', async () => (savedObjects ? { habitObjects: savedObjects } : null));
   stub(prisma.proofVerification, 'create', async ({ data }: any) => { const r = { id: String(nextId++), status: 'PENDING', usedAt: null, oath: null, dayIndex: null, habit: null, createdAt: new Date(), ...data }; rows.set(r.id, r); return r; });
   stub(prisma.proofVerification, 'count', async () => 0);
   stub(prisma.proofVerification, 'update', async ({ where, data }: any) => { const r = { ...rows.get(where.id), ...data }; rows.set(where.id, r); return r; });
@@ -54,6 +56,14 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
   };
   const evidence = (photo: Buffer, over: object = {}) => ({ trace: fr.trace, reps: 8, phoneCount: 8, freeze: { afterRep: 4, promptT: 6850, t: 8550, gesture: 'Thumb_Up', sha256: sha(photo) }, keyframes: [{ kind: 'final', t: 16950, jpeg: frame(9).toString('base64'), sha256: sha(frame(9)) }], ...over });
   try {
+    // A check for another object than the habit's saved one (a stale challenge, as when a solo Oath's details were
+    // missing and the server fell back to "dumbbell") is refused before any model call, as a challenge to renew.
+    savedObjects = ['8 push-ups'];
+    const stale = await verify(frame(5), undefined, 'dumbbell');
+    assert.equal(stale.status, 409); assert.equal(stale.body.habitChanged, true); assert.equal(stale.body.expected.object, '8 push-ups');
+    assert.equal(asked.length, 0);
+    savedObjects = null;
+
     // A rep habit needs the set: a photo alone is refused.
     const bare = await verify(frame(1), undefined);
     assert.equal(bare.status, 422); assert.equal(bare.body.reps, true);

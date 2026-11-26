@@ -18,6 +18,44 @@ import type { HttpClient } from "./client";
 
 type Details = { goalText: string | null; habits: string[]; habitObjects: string[] };
 
+const sameObjects = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x.trim().toLowerCase() === b[i]!.trim().toLowerCase());
+
+/**
+ * Keeps the server's habit details and this phone's in step; the server's copy is what proofs are judged against.
+ * - The creator's phone saved them when it created the Oath. If the server has none (a solo Oath is Active the moment
+ *   it is created, and the server used to refuse the save then), they are sent again.
+ * - If the server has different ones, the server wins and this phone takes them.
+ * Reads wait for it (once per Oath per app session, unless `force`), so the facts they build show the synced details.
+ * Returns the server's habit objects, or null if they couldn't be read.
+ */
+const synced = new Map<string, Promise<string[] | null>>();
+function syncDetails(c: HttpClient, oath: string, creator: string, force = false): Promise<string[] | null> {
+  const run = async (): Promise<string[] | null> => {
+    const d = useDeviceOaths.getState();
+    const mine = useSession.getState().wallet === creator;
+    const goal = d.goals[oath], habits = d.habits[oath], objects = d.habitObjects[oath];
+    try {
+      const server = await c.get(`/api/oaths/${oath}/details`, GoalResponse);
+      if (server.goalText) {
+        const serverObjects = server.habitObjects ?? [];
+        const serverHabits = server.habits?.length ? server.habits : [server.goalText];
+        if (!objects || !sameObjects(serverObjects, objects) || goal !== server.goalText) {
+          d.remember(oath, { goal: server.goalText, habits: serverHabits, habitObjects: serverObjects });
+        }
+        return serverObjects;
+      }
+      if (!mine || !goal || !objects?.length) return null;
+      await c.post("/api/oaths/details", { oath, goalText: goal, habits: habits?.length ? habits : [goal], habitObjects: objects }, DetailsResponse);
+      return objects;
+    } catch {
+      synced.delete(oath); // try again on the next read
+      return null;
+    }
+  };
+  if (force || !synced.has(oath)) synced.set(oath, run());
+  return synced.get(oath)!;
+}
+
 async function goalOf(c: HttpClient, oath: string): Promise<Details> {
   const d = useDeviceOaths.getState();
   if (d.goals[oath] && d.habitObjects[oath]) return { goalText: d.goals[oath]!, habits: d.habits[oath] ?? [d.goals[oath]!], habitObjects: d.habitObjects[oath]! };
@@ -90,7 +128,7 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     const known = useDeviceOaths.getState().known.filter((id) => !found.some((o) => o.address === id));
     const extra = (await Promise.all(known.map((id) => readOath(id).catch(() => null)))).filter((o): o is ChainOath => !!o && o.members.some((m) => m.wallet === wallet));
     const [oaths, bounty] = await Promise.all([
-      Promise.all([...found, ...extra].map(async (o) => toFacts(o, await goalOf(c, o.address)))),
+      Promise.all([...found, ...extra].map(async (o) => { await syncDetails(c, o.address, o.creator); return toFacts(o, await goalOf(c, o.address)); })),
       myLiveBounty(c, wallet),
     ]);
     return bounty ? [...oaths, bounty] : oaths;
@@ -103,6 +141,7 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     }
     const o = await readOath(id).catch((e: unknown) => { throw fromRpcError(e); });
     if (!o) throw new ApiError("NOT_FOUND", `Oath ${id} not found`, 404);
+    await syncDetails(c, id, o.creator);
     const facts = toFacts(o, await goalOf(c, id));
     if (!facts.inviteCode && !facts.isSolo && facts.status === "open") {
       facts.inviteCode = await restoreInvite(c, id);
@@ -156,7 +195,14 @@ export function httpProof(c: HttpClient): ProofApi {
     challenge: async (oath, habit, dayIndex) => {
       // Bounty proof (POST /bounty/:id/challenge) needs the same on-device check: Q1.
       if (oath.bountyId) throw new ApiError("PROOF_UNAVAILABLE", "Bounty proof waits for the on-device check (LIVE_DEMO_PLAN Q1)", 409);
-      const r = await c.post("/api/proof/challenge", { oath: oath.id, dayIndex, habit }, HabitChallengeResponse);
+      let r = await c.post("/api/proof/challenge", { oath: oath.id, dayIndex, habit }, HabitChallengeResponse);
+      // What the server judges this habit against must be what the phone shows: if they differ, sync the details (the
+      // creator's phone re-sends them; otherwise the phone takes the server's) and ask again.
+      const shown = useDeviceOaths.getState().habitObjects[oath.id]?.[habit];
+      if (shown && shown.trim().toLowerCase() !== r.object.trim().toLowerCase()) {
+        await syncDetails(c, oath.id, oath.creator, true);
+        r = await c.post("/api/proof/challenge", { oath: oath.id, dayIndex, habit }, HabitChallengeResponse);
+      }
       useDeviceOaths.getState().setHabitsDone(oath.id, dayIndex, r.done);
       // The schema (IsoTime) already turns the backend's ISO timestamps into unix seconds. Converting again
       // read them as milliseconds (1970) and every challenge expired the moment it arrived (F2c).
@@ -176,9 +222,13 @@ export function httpProof(c: HttpClient): ProofApi {
       } catch (e) {
         // The Keeper could not judge (model down or slow): not the user's miss and not a counted try. They retry (F2b).
         if (isApiError(e) && e.status === 503) return { status: "unavailable" };
-        // A rep set the Keeper's recount refused (422) or already used (409): the user does a new set (F2a), and hears why.
-        // Not a model call, so not a counted try.
-        if (reps && isApiError(e) && (e.status === 422 || (e.status === 409 && /rep set/.test(e.message)))) return { status: "fail", attempts: 0, reason: e.message };
+        // The challenge ran out, or no longer matches the habit (its gesture or object changed): a new challenge (F2c),
+        // not a retry of the same check on F2b, which would get the same answer.
+        if (isApiError(e) && ((e.status === 409 && /challenge/i.test(e.message)) || (e.status === 400 && /current challenge/i.test(e.message)))) return { status: "expired" };
+        // Refused for good (a photo already used, a rep set the recount refused or already used): retrying the same check
+        // would get the same answer, so the user takes a new photo or does a new set (F2a) and hears why. No model call
+        // was made, so it is not a counted try.
+        if (isApiError(e) && (e.status === 409 || e.status === 422)) return { status: "fail", attempts: 0, reason: e.message };
         throw e;
       }
       if (!checked.pass || !checked.verificationId) return {

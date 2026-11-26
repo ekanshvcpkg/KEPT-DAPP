@@ -75,14 +75,18 @@ const pillOf = (total: number, habit: number) => (total > 1 ? { pill: t("additio
 /** Loads (or reuses) today's challenge for this habit; a new one once it has expired. */
 function useChallenge(v: OathView | null, habit: number, fresh = false) {
   const stored = useProof((s) => (v ? s.challenges[key(v.facts.id, habit)] : undefined));
+  // A stored challenge is reused only while it is live and for the object the habit shows now (its details may have been
+  // synced with the server since). One fetched on this screen is the server's word and is always used.
+  const object = v?.habits[habit]?.object.trim().toLowerCase();
+  const live = (x: Challenge | undefined) => (x && x.expiresAt > nowSeconds() ? x : undefined);
+  const reusable = (x: Challenge | undefined) => (live(x) && (!object || x!.object.trim().toLowerCase() === object) ? x : undefined);
   // An expired stored challenge is replaced, not shown: Shoot sends an expired one to F2c, which is for a challenge that ran out while shooting.
-  const [c, setC] = useState<Challenge | undefined>(() => (!fresh && stored && stored.expiresAt > nowSeconds() ? stored : undefined));
+  const [c, setC] = useState<Challenge | undefined>(() => (fresh ? undefined : reusable(stored)));
   const { replace, close } = useGo();
   const toast = useToast();
   // F2c "Take a new photo" lands back on a Shoot that was never unmounted (history.ts goes back to it, same key), still
   // holding the challenge that ran out. The fresh one F2c stored takes its place, or Shoot would bounce straight to F2c again.
-  const usable = (x: Challenge | undefined) => (x && x.expiresAt > nowSeconds() ? x : undefined);
-  const cur = usable(c) ?? (fresh ? undefined : usable(stored)) ?? c;
+  const cur = live(c) ?? (fresh ? undefined : reusable(stored)) ?? c;
   useEffect(() => {
     if (!v || v.dayIndex === null) return;
     if (cur && cur.dayIndex === v.dayIndex && cur.habit === habit && cur.expiresAt > nowSeconds()) return;
@@ -179,7 +183,8 @@ function Shoot() {
   const left = c ? Math.max(0, c.expiresAt - now) : 0;
   // A rep habit ("20 push-ups") is proven by a live counted set, not a photo. The photo camera is never mounted here,
   // so expo-camera can't unbind the rep counter's camera.
-  const rep = h ? parseRepHabit(h.object) : null;
+  // Decided by the server's challenge (what the proof is judged against), so the phone and the server never disagree.
+  const rep = c ? parseRepHabit(c.object) : null;
   if (rep) {
     return (
       <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} scroll={false}>

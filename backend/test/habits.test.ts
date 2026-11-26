@@ -48,3 +48,14 @@ test("a habit can be proven once a day, and must exist", () => {
 test("each habit draws its own gesture challenge", () => {
   assert.notEqual(habitChallengeKey("Oath", 0), habitChallengeKey("Oath", 1));
 });
+
+test('detailsWriteAllowed: the creator edits while Open, and saves once after a solo Oath went Active in its create tx', async () => {
+  const { detailsWriteAllowed } = await import('../src/v4/habits.js');
+  const base = { creator: 'C', wallet: 'C' };
+  assert.equal(detailsWriteAllowed({ ...base, status: 0, saved: false }), true);
+  assert.equal(detailsWriteAllowed({ ...base, status: 0, saved: true }), true, 'edits while Open');
+  assert.equal(detailsWriteAllowed({ ...base, status: 1, saved: false }), true, 'a solo Oath is Active at once: first save');
+  assert.equal(detailsWriteAllowed({ ...base, status: 1, saved: true }), false, 'never overwritten once Active');
+  assert.equal(detailsWriteAllowed({ ...base, status: 2, saved: false }), false);
+  assert.equal(detailsWriteAllowed({ creator: 'C', wallet: 'M', status: 0, saved: false }), false, 'only the creator');
+});

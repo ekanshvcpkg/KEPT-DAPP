@@ -51,6 +51,15 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
 
   // A photo of a habit answers one challenge: the current one for that habit, and the gesture it names (not a gesture
   // the app picks). Checks sent without a habit (the legacy two-photo and Bounty flows) are bound when they are claimed.
+  // The habit's object is the Oath's saved one: a check for another object (stale challenge, details synced since) is
+  // refused before any model call, and the app takes a new challenge (which names the right object).
+  if (habit !== undefined) {
+    const details = await prisma.oathDetails.findUnique({ where: { oath }, select: { habitObjects: true } });
+    const saved = details?.habitObjects[habit];
+    if (saved !== undefined && saved.trim().toLowerCase() !== expectedObject.trim().toLowerCase()) {
+      return res.status(409).json({ error: "This habit's proof has changed; a new challenge is needed", habitChanged: true, challengeExpired: true, expected: { object: saved } });
+    }
+  }
   // A rep habit ("20 push-ups") is proven by a live set, which may take up to REP_SET_MAX_MS after its challenge.
   const rep = habit !== undefined ? parseRepHabit(expectedObject) : null;
   const challenge = habit !== undefined

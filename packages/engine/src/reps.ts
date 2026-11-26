@@ -160,9 +160,9 @@ export const FAULT_SHARE = 0.25;
 const FRAME_SLACK = 20;
 /** Push-up top (start pose and the end of every rep): the wrist is more than this many upper-arm lengths below the
  *  shoulder (a straight arm under the shoulder reads 1.6–2; lying on the belly with the arms forward reads about 1). */
-export const PUSHUP_REACH_MIN = 1.2;
+export const PUSHUP_REACH_MIN = 1.0;
 /** Push-up top: the wrist is at most this many upper-arm lengths in front of or behind the shoulder (under it). */
-export const PUSHUP_OFFSET_MAX = 0.8;
+export const PUSHUP_OFFSET_MAX = 1.3;
 /** Push-up: the hip must drop at least this share of the shoulder's drop (hips left on the floor: cobra). */
 export const PUSHUP_HIP_DROP_MIN = 0.3;
 /** Squat depth, in thigh lengths of hip height relative to the knee at the deepest sample (negative = above). */
@@ -239,9 +239,9 @@ export type RepRules = {
 export const RULES: Record<Exercise, Readonly<RepRules>> = {
   pushup: {
     needed: ["shoulder", "elbow", "wrist", "hip", "ankle"],
-    start: 130, bottom: 90, top: 155, minRepMs: 600, maxRepMs: 8_000, startHoldMs: 500,
+    start: 130, bottom: 100, top: 150, minRepMs: 600, maxRepMs: 8_000, startHoldMs: 500,
     dropMin: 0.5, dropFault: "no_shoulder_drop", hipDropMin: PUSHUP_HIP_DROP_MIN,
-    anchorMax: 0.5, anchorFault: "hands_not_planted",
+    anchorMax: 0.8, anchorFault: "hands_not_planted",
     features: (p, s, aspect) => {
       const limb = segment(p, s, "shoulder", "elbow", aspect);
       const sy = at(p, s, "shoulder", 1), wy = at(p, s, "wrist", 1);

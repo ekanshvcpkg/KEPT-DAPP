@@ -50,6 +50,8 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
   const aspect = useRef(0.75);
   const lastT = useRef(-1);
   const lastJab = useRef(-1e9);
+  const lastLog = useRef(-1e9);
+  const rawLog = useRef<{ t: number[]; p: number[] }>({ t: [], p: [] });
   const freeze = useRef<RepEvidence["freeze"]>(null);
   const freezeJpeg = useRef<string | null>(null);
   // The freeze comes at the server's pick (30–70% of the set, from the challenge), so a recorded set can't be replayed.
@@ -80,6 +82,7 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
 
   /** Throws the set away and goes back to setup, saying why (the server would refuse it). */
   const restart = useCallback((why: Parameters<typeof t>[0]) => {
+    if (__DEV__) console.warn("[kept] rep set restart", why);
     attempt.current++;
     counter.current = null;
     samples.current = { t: [], p: [] };
@@ -121,6 +124,8 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
   }, [gesture, setPhase, later, restart]);
 
   const onEvent = useCallback((e: RepEvent) => {
+    // Dev builds: every counter event goes to the Metro log, to tune the rules against real sets.
+    if (__DEV__) console.warn("[kept] rep event", JSON.stringify(e));
     if (e.type === "rep") {
       reps.current.push({ startT: e.startT, bottomT: e.bottomT, endT: e.endT });
       setCount(e.n);
@@ -146,6 +151,12 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
   const onPose = useCallback((ev: { nativeEvent: { t: number; w: number; h: number; tilt?: number; p: number[] } }) => {
     const { t: ts, w, h, p } = ev.nativeEvent;
     gotPose.current = true;
+    if (__DEV__ && ts - lastLog.current > 2000) {
+      lastLog.current = ts;
+      // Per joint (11..28 as in JOINTS) its visibility 0..100: what the pose model sees right now.
+      const vis = p.length === 36 ? Array.from({ length: 12 }, (_, j) => p[j * 3 + 2]) : [];
+      console.warn("[kept] pose", JSON.stringify({ w, h, rot: (ev.nativeEvent as { rot?: number }).rot, tilt: ev.nativeEvent.tilt, phase: phaseRef.current, vis }));
+    }
     const ph = phaseRef.current;
     if (ph === "done") return;
     const wasTilted = tilted.current;
@@ -162,6 +173,11 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
     if (lastT.current >= 0 && ts - lastT.current > MAX_GAP_MS) { restart("additions.reps.restart"); return; }
     if (ts - startT.current > MAX_SET_MS) { restart("additions.reps.tooLong"); return; }
     lastT.current = ts;
+    if (__DEV__) {
+      // Dev builds: the raw samples go to the Metro log in 2 s chunks, to tune the rules on real sets.
+      rawLog.current.t.push(ts); rawLog.current.p.push(...(p.length === 36 ? p : EMPTY));
+      if (rawLog.current.t.length >= 40) { console.warn("[kept] samples " + JSON.stringify({ aspect: aspect.current, ...rawLog.current })); rawLog.current = { t: [], p: [] }; }
+    }
     // A tilted phone's pose can't be trusted (image-down isn't gravity-down): it is recorded and counted as no pose.
     const sample = p.length === 36 && !tilted.current ? p : EMPTY;
     samples.current.t.push(ts);

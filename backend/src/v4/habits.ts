@@ -50,3 +50,13 @@ export function habitRejection(input: { habit: unknown; count: number; done: rea
 
 /** The challenge key of one habit: gestures are drawn per habit, so each photo gets its own. */
 export const habitChallengeKey = (oath: string, habit: number): string => `${oath}:h${habit}`;
+
+/**
+ * Who may save an Oath's details (goal, habits, what each is proven with), and when. While Open the creator may edit
+ * them. A solo Oath is already Active when its create transaction lands, so its creator may also save them once after
+ * that, never overwrite them: members and the Keeper's receipts rely on what was saved. (status: 0 Open, 1 Active.)
+ */
+export function detailsWriteAllowed(x: { creator: string; wallet: string; status: number; saved: boolean }): boolean {
+  if (x.creator !== x.wallet) return false;
+  return x.status === 0 || (x.status === 1 && !x.saved);
+}

@@ -55,6 +55,7 @@ test('POST /proof/verify: the Keeper judges the uploaded photo; the client verdi
   const issuedAt = new Date(Date.now() - 5_000);
   let challengeRow: any = { gesture: 'Thumb_Up', issuedAt, slot: 777, blockhash: 'bh' };
   stub(prisma.gestureChallenge, 'findFirst', async () => challengeRow);
+  stub(prisma.oathDetails, 'findUnique', async () => null);
   stub(prisma.proofVerification, 'create', async ({ data }: any) => { const r = { id: String(nextId++), status: 'PENDING', usedAt: null, oath: null, dayIndex: null, habit: null, createdAt: new Date(), ...data }; rows.set(r.id, r); return r; });
   stub(prisma.proofVerification, 'count', async ({ where }: any) => [...rows.values()].filter((r) => r.wallet === where.wallet && (!where.status || r.status === where.status)).length);
   stub(prisma.proofVerification, 'update', async ({ where, data }: any) => { const r = { ...rows.get(where.id), ...data }; rows.set(where.id, r); return r; });

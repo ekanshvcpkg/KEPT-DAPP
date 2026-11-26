@@ -156,3 +156,46 @@ describe("shutter", () => {
     expect(photoToUse(null, true)).toEqual(expect.any(String));
   });
 });
+
+describe("habit details the server is missing (a solo Oath is Active as soon as it is created)", () => {
+  const me = "Me11111111111111111111111111111111111111111";
+  const solo = { ...oath, creator: me } as unknown as OathFacts;
+  beforeEach(() => {
+    const { useSession } = jest.requireActual("@/state/session") as typeof import("@/state/session");
+    useSession.setState({ wallet: me });
+    useDeviceOaths.getState().remember(solo.id, { goal: "Exercise · Read", habits: ["Exercise", "Read"], habitObjects: ["10 push-ups", "book"] });
+  });
+
+  it("re-sends the phone's details and asks again, so the challenge names the habit's own object", async () => {
+    let saved: unknown = null;
+    const calls: string[] = [];
+    const f = (async (url: string, init?: RequestInit) => {
+      const path = new URL(url).pathname;
+      calls.push(`${init?.method ?? "GET"} ${path}`);
+      const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+      if (path.endsWith("/details") && (init?.method ?? "GET") === "GET") return json(saved ?? { goalText: null });
+      if (path === "/api/oaths/details") { saved = { ...JSON.parse(String(init!.body)) }; return json({ oath: solo.id, ...(saved as object) }, 201); }
+      if (path === "/api/proof/challenge") return json(habitChallenge({ object: saved ? "10 push-ups" : "dumbbell", freezeAfter: saved ? 4 : undefined }));
+      return json({ error: "unexpected" }, 500);
+    }) as unknown as typeof fetch;
+    const c = await httpProof(createHttpClient(() => "t", "http://api", f)).challenge(solo, 0, 0);
+    expect(c).toMatchObject({ object: "10 push-ups", freezeAfter: 4 });
+    expect(saved).toMatchObject({ oath: solo.id, goalText: "Exercise · Read", habits: ["Exercise", "Read"], habitObjects: ["10 push-ups", "book"] });
+    expect(calls).toEqual(["POST /api/proof/challenge", "GET /api/oaths/" + solo.id + "/details", "POST /api/oaths/details", "POST /api/proof/challenge"]);
+  });
+
+  it("takes the server's details when they differ (another member, or the server's copy is the saved one)", async () => {
+    const f = (async (url: string, init?: RequestInit) => {
+      const path = new URL(url).pathname;
+      const json = (b: unknown) => new Response(JSON.stringify(b), { status: 200 });
+      if (path.endsWith("/details")) return json({ goalText: "Exercise · Read", habits: ["Exercise", "Read"], habitObjects: ["20 squats", "book"] });
+      if (path === "/api/proof/challenge") return json(habitChallenge({ object: "20 squats" }));
+      return new Response("{}", { status: 500 });
+    }) as unknown as typeof fetch;
+    const other = "Oath2222222222222222222222222222222222222222";
+    useDeviceOaths.getState().remember(other, { goal: "Exercise · Read", habits: ["Exercise", "Read"], habitObjects: ["10 push-ups", "book"] });
+    const c = await httpProof(createHttpClient(() => "t", "http://api", f)).challenge({ ...solo, id: other } as OathFacts, 0, 0);
+    expect(c.object).toBe("20 squats");
+    expect(useDeviceOaths.getState().habitObjects[other]).toEqual(["20 squats", "book"]); // the phone now shows the server's
+  });
+});

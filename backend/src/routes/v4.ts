@@ -17,7 +17,7 @@ import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPendi
 import { BREAK_HOLD_BPS, HELD_WINDOW_DAYS, MISS_BPS, replayV3, RULES_V2, RULES_V3 } from "../shared/payout.js";
 import { CHALLENGE_UPLOAD_GRACE_MS, dayClosing, GESTURE_TEXT, OBJECT_IDS, OBJECT_TEXT, nudgeRejection, nudgeTargets, proofRequestKind, REVIEW_PHOTO_TTL_MS, reviewPhotoExpired, reviewRequestRejection, type ChallengeGesture, proofRejection, reviewOutcome } from "../v4/rules.js";
 import { challengeJson, currentChallenge, dayChallenge, findSession, issueChallenge, startSession } from "../v4/challenges.js";
-import { combinedHabitsHash, habitChallengeKey, habitObjectTexts, habitRejection, parseHabitObjects } from "../v4/habits.js";
+import { combinedHabitsHash, detailsWriteAllowed, habitChallengeKey, habitObjectTexts, habitRejection, parseHabitObjects } from "../v4/habits.js";
 import { combinedProofHash, sessionPhase, validMinMinutes } from "../v4/session.js";
 import { checkGenesis, requireGenesis } from "../genesis.js";
 import { connection, keypairFromEnv, programId, tokenProgramForMint } from "../solana.js";
@@ -246,7 +246,8 @@ post("/api/oaths/details", async (req: AuthedRequest, res) => {
   if (habitObjects && "error" in habitObjects) return res.status(400).json({ error: habitObjects.error });
   const info = await readOath(oath);
   if (!info) return res.status(404).json({ error: "Oath not found" });
-  if (info.creator !== req.wallet || info.status !== 0) return res.status(403).json({ error: "Only the creator can save goal details while the Oath is Open" });
+  const saved = info.status === 1 ? !!(await prisma.oathDetails.findUnique({ where: { oath }, select: { oath: true } })) : false;
+  if (!detailsWriteAllowed({ creator: info.creator, wallet: req.wallet, status: info.status, saved })) return res.status(403).json({ error: "Only the creator can save goal details while the Oath is Open" });
   if (createHash("sha256").update(goalText, "utf8").digest("hex") !== info.goalHash) return res.status(422).json({ error: "Goal text does not match the on-chain goal hash" });
   const row = await prisma.oathDetails.upsert({ where: { oath }, create: { oath, creator: req.wallet, goalText, habits, ...(habitObjects ? { habitObjects } : {}), minMinutes: minMinutes ?? null }, update: { goalText, habits, ...(habitObjects ? { habitObjects } : {}), ...(minMinutes !== undefined ? { minMinutes } : {}) } });
   return res.status(201).json({ oath, goalText, habits, habitObjects: row.habitObjects, minMinutes: row.minMinutes ?? config.sessionMinMinutes });
