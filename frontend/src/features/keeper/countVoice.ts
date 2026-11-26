@@ -1,8 +1,14 @@
 // The Keeper counting reps out loud: clips pre-generated in the custom KEPT Keeper voice (ElevenLabs,
 // backend/scripts/keeper_count_voice.ts) and bundled, so counting is instant and offline. Metro needs static requires.
+// Hype lines (hypeLines.ts, backend/scripts/keeper_hype_voice.ts) play on their own player and never over a count or a
+// set line: those cut a hype line off, and the coach (hypeCoach.ts) waits for the clip playing now (keeperBusyMs).
 import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
 import { useSettings } from "@/state/settings";
+import { HypeCoach } from "./hypeCoach";
+import type { HypeCoachDeps } from "./hypeCoach";
+import { HYPE_SOURCES } from "./hypeSources";
+import durations from "./voiceDurations.gen.json";
 
 const COUNTS: Record<number, number> = {
   1: require("../../../assets/voice/count-1.mp3") as number,
@@ -64,17 +70,31 @@ const LINES = {
   lost: require("../../../assets/voice/lost.mp3") as number,
 } as const;
 export type KeeperLine = keyof typeof LINES;
+const LINE_FILE: Record<KeeperLine, string> = { go: "go", done: "done", freeze: "freeze", halfRep: "half-rep", lost: "lost" };
+/** Each bundled clip's length in ms (written by keeper_hype_voice.ts): "count-7", "go", "hype/start-clean-1". */
+const MS = durations as Record<string, number>;
+
+// When the clip the Keeper is saying now ends (Date.now() ms).
+let busyUntil = 0;
+let hypePlayer: AudioPlayer | null = null;
+
+/** Cuts off a hype line that is playing. */
+export function stopHype(): void {
+  try { hypePlayer?.pause(); } catch { /* nothing playing */ }
+}
 
 // Three players in rotation: a new number replaces one still playing instead of queueing behind it.
 const pool: AudioPlayer[] = [];
 let next = 0;
-function play(source: number): void {
+function play(source: number, ms: number): void {
   if (!useSettings.getState().keeperVoice) return;
+  stopHype(); // the count and the set lines always win over a hype line
   try {
     let p = pool[next];
     if (!p) { p = createAudioPlayer(source); pool[next] = p; } else p.replace(source);
     next = (next + 1) % 3;
     p.play();
+    busyUntil = Date.now() + ms;
   } catch {
     // counting aloud is a bonus; the number is on screen
   }
@@ -83,9 +103,45 @@ function play(source: number): void {
 /** The Keeper says the rep number (1–50; above 50 stays silent). */
 export function sayCount(n: number): void {
   const src = COUNTS[n];
-  if (src) play(src);
+  if (src) play(src, MS[`count-${n}`] ?? 900);
 }
 
 export function sayLine(line: KeeperLine): void {
-  play(LINES[line]);
+  play(LINES[line], MS[LINE_FILE[line]] ?? 2000);
+}
+
+/** ms until the clip the Keeper is saying now (count, line or hype) ends; 0 when he's quiet. */
+export function keeperBusyMs(now: number = Date.now()): number {
+  return Math.max(0, busyUntil - now);
+}
+
+/** A hype clip's length in ms. */
+export const hypeMs = (id: string): number => MS[`hype/${id}`] ?? 2500;
+
+/** Plays a hype line (Keeper voice setting on); its length in ms, or 0 when it didn't play. */
+export function sayHype(id: string): number {
+  const src = HYPE_SOURCES[id];
+  if (!src || !useSettings.getState().keeperVoice) return 0;
+  try {
+    if (hypePlayer) hypePlayer.replace(src);
+    else hypePlayer = createAudioPlayer(src);
+    hypePlayer.play();
+  } catch {
+    return 0;
+  }
+  const ms = hypeMs(id);
+  busyUntil = Date.now() + ms;
+  return ms;
+}
+
+/**
+ * The hype coach for one rep set, on the bundled clips, in the language picked in Settings (clean unless "no filter").
+ * `schedule` and `canSpeak` come from the set screen (its attempt-scoped timers, its phase); the rest can be overridden
+ * (tests).
+ */
+export function repSetHype(target: number, set: Pick<HypeCoachDeps, "schedule" | "canSpeak"> & Partial<HypeCoachDeps>): HypeCoach {
+  return new HypeCoach(target, {
+    now: Date.now, busyMs: () => keeperBusyMs(), play: sayHype, clipMs: hypeMs,
+    lang: () => useSettings.getState().hypeLanguage, ...set,
+  });
 }

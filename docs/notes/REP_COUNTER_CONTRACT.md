@@ -114,3 +114,20 @@ Design notes: scratchpad rep-native-sketch / rep-algo (session); this file is th
   freeze-resume), checked by the engine tests and
   by backend/test/reps.test.ts against the server copy; the app can replay the same file under Hermes and compare `expect`.
   Regenerate only on an intended behaviour change: `REPS_VECTORS_WRITE=1 pnpm --filter @kept/engine exec tsx --test src/reps.test.ts`.
+
+## App voice during a set (frontend only, 2026-11-27; no change to the native view, engine or trace)
+- RepSet (frontend/src/screens/proof/RepSet.tsx) counts aloud with bundled clips (features/keeper/countVoice.ts) and, between counts,
+  plays the Keeper's hype lines: manifest `features/keeper/hypeLines.ts` (12 situations × clean / noFilter, 3–4 variants, ≤ 60 chars;
+  clips `frontend/assets/voice/hype/<id>.mp3`, made by `backend/scripts/keeper_hype_voice.ts`, which also writes every bundled clip's
+  length to `features/keeper/voiceDurations.gen.json`). Chooser `hypeChooser.ts` (pure, injectable rng; cooldowns: start/done always,
+  back/resume/milestones ≥ 3 s, slow/half rep/fault ≥ 6 s, a plain rep every 3–4 reps ≥ 5 s; never the same line twice in a row);
+  coach `hypeCoach.ts` (waits for the clip playing now, drops a line superseded by a newer moment, outside "counting" (the Freeze) or
+  when the next rep would come before it ends, known when the moment happens, so a half rep falls back to the plain jab; a count or
+  set line cuts a hype line off).
+- RepSet calls: `ready` → coach.ready() (first: start line; after a `lost`: back line), `rep` → after sayCount, coach.rep(n, endT −
+  startT), `half_rep` (8 s jab) → coach.halfRep() else the plain "go lower", `fault` → coach.fault(), the freeze's end → coach.resume()
+  (the "after the photo" line; the counter's `setup` right after it is ignored), any other `setup` (a camera stall) → coach.lost() (a
+  back line at the next `ready`), finish → coach.done() (replaces the plain "done"). One coach per attempt (restart drops it); closing
+  the screen mid-set stops a hype line (the done line plays on). Covered by src/__tests__/keeperHype.test.tsx and repSetHype.test.tsx.
+- Settings: `keeperVoice` off silences everything; `hypeLanguage: "clean" | "noFilter"` (default clean; Profile › Settings row
+  "The Keeper, no filter").

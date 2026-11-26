@@ -190,6 +190,7 @@ export function I4() {
   const notify = useSettings((s) => s.notify);
   const setNotify = useSettings((s) => s.setNotify);
   const keeperVoice = useSettings((s) => s.keeperVoice);
+  const hypeLanguage = useSettings((s) => s.hypeLanguage);
   const stats = useStats();
   const faucet = async () => {
     try { const amount = await walletActions.faucet(); toast(t("toasts.17", { amount: skrWhole(amount) })); }
@@ -237,6 +238,9 @@ export function I4() {
       })).concat([{
         title: t("additions.keeper.voiceSetting"), sub: t("additions.keeper.voiceSettingSub"), leading: { kind: "icon" as const, icon: "shield-check-outline" as const, fg: color.text.primary },
         toggle: { on: keeperVoice, onChange: (on: boolean) => useSettings.getState().set({ keeperVoice: on }) },
+      }, {
+        title: t("additions.keeper.hypeSetting"), sub: t("additions.keeper.hypeSettingSub"), leading: { kind: "icon" as const, icon: "fire" as const, fg: color.text.primary },
+        toggle: { on: hypeLanguage === "noFilter", onChange: (on: boolean) => useSettings.getState().set({ hypeLanguage: on ? "noFilter" : "clean" }) },
       }])} />
       <RowList label={t("screens.I4.b2.label")} rows={[
         ...account,

@@ -573,6 +573,8 @@
     "saySign": "{what}. Your wallet: {change}. Sign only if that is what you meant.",
     "voiceSetting": "The Keeper's voice and sounds",
     "voiceSettingSub": "Verdicts, transactions read aloud, and the sound of money",
+    "hypeSetting": "The Keeper, no filter",
+    "hypeSettingSub": "He swears while you rep. At the set, never at you",
     "askHold": "Hold to ask the Keeper",
     "askListening": "Listening… let go to ask",
     "askThinking": "The Keeper is thinking…",

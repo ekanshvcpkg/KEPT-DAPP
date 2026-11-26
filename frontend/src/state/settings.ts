@@ -22,9 +22,11 @@ interface SettingsState {
   demoPrefill: boolean;
   /** The Keeper speaks verdicts and transaction explanations (ElevenLabs). */
   keeperVoice: boolean;
+  /** The Keeper's hype during a live rep set: "clean" (default) or "noFilter" (swearing at the set; features/keeper/hypeLines.ts). */
+  hypeLanguage: "clean" | "noFilter";
   setNotify(k: keyof SettingsState["notify"], on: boolean): void;
   setVisibility(k: keyof SettingsState["visibility"], a: Audience): void;
-  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill" | "keeperVoice">>): void;
+  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill" | "keeperVoice" | "hypeLanguage">>): void;
   follow(name: string): void;
 }
 
@@ -41,6 +43,7 @@ const DEFAULTS: SettingsData = {
   deckHintSeen: false,
   demoPrefill: true,
   keeperVoice: true,
+  hypeLanguage: "clean",
 };
 
 export const useSettings = create<SettingsState>()(persist((set) => ({

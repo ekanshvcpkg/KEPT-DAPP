@@ -16,7 +16,8 @@ import { Chip, ChipRow } from "@/components/content/Basics";
 import { Icon, Text, loopCycles, useAnimationLifecycle } from "@/components/primitives";
 import { color, duration, metrics, radius, type as typeStyles } from "@/theme";
 import { haptic } from "@/lib/haptics";
-import { sayCount, sayLine } from "@/features/keeper/countVoice";
+import { repSetHype, sayCount, sayLine, stopHype } from "@/features/keeper/countVoice";
+import type { HypeCoach } from "@/features/keeper/hypeCoach";
 
 type Phase = "setup" | "counting" | "freeze" | "done";
 const EMPTY = Array.from({ length: 36 }, () => 0);
@@ -73,6 +74,17 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     phaseRef.current = next; setPhaseState(next);
     onCounting?.(next === "counting" || next === "freeze");
   }, [onCounting]);
+  // The Keeper's hype lines between the counts (features/keeper/hypeCoach.ts): one coach per attempt, on the attempt's
+  // timers; a line plays only while counting (never in the Freeze), the done line also as the screen closes.
+  const hype = useRef<HypeCoach | null>(null);
+  const coach = useCallback(() => (hype.current ??= repSetHype(target, {
+    schedule: (ms, fn, keep) => { if (keep) setTimeout(fn, ms); else later(ms, fn); },
+    canSpeak: (s) => phaseRef.current === "counting" || (s === "done" && phaseRef.current === "done"),
+  })), [target, later]);
+  useEffect(() => () => { if (phaseRef.current !== "done") stopHype(); }, []);
+  // The counter's "setup" right after the Freeze is the freeze's own (its end already got the "after the photo" line);
+  // any other "setup" is a camera stall, which gets a welcome back at the next "ready".
+  const freezeEnded = useRef(false);
   const startT = useRef<number | null>(null);
   const pauseOpen = useRef<[number, number] | null>(null);
   const [count, setCount] = useState(0);
@@ -87,6 +99,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
   const restart = useCallback((why: Parameters<typeof t>[0]) => {
     if (__DEV__) console.warn("[kept] rep set restart", why);
     attempt.current++;
+    hype.current = null; stopHype(); freezeEnded.current = false;
     counter.current = null;
     samples.current = { t: [], p: [] };
     pauses.current = []; reps.current = []; pauseOpen.current = null;
@@ -101,12 +114,12 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
 
   const finish = useCallback(async (endT: number) => {
     setPhase("done"); // no sample after the one that completed the set enters the trace
-    sayLine("done");
+    if (!coach().done()) sayLine("done");
     const shot = await cam.current?.capture().catch(() => null);
     const trace: Trace = { v: 1, engine: "reps@1", exercise, aspect: aspect.current, t: samples.current.t, p: samples.current.p, pauses: pauses.current };
     onDone({ trace, reps: reps.current, phoneCount: reps.current.length, freeze: freeze.current,
       keyframes: shot ? [{ kind: "final", t: shot.t || endT, jpeg: shot.jpeg, sha256: shot.sha256 }] : [] }, freezeJpeg.current);
-  }, [exercise, onDone, setPhase]);
+  }, [exercise, onDone, setPhase, coach]);
 
   const startFreeze = useCallback((repT: number, n: number) => {
     setPhase("freeze");
@@ -124,16 +137,20 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       // No freeze photo, no proof: the set starts again now, not after the last rep.
       if (!freeze.current) { restart("additions.reps.noFreeze"); return; }
       setPhase("counting"); setHint(null);
+      freezeEnded.current = true;
+      coach().resume();
     });
-  }, [gesture, setPhase, later, restart]);
+  }, [gesture, setPhase, later, restart, coach]);
 
   const onEvent = useCallback((e: RepEvent) => {
     // Dev builds: every counter event goes to the Metro log, to tune the rules against real sets.
     if (__DEV__) console.warn("[kept] rep event", JSON.stringify(e));
+    if (e.type === "lost") coach().lost();
     if (e.type === "rep") {
       reps.current.push({ startT: e.startT, bottomT: e.bottomT, endT: e.endT });
       setCount(e.n);
       sayCount(e.n);
+      coach().rep(e.n, e.endT - e.startT);
       haptic.light();
       setHint((h) => (h === t("additions.reps.holdTop") ? null : h));
       if (e.n >= target) void finish(e.endT);
@@ -141,18 +158,24 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     } else if (e.type === "ready") {
       setHint(null);
       setInPosition(true);
+      freezeEnded.current = false;
+      coach().ready();
     } else if ((e.type === "half_rep" || e.type === "lost") && e.t - lastJab.current > 8000) {
       lastJab.current = e.t;
-      sayLine(e.type === "half_rep" ? "halfRep" : "lost");
+      // A half rep gets a shaming hype line when one is due, else the plain "go lower".
+      if (e.type === "lost" || !coach().halfRep()) sayLine(e.type === "half_rep" ? "halfRep" : "lost");
       setHint(t(e.type === "half_rep" ? "additions.reps.halfRep" : "additions.reps.lost"));
     } else if (e.type === "fault") {
       setHint(t("additions.reps.formHint"));
+      coach().fault();
     } else if (e.type === "setup") {
       // After a camera stall the counter resumes on a short hold at the top.
       setHint(t("additions.reps.holdTop"));
       setInPosition(false);
+      if (freezeEnded.current) freezeEnded.current = false;
+      else coach().lost();
     }
-  }, [target, finish, startFreeze, freezeAt]);
+  }, [target, finish, startFreeze, freezeAt, coach]);
 
   const onPose = useCallback((ev: { nativeEvent: { t: number; w: number; h: number; tilt?: number; p: number[] } }) => {
     const { t: ts, w, h, p } = ev.nativeEvent;
