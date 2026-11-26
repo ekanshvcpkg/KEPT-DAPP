@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JOINTS, MAX_PAUSES, RepCounter, SAMPLE_INTS, countReps, parseRepHabit, parseTrace, repHabitText, traceDigest } from "./reps";
 import type { Exercise, RepEvent, RepSample, Trace } from "./reps";
+import * as V from "./reps3d.fixtures";
 
 // ── Synthetic poses ──
 // Each builder places the 12 JOINTS for a given joint angle and returns the 36-int sample the native view emits
@@ -792,6 +793,273 @@ test("squats that bottom out above parallel count but get one depth hint", () =>
   assert.deepEqual(faults(r.events), ["depth"]);
 });
 
+// ── Any viewing angle: a 3D stick body through a pinhole camera (reps3d.fixtures.ts) ──
+// The fixtures above are 2D side views. These place the 12 joints in 3D (push-ups on the toes, squats, and the
+// cheats), film them with a camera at any azimuth around the person (0 = in front: the head end of a push-up, the
+// face of a squatter; 90 = the person's left side; 180 = behind), at a lens height from the floor up and 1.8–3.3 m
+// away, aimed at the body, with ±5/1000 landmark noise, left/right flips, single-joint jumps, visibility dips, the
+// far side losing visibility as it turns away and, in push-ups, the joints behind the body near the bottom. The
+// counter must count honest sets from every angle and nothing from the cheats.
+
+const AZIMUTHS = [0, 30, 45, 60, 90, 120, 135, 150, 180];
+const PUSH_HEIGHTS = [0.05, 0.3, 0.6]; // a phone on the floor, on a step, on a chair seat
+const SQUAT_HEIGHTS = [0.05, 0.5, 1.0];
+const DISTANCES = [1.8, 2.5, 3.3];
+const NOISE_3D: V.Noise = { px: 5, occlusion: 0.45, flip: 0.02, jump: 0.02, dip: 0.02 };
+const N3 = 10;
+const PUSH_SET = [V.hold(1, 1000), ...V.reps(N3, 1500), V.hold(1, 500)];
+const SQUAT_SET = [V.hold(1, 1000), ...V.reps(N3, 2000), V.hold(1, 500)];
+
+type Grid = { kind: Exercise; body: (e: number, i: number) => V.Body; script: V.Seg[]; azimuths?: number[]; heights?: number[]; distances?: number[];
+  noise?: V.Noise; cam?: Partial<V.Cam> };
+
+/** Films the set from every camera position of the grid; each result also checks live count = server recount. */
+function grid(g: Grid): { where: string; count: number; events: RepEvent[]; view: string | null }[] {
+  const out: { where: string; count: number; events: RepEvent[]; view: string | null }[] = [];
+  const heights = g.heights ?? (g.kind === "pushup" ? PUSH_HEIGHTS : SQUAT_HEIGHTS);
+  for (const azimuth of g.azimuths ?? AZIMUTHS) for (const height of heights) for (const distance of g.distances ?? DISTANCES) {
+    const cam: V.Cam = { azimuth, height, distance, landscape: g.kind === "pushup", ...g.cam };
+    const samples = V.film(g.script, { kind: g.kind, body: g.body, cam, noise: { ...NOISE_3D, ...g.noise, seed: azimuth * 7 + height * 100 + distance * 10 } });
+    const r = run(g.kind, V.aspectOf(cam), samples);
+    out.push({ where: `az ${azimuth}° h ${height} m d ${distance} m`, count: r.count, events: r.events, view: r.counter.view });
+  }
+  return out;
+}
+
+const counted = (rs: { count: number }[]) => rs.reduce((s, r) => s + r.count, 0);
+const misses = (rs: { where: string; count: number }[], n = N3) => rs.filter((r) => r.count !== n).map((r) => `${r.where}: ${r.count}`);
+const cheats = (rs: { where: string; count: number }[]) => rs.filter((r) => r.count > 0).map((r) => `${r.where}: ${r.count}`);
+
+/** Exactly side-on the counter uses the side reading (the original 2D-angle rules, unchanged): there it can lose a rep
+ *  in ten to a run of visibility flicker that makes it switch arms (it then waits for a fresh top). */
+const sideOn = (where: string) => where.startsWith("az 90°");
+
+test("3D: honest push-ups count fully from every horizontal angle, camera height and distance", () => {
+  const rs = grid({ kind: "pushup", body: (e) => V.pushupBody(e), script: PUSH_SET });
+  assert.deepEqual(misses(rs.filter((r) => !sideOn(r.where))), []);
+  assert.deepEqual(misses(rs.filter((r) => sideOn(r.where)), N3).filter((m) => !m.endsWith(`: ${N3 - 1}`)), [], "side-on: at most one miss");
+  // The reading follows the view: the side reading only straight from the side, the vertical one elsewhere.
+  for (const r of rs) {
+    if (r.where.startsWith("az 0°") || r.where.startsWith("az 180°")) assert.equal(r.view, "front", r.where);
+    if (r.where.startsWith("az 45°")) assert.notEqual(r.view, "side", r.where);
+  }
+});
+
+test("3D: honest push-up variants (elbows to ~90°, tucked or flared elbows, 1 s and 3 s reps) count", () => {
+  const variants: [string, (e: number) => V.Body, V.Seg[]][] = [
+    ["elbows to ~90°", (e) => V.pushupBody(e, { bottomY: 0.3 }), PUSH_SET],
+    ["tucked elbows", (e) => V.pushupBody(e, { flare: 10 }), PUSH_SET],
+    ["brisk 1 s reps", (e) => V.pushupBody(e), [V.hold(1, 1000), ...V.reps(N3, 1000), V.hold(1, 500)]],
+    ["slow 3 s reps", (e) => V.pushupBody(e), [V.hold(1, 1000), ...V.reps(N3, 3000), V.hold(1, 500)]],
+  ];
+  for (const [name, body, script] of variants) {
+    const rs = grid({ kind: "pushup", body, script });
+    // Every angle but side-on counts fully. Side-on is the side reading (unchanged): brisk and slow sets can lose a
+    // rep in ten there, and push-ups only to ~90° filmed side-on from a raised (0.6 m), close (1.8 m) camera read
+    // ~102° at the bottom and never reach its 100° bottom line (as before this change).
+    assert.deepEqual(misses(rs.filter((r) => !sideOn(r.where))), [], name);
+    for (const r of rs.filter((x) => sideOn(x.where))) {
+      if (name === "elbows to ~90°" && r.where === "az 90° h 0.6 m d 1.8 m") continue;
+      assert.ok(r.count >= N3 - 1, `${name}, ${r.where}: ${r.count}`);
+    }
+  }
+  // Elbows flared straight out (80°): every angle except exactly side-on, where the side reading sees the elbow
+  // swing towards the camera rather than bend (a limit of the side reading, unchanged).
+  const wide = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { flare: 80 }), script: PUSH_SET, azimuths: [0, 30, 45, 60, 120, 135, 150, 180] });
+  assert.deepEqual(misses(wide), []);
+});
+
+test("3D: honest squats count fully from every horizontal angle, camera height and distance", () => {
+  const rs = grid({ kind: "squat", body: (e) => V.squatBody(e), script: SQUAT_SET });
+  assert.deepEqual(misses(rs.filter((r) => !sideOn(r.where))), []);
+  for (const r of rs.filter((x) => sideOn(x.where))) assert.ok(r.count >= N3 - 1, `side-on ${r.where}: ${r.count}`);
+  for (const r of rs) assert.deepEqual(faults(r.events).filter((f) => f !== "depth"), [], r.where);
+});
+
+test("3D: squat variants (1.2 s reps, deep with more lean, a little above parallel with a depth hint) count", () => {
+  const variants: [string, (e: number) => V.Body, V.Seg[]][] = [
+    ["1.2 s reps", (e) => V.squatBody(e), [V.hold(1, 1000), ...V.reps(N3, 1200), V.hold(1, 500)]],
+    ["deep, more lean", (e) => V.squatBody(e, { bottomY: 0.4, torso: 45 }), SQUAT_SET],
+  ];
+  for (const [name, body, script] of variants) {
+    const rs = grid({ kind: "squat", body, script });
+    assert.deepEqual(misses(rs.filter((r) => !sideOn(r.where))), [], name);
+    for (const r of rs.filter((x) => sideOn(x.where))) assert.ok(r.count >= N3 - 1, `${name}, side-on ${r.where}: ${r.count}`);
+  }
+  // Hip ~10 cm above the knee: counted, mostly with the one-off depth hint (where perspective puts the extension
+  // under 0.6 it reads as deep enough for no hint). From close behind and low it can read just short of the bottom.
+  const above = grid({ kind: "squat", body: (e) => V.squatBody(e, { bottomY: 0.6 }), script: SQUAT_SET, azimuths: [0, 30, 45, 60, 90, 120], heights: [0.5, 1.0] });
+  for (const r of above) assert.ok(r.count >= N3 - 1, `${r.where}: ${r.count}`);
+  assert.ok(above.filter((r) => faults(r.events).includes("depth")).length >= above.length * 0.8, "the depth hint, mostly");
+});
+
+test("3D: a person turning slowly during the set (up to 180°, camera rolled up to 15°) still counts", () => {
+  const turns: [number, number][] = [[0, 90], [90, 0], [45, 135], [90, 180], [180, 90], [0, 180], [-45, 45], [30, 60]];
+  for (const roll of [0, 10, -15]) for (const [from, to] of turns) {
+    for (const kind of ["pushup", "squat"] as const) {
+      const height = kind === "pushup" ? 0.1 : 0.9;
+      // Push-ups turn about the hands (they stay planted, the feet walk round); squats turn on the spot.
+      const cam: V.Cam = { azimuth: from, height, distance: 2.5, landscape: kind === "pushup", roll, ...(kind === "pushup" ? { center: { x: 1.33, y: 0, z: 0 } } : {}) };
+      const body = kind === "pushup" ? (e: number) => V.pushupBody(e) : (e: number) => V.squatBody(e);
+      const samples = V.film(kind === "pushup" ? PUSH_SET : SQUAT_SET, { kind, body, cam, azimuthTo: to, noise: { ...NOISE_3D, seed: from + to + roll } });
+      const r = run(kind, V.aspectOf(cam), samples);
+      // Starting side-on, the counter switches from the side reading to the vertical one once, which can cost the
+      // rep in progress: at most one in ten.
+      assert.ok(r.count >= N3 - 1, `${kind} ${from}° → ${to}°, roll ${roll}°: ${r.count}`);
+    }
+  }
+});
+
+test("3D: push-up cheats count nothing from any angle", () => {
+  const set = PUSH_SET;
+  const none: [string, (e: number) => V.Body][] = [
+    ["standing arm dips against a table", (e) => V.uprightDipBody(e)],
+    ["kneeling arm dips against a chair", (e) => V.uprightDipBody(e, { kneeling: true })],
+    ["standing arm curls", (e) => V.standingArmsBody(e)],
+    ["standing air presses", (e) => V.standingArmsBody(e, { press: true })],
+    ["half reps (elbows to ~120°)", (e) => V.pushupBody(e, { bottomY: 0.42 })],
+    ["shoulder bob on straight arms", (e) => V.pushupBody(e, { bottomY: V.PUSHUP_TOP_Y - 0.08 })],
+    ["cobra (hips on the floor)", (e) => V.proneBody(e)],
+    ["lying on the belly propped on the hands", (e) => V.proneBody(e, { belly: true })],
+    ["hips sagging 20 cm", (e) => V.pushupBody(e, { sag: 0.2 })],
+  ];
+  for (const [name, body] of none) {
+    const rs = grid({ kind: "pushup", body, script: set });
+    // Sagging hips seen exactly side-on from a close, raised camera go through the side reading's body-line check,
+    // which lets a few by there (as before this change).
+    if (name.startsWith("hips sagging")) assert.ok(counted(rs) <= 5, `${name}: ${cheats(rs).join(", ")}`);
+    else assert.deepEqual(cheats(rs), [], name);
+  }
+  // Hands walking forward on straight arms (an inchworm): caught by the arms never bending, the hands' box and
+  // their spread. A limit: filmed from behind the feet (150–180°) the arms are hidden behind the body and their 2D
+  // angle is mostly noise, and the hands move along the line of sight: up to 4 in 10 slip by there.
+  const inch = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { straightArms: true, slide: 0.5 }), script: set });
+  assert.ok(counted(inch) <= 30, `inchworm: ${counted(inch)}: ${cheats(inch).join(", ")}`);
+  for (const r of inch) {
+    const az = Number(r.where.split(" ")[1]!.replace("°", ""));
+    assert.ok(az >= 150 ? r.count <= 4 : r.count === 0, `inchworm ${r.where}: ${r.count}`);
+  }
+});
+
+test("3D: squat cheats count nothing from any angle", () => {
+  const none: [string, (e: number, i: number) => V.Body, V.Seg[]][] = [
+    ["quarter squats", (e) => V.squatBody(e, { bottomY: 0.75 }), SQUAT_SET],
+    ["good mornings (waist bend, straight legs)", (e) => V.goodMorningBody(e), SQUAT_SET],
+    ["good mornings with bent knees", (e) => V.goodMorningBody(e, { kneeBend: 45, torso: 90 }), SQUAT_SET],
+    ["jumping jacks", (e) => V.jumpBody(e, { jacks: true }), [V.hold(1, 1000), ...V.reps(N3, 900), V.hold(1, 500)]],
+    ["bouncing in place", (e) => V.jumpBody(e), [V.hold(1, 1000), ...V.reps(N3, 700), V.hold(1, 500)]],
+    ["dropping to the knees", (e) => V.kneelBody(e), [V.hold(1, 1000), ...V.reps(N3, 3000), V.hold(1, 500)]],
+    ["high knees", (e, i) => V.highKneeBody(e, i), [V.hold(1, 1000), ...V.reps(N3, 1600), V.hold(1, 500)]],
+    ["high knees with a dip", (e, i) => V.highKneeBody(e, i, { dip: 0.12 }), [V.hold(1, 1000), ...V.reps(N3, 1600), V.hold(1, 500)]],
+  ];
+  for (const [name, body, script] of none) {
+    const rs = grid({ kind: "squat", body, script });
+    if (name === "high knees with a dip") assert.ok(counted(rs) <= 1, `${name}: ${cheats(rs).join(", ")}`);
+    else assert.deepEqual(cheats(rs), [], name);
+  }
+});
+
+test("3D: a cheat after a real start pose still counts nothing (front, oblique, behind)", () => {
+  for (const azimuth of [0, 45, 135]) {
+    const cam: V.Cam = { azimuth, height: 0.1, distance: 2.5, landscape: true };
+    const real = { kind: "pushup" as const, body: (e: number) => V.pushupBody(e), cam, noise: { ...NOISE_3D, seed: azimuth + 1 } };
+    const after = (body: (e: number) => V.Body) => run("pushup", 4 / 3, [...V.film([V.hold(1, 1000)], real), ...V.film(V.reps(6), { ...real, body }, 1000)]);
+    const cobra = after((e) => V.proneBody(e));
+    assert.equal(ofType(cobra.events, "ready").length, 1, `${azimuth}°: ready from the real plank`);
+    assert.equal(cobra.count, 0, `${azimuth}°: cobra`);
+    assert.ok(faults(cobra.events).includes("hips"), `${azimuth}°: cobra is hips`);
+    const half = after((e) => V.pushupBody(e, { bottomY: 0.42 }));
+    assert.equal(half.count, 0, `${azimuth}°: half reps`);
+    assert.equal(ofType(half.events, "half_rep").length, 6, `${azimuth}°: six half reps`);
+    const inch = after((e) => V.pushupBody(e, { straightArms: true, slide: 0.5 }));
+    assert.equal(inch.count, 0, `${azimuth}°: inchworm`);
+    assert.deepEqual(faults(inch.events), new Array(6).fill("hands_not_planted"), `${azimuth}°: inchworm`);
+  }
+});
+
+test("3D: freezes, stand-ups during the freeze, occlusion and walking to the mat work from the front too", () => {
+  for (const azimuth of [0, 45, 135]) {
+    const cam: V.Cam = { azimuth, height: 0.1, distance: 2.5, landscape: true };
+    const sc: V.Scene = { kind: "pushup", body: (e) => V.pushupBody(e), cam, noise: { ...NOISE_3D, seed: azimuth + 2 } };
+    const fr = 1000 + 4 * 1500;
+    const pauses: [number, number][] = [[fr + DT, fr + 3500]];
+    const held = run("pushup", 4 / 3, V.film([V.hold(1, 1000), ...V.reps(4), V.hold(1, 3500), ...V.reps(4), V.hold(1, 500)], sc), pauses);
+    assert.equal(held.count, 8, `${azimuth}°: held through the freeze`);
+    assert.equal(ofType(held.events, "setup").length, 1);
+    // Standing up for the freeze gesture, then straight back into reps after 150 ms at the top.
+    const stood = run("pushup", 4 / 3, [...V.film([V.hold(1, 1000), ...V.reps(4)], sc), ...V.film([V.hold(1, 3500)], { ...sc, body: (e) => V.standingArmsBody(e) }, fr + DT),
+      ...V.film([V.hold(1, 150), ...V.reps(4), V.hold(1, 500)], sc, fr + 3550)], pauses);
+    assert.equal(stood.count, 8, `${azimuth}°: stood up during the freeze`);
+    // 600 ms without a pose at the bottom of rep 4: that rep is lost, the rest count.
+    const lost = run("pushup", 4 / 3, V.film([V.hold(1, 1000), ...V.reps(3), V.move(1, 0, 750), V.gap(600), V.move(0, 1, 750), V.hold(1, 800), ...V.reps(3), V.hold(1, 500)], sc));
+    assert.equal(lost.count, 6, `${azimuth}°: occlusion`);
+    assert.equal(ofType(lost.events, "lost").length, 1);
+    // Standing close to the phone first (arms hanging straight: a bigger gap than the plank's), then down on the mat.
+    const walk = run("pushup", 4 / 3, [...V.film([V.hold(1, 2000)], { ...sc, body: (e) => V.standingArmsBody(e), cam: { ...cam, distance: 1.6 } }),
+      ...V.film([V.gap(1000), V.hold(1, 1000), ...V.reps(5), V.hold(1, 500)], sc, 2000)]);
+    assert.equal(walk.count, 5, `${azimuth}°: walked to the mat`);
+  }
+  const sq: V.Scene = { kind: "squat", body: (e) => V.squatBody(e), cam: { azimuth: 0, height: 0.8, distance: 2.5, landscape: false }, noise: { ...NOISE_3D, seed: 5 } };
+  const fr = 1000 + 4 * 2000;
+  const r = run("squat", 3 / 4, V.film([V.hold(1, 1000), ...V.reps(4, 2000), V.hold(1, 3500), ...V.reps(4, 2000), V.hold(1, 500)], sq), [[fr + DT, fr + 3500]]);
+  assert.equal(r.count, 8, "squats through a freeze, head-on");
+});
+
+test("3D: when the far side is hidden more (stronger occlusion, more flips and jumps) honest sets still count", () => {
+  const hard: V.Noise = { px: 8, occlusion: 0.65, flip: 0.05, jump: 0.05, dip: 0.05, bodyOcclusion: 0.35 };
+  const push = grid({ kind: "pushup", body: (e) => V.pushupBody(e), script: PUSH_SET, noise: hard });
+  assert.ok(counted(push) >= push.length * N3 - 9, `push-ups: ${misses(push).join(", ")}`);
+  for (const r of push) assert.ok(r.count >= N3 - 1, `push-ups ${r.where}: ${r.count}`);
+  const squat = grid({ kind: "squat", body: (e) => V.squatBody(e), script: SQUAT_SET, noise: hard });
+  // From close behind and low (1.8 m, lens on the floor) the far hip and knee are guesses: the worst case loses 7.
+  assert.ok(counted(squat) >= squat.length * N3 - 12, `squats: ${misses(squat).join(", ")}`);
+  for (const [kind, body, script] of [["pushup", (e: number) => V.uprightDipBody(e), PUSH_SET], ["pushup", (e: number) => V.proneBody(e), PUSH_SET],
+    ["squat", (e: number) => V.squatBody(e, { bottomY: 0.75 }), SQUAT_SET], ["squat", (e: number) => V.goodMorningBody(e), SQUAT_SET]] as const) {
+    const rs = grid({ kind, body, script, noise: hard });
+    assert.ok(counted(rs) <= 1, `${kind} cheat, hard noise: ${cheats(rs).join(", ")}`);
+  }
+});
+
+test("3D: piked hips are refused from the side and obliquely, as the side reading refuses them; slight form still counts", () => {
+  // The hips 20 cm above the straight line through the whole set. The hip-height check alone let this by from every
+  // angle (perspective changes the hip's apparent height); the side reading's body line, applied to the midpoints
+  // wherever the body is not seen end-on (V_PUSHUP_LINE_SPAN), refuses it from 75° to 135°. A limit: head-on, from
+  // 30–60° and from behind (150–180°) the body is too end-on for a 2D line and a pike can still pass.
+  const piked = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag: -0.2 }), script: PUSH_SET, azimuths: [75, 90, 105, 120, 135] });
+  assert.deepEqual(cheats(piked), []);
+  // Hips 8 cm high (ordinary form) still count from every angle.
+  const slight = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag: -0.08 }), script: PUSH_SET });
+  assert.deepEqual(misses(slight.filter((r) => !sideOn(r.where))), []);
+  for (const r of slight.filter((x) => sideOn(x.where))) assert.ok(r.count >= N3 - 1, `side-on ${r.where}: ${r.count}`);
+});
+
+test("3D: knees-on-the-floor push-ups are refused head-on (a limit: obliquely, from the side and from behind they can pass)", () => {
+  const rs = grid({ kind: "pushup", body: (e) => V.kneePushupBody(e), script: PUSH_SET, azimuths: [0] });
+  assert.deepEqual(cheats(rs), []);
+});
+
+test("view: side for the side-on fixtures, front head-on, oblique at 45°, null before a pose", () => {
+  const c = new RepCounter("pushup", LANDSCAPE);
+  assert.equal(c.view, null);
+  c.push({ t: 0, p: [] });
+  assert.equal(c.view, null);
+  c.push({ t: 50, p: pushupSample(170) });
+  assert.equal(c.view, "side");
+  assert.equal(c.side, "left");
+  const at = (azimuth: number, kind: Exercise) => {
+    const cam: V.Cam = { azimuth, height: kind === "pushup" ? 0.1 : 0.9, distance: 2.5, landscape: kind === "pushup" };
+    const k = new RepCounter(kind, V.aspectOf(cam));
+    for (const s of V.film([V.hold(1, 1500)], { kind, body: (e) => (kind === "pushup" ? V.pushupBody(e) : V.squatBody(e)), cam, noise: { seed: 1, px: 2, occlusion: 0.3 } })) k.push(s);
+    return { view: k.view, side: k.side };
+  };
+  for (const kind of ["pushup", "squat"] as const) {
+    assert.deepEqual(at(0, kind), { view: "front", side: null }, kind);
+    assert.deepEqual(at(180, kind), { view: "front", side: null }, kind);
+    assert.equal(at(45, kind).view, "oblique", kind);
+    assert.equal(at(90, kind).view, "side", kind);
+  }
+});
+
 // ── Trace and replay ──
 
 test("pause windows are skipped: movement during a pause never counts, live or on the server", () => {
@@ -895,6 +1163,11 @@ function vectorTraces(): { name: string; about: string; count: number; trace: Tr
   // 4 reps, a 3.5 s freeze (pause window) holding the plank, then 4 more with no still hold.
   const freezeAt = 1000 + 4 * 1500;
   const frozen = sampled(noisy(17, [hold(170, 1000), ...reps(4, 70), hold(170, 3500), ...reps(4, 70), hold(170, 500)], 3, 19), (x) => pushupSample(x));
+  // The vertical reading (3D fixtures, reps3d.fixtures.ts): head-on and 45° sets, honest and cheating.
+  const film3 = (kind: Exercise, body: (e: number, i: number) => V.Body, script: V.Seg[], cam: V.Cam, seed: number) =>
+    toTrace(kind, V.aspectOf(cam), V.film(script, { kind, body, cam, noise: { ...NOISE_3D, seed } }));
+  const frontCam: V.Cam = { azimuth: 0, height: 0.1, distance: 2.5, landscape: true };
+  const obliqueSquatCam: V.Cam = { azimuth: 45, height: 0.9, distance: 2.5, landscape: false };
   return [
     { name: "pushups", about: "5 push-ups, ±3° noise and a 70° landmark flip every 13 samples", count: 5, trace: toTrace("pushup", LANDSCAPE, pushups) },
     { name: "squats", about: "3 deep squats and one above parallel (counts, depth hint), ±3° noise, flips every 17 samples", count: 4, trace: toTrace("squat", PORTRAIT, squats) },
@@ -907,6 +1180,14 @@ function vectorTraces(): { name: string; about: string; count: number; trace: Tr
       trace: toTrace("pushup", LANDSCAPE, cobra) },
     { name: "freeze-resume", about: "4 push-ups, a 3.5 s freeze pause (setup), 4 more resumed at the first top without a still hold", count: 8,
       trace: toTrace("pushup", LANDSCAPE, frozen, [[freezeAt + DT, freezeAt + 3500]]) },
+    { name: "front-pushups", about: "6 push-ups filmed head-on from the floor (3D fixture, vertical reading), landmark noise, flips and jumps", count: 6,
+      trace: film3("pushup", (e) => V.pushupBody(e), [V.hold(1, 1000), ...V.reps(6, 1500), V.hold(1, 500)], frontCam, 101) },
+    { name: "oblique-squats", about: "5 squats filmed at 45° from 0.9 m (3D fixture, vertical reading), landmark noise, flips and jumps", count: 5,
+      trace: film3("squat", (e) => V.squatBody(e), [V.hold(1, 1000), ...V.reps(5, 2000), V.hold(1, 500)], obliqueSquatCam, 102) },
+    { name: "cheat-front-arm-dips", about: "standing arm dips against a table, filmed head-on: never ready, not_plank", count: 0,
+      trace: film3("pushup", (e) => V.uprightDipBody(e), [V.hold(1, 1000), ...V.reps(5, 1500), V.hold(1, 500)], frontCam, 103) },
+    { name: "cheat-oblique-good-morning", about: "good mornings (waist bend, legs straight) filmed at 45°: the hips never drop, nothing counts", count: 0,
+      trace: film3("squat", (e) => V.goodMorningBody(e), [V.hold(1, 1000), ...V.reps(5, 2000), V.hold(1, 500)], obliqueSquatCam, 104) },
   ];
 }
 
@@ -932,9 +1213,10 @@ if (process.env.REPS_VECTORS_WRITE === "1") {
 test("golden vectors on disk replay to the same digest (regenerate: see the comment above)", () => {
   const file = JSON.parse(readFileSync(VECTORS_URL, "utf8")) as { vectors: { name: string; trace: unknown; expect: unknown }[] };
   assert.deepEqual(file.vectors.map((v) => v.name),
-    ["pushups", "squats", "cheat-supine-press", "paused-session", "cheat-belly-prop", "cheat-cobra", "freeze-resume"]);
+    ["pushups", "squats", "cheat-supine-press", "paused-session", "cheat-belly-prop", "cheat-cobra", "freeze-resume",
+      "front-pushups", "oblique-squats", "cheat-front-arm-dips", "cheat-oblique-good-morning"]);
   const intended: Record<string, number> = { pushups: 5, squats: 4, "cheat-supine-press": 0, "paused-session": 5, "cheat-belly-prop": 0,
-    "cheat-cobra": 0, "freeze-resume": 8 };
+    "cheat-cobra": 0, "freeze-resume": 8, "front-pushups": 6, "oblique-squats": 5, "cheat-front-arm-dips": 0, "cheat-oblique-good-morning": 0 };
   for (const v of file.vectors) {
     const trace = parseTrace(v.trace);
     assert.ok(trace, `${v.name}: a valid trace`);

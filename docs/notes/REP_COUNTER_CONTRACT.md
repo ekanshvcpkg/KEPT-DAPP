@@ -125,7 +125,11 @@ Design notes: scratchpad rep-native-sketch / rep-algo (session); this file is th
     `V_PUSHUP_UPRIGHT_FEET` = 1.4 below it (standing / kneeling arm dips, incline presses against a table or chair, curls); else, in the
     upper half of the rep, hips when the hip's height above the floor line (wrist level → ankle level, 40% of the way) is under
     `V_PUSHUP_HIP_MIN` = 0.4 or over `V_PUSHUP_HIP_MAX` = 1.35 of the shoulder's height above the wrists (sag, cobra, belly prop / pike;
-    a straight plank reads 0.5–0.85 from every angle); else not_plank when the hip is > 0.65 below the shoulder or the ankle >
+    a straight plank reads 0.5–0.85 from every angle); else hips when the 2D shoulder–hip–ankle angle through the midpoints is
+    < 150° (the side reading's body-line rule; added 2026-11-27 after verification: the hip-height band alone let a 20 cm pike
+    count from every angle, side-on included), judged only when shoulder→hip→ankle spans ≥ `V_PUSHUP_LINE_SPAN` = 2.2
+    calibrated tops in 2D with each segment ≥ 0.4 (the body not end-on; a straight body stays straight in 2D under any
+    perspective and roll), `bodyLine` = 180 otherwise; else not_plank when the hip is > 0.65 below the shoulder or the ankle >
     `V_PUSHUP_FEET_MAX` = 2.1 below it. Rep gates, in the side reading's order: top check; shoulder level drop ≥ 0.3 arm lengths
     (no_shoulder_drop); hip drop ≥ 0.3 × the shoulder's (hips: cobra); the wrist midpoint's box ≤ 0.3 arm lengths, kept separately for
     samples read from both wrists and from one (3-sample median within each; hands_not_planted); the wrists' left–right spread (both seen,
@@ -172,6 +176,20 @@ Design notes: scratchpad rep-native-sketch / rep-algo (session); this file is th
     in the side reading. (7) Push-ups turning about the body's middle (the hands walk round) trip hands_not_planted. (8) Squats a little
     above parallel are borderline: from close behind and low they can read just short of the bottom. (9) Thresholds are tuned on the
     synthetic body; real traces (backend/scripts/fetch_rep_traces.ts → docs/notes/real-sets/) should be replayed as soon as there are some.
+  - Limits found by an independent probe (2026-11-27: a different 3D body, 1.55 / 1.95 m tall, level or aimed cameras, roll up to 19°,
+    time-correlated jitter of 2–5 px, burst label swaps, torso occlusion, 15–20 Hz real-camera sampling): (10) Roll: the app counts
+    with |tilt| ≤ 20° and the landmarks are not de-rotated; both readings' posture checks assume image-down = gravity-down, so
+    side-on and oblique honest push-ups lose reps from ~12° (side-on at 14°: ~35–55% counted, at 19°: ~30%; the engine before
+    2026-11-27 did the same). The fix belongs outside the engine: rotate `p` by −tilt about the frame centre in RepSet before the
+    counter and the trace (the server then recounts the same numbers), or gate at ~10°. (11) The view measure is |left − right hip|
+    over the scale, so landmark jitter and perspective (hips off the frame's centre sit at different depths) give it a positive
+    floor of ~0.03–0.06 side-on, around `sideOut`: with a few pixels of jitter most side-on push-up sets read in the vertical
+    reading (squats less often). It counts there; the gaps in (12)–(14) then apply side-on too. (12) Piked hips still pass head-on,
+    from 30–60° and from behind (150–180°), where the body is too end-on for the 2D body line; the hip-height band is
+    perspective-biased (the hips look lower from the head end, higher from the feet), so a slight 6–8 cm sag filmed head-on is
+    refused as `hips` on most reps. (13) The wrists' spread gate (0.25 arm lengths) is noise-limited: far away (3+ m) with
+    half-hidden wrists (about 135°) honest push-ups lose up to ~35%. (14) Squat depth in the vertical reading is the extension alone
+    (< 0.7): hips ~0.55 thighs above the knee, which the side reading refuses as `depth`, count in about one rep in five.
 - `RepFault` = not_plank | hips | lean | depth | too_fast | too_slow | no_lockout | hands_not_planted | no_shoulder_drop | no_hip_drop |
   feet_not_planted (the last four are new; UI copy should map them, or fall back to the generic form hint). No new codes on 2026-11-26:
   cobra reuses `hips`, the belly-prop cheat reuses `hands_not_planted`. None on 2026-11-27 either: the vertical reading emits the same
@@ -182,11 +200,12 @@ Design notes: scratchpad rep-native-sketch / rep-algo (session); this file is th
   RepFeatures gained `offset` and `hipY`). Added 2026-11-27 (all additive): ANCHOR_JUMP 0.5; VIEW_SWITCH_SAMPLES 8, VIEW_SCALE_TAU_MS
   10000, VIEW_SPREAD_TAU_MS 500, VIEW_VIS_MIN 35, CAL_SAMPLES 3, CAL_FOLLOW 0.05, CAL_FOLLOW_MIN 0.85, SPREAD_MIN 0.2, V_PUSHUP_TORSO_MAX
   0.65, V_PUSHUP_FEET_MAX 2.1, V_PUSHUP_UPRIGHT_FEET 1.4, V_PUSHUP_HIP_MIN 0.4, V_PUSHUP_HIP_MAX 1.35, V_PUSHUP_BEND 145,
-  V_PUSHUP_OFFSET_MAX 0.45, V_SQUAT_TORSO_MIN 0.15, V_SQUAT_TORSO_START 0.4, V_SQUAT_DEPTH_MIN −0.75, V_SQUAT_SHALLOW 0.6;
+  V_PUSHUP_OFFSET_MAX 0.45, V_PUSHUP_LINE_SPAN 2.2, V_SQUAT_TORSO_MIN 0.15, V_SQUAT_TORSO_START 0.4, V_SQUAT_DEPTH_MIN −0.75, V_SQUAT_SHALLOW 0.6;
   `VERTICAL_RULES` (type `VerticalRules` = `RepGates` + sideIn / sideOut / frontMin / straight / upright); `type RepView`. `RepRules` is
   now `RepGates & { needed, features }`, and `RepGates` gained `spreadMax`, `bendMax`, `depthMin`, `shallow(minPrimary, minDepth)` (the
   side rules set them so they behave as before: 0, 181, SQUAT_DEPTH_MIN / null, the old depth-hint test). `RepFeatures` gained the
-  vertical reading's `spread`, `bend`, `straight`, `upright`, `torso`, `feet`, `hipRel` (neutral values in the side reading).
+  vertical reading's `spread`, `bend`, `straight`, `upright`, `torso`, `feet`, `hipRel` (neutral values in the side reading);
+  in the vertical reading `bodyLine` is the midpoints' 2D shoulder–hip–ankle angle when not end-on, else 180.
 - Engine tag: still `REPS_ENGINE = "reps@1"` (the trace format is unchanged). The counting behaviour changed under the same tag, so a
   trace recorded by an app build older than 2026-11-26 may recount differently on a newer server; fine before release, bump the tag if
   that ever matters after it. 2026-11-27: side-view traces recount exactly as before (the seven older golden vectors' digests are
