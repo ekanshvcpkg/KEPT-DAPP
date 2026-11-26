@@ -5,7 +5,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { config } from "../config.js";
 
-export const MAX_LINE_CHARS = 220;
+/** The longest line the Keeper says (Ask the Keeper answers are up to this long; the app uses the same limit). */
+export const MAX_LINE_CHARS = 320;
 export const ELEVEN_API = "https://api.elevenlabs.io";
 
 export class VoiceUnavailableError extends Error {}

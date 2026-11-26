@@ -28,7 +28,8 @@ export const config = {
   elevenTtsModel: process.env.ELEVEN_TTS_MODEL || "eleven_flash_v2_5",
   elevenSttModel: process.env.ELEVEN_STT_MODEL || "scribe_v3",
   /** Text model for "Ask the Keeper" answers (same OpenAI-compatible endpoint and key as the vision judge). */
-  askModel: process.env.ASK_MODEL || process.env.VISION_MODEL || "google/gemma-3-27b-it",
+  /** Ask the Keeper (a tool-using agent): a model with reliable tool calls; the photo judge stays on VISION_MODEL. */
+  askModel: process.env.ASK_MODEL || "anthropic/claude-haiku-5.5",
   /** Supabase Storage: public copies of the Keeper's receipts (bucket keeper-receipts). Optional. */
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",

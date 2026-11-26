@@ -7,7 +7,8 @@ import { useMode } from "@/state/mode";
 import { useSession } from "@/state/session";
 import { useSettings } from "@/state/settings";
 
-const MAX_CHARS = 220;
+/** Same as the backend (backend/src/v4/voice.ts › MAX_LINE_CHARS): longer lines would be cut and never cached. */
+const MAX_CHARS = 320;
 let player: AudioPlayer | null = null;
 
 export function keeperSay(text: string | undefined | null): void {

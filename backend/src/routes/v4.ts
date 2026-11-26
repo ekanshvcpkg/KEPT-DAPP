@@ -10,7 +10,8 @@ import { cachedSpeech, keeperSpeech, MAX_LINE_CHARS, SIGN_LINE, takeGlobalVoiceB
 import { parseRepHabit } from "../shared/reps.js";
 import { freezeAfterRep, REP_SET_MAX_MS } from "../v4/repProof.js";
 import { broadcastOathChanged } from "../v4/realtime.js";
-import { answerQuestion, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe, type AskContext } from "../v4/ask.js";
+import { askAgent, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe } from "../v4/ask.js";
+import type { AgentDeps } from "../v4/keeperAgent.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
 import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
@@ -90,33 +91,57 @@ get("/api/keeper/say", async (req: AuthedRequest, res) => {
 });
 
 /** What the Keeper may tell this wallet: its own Oaths (read from chain), its recent verdicts and its balance. */
-async function askContext(wallet: string): Promise<AskContext> {
-  const lists = await Promise.all([0, 1, 2, 3].map((i) => connection.getProgramAccounts(programId, { filters: [{ memcmp: { offset: 139 + 44 * i, bytes: wallet } }], dataSlice: { offset: 0, length: 0 } }).catch(() => [])));
-  const addresses = [...new Set(lists.flat().map((a) => a.pubkey.toBase58()))];
-  const reads = (await Promise.all(addresses.map(async (a) => ({ a, o: await readOath(a) })))).filter((x): x is { a: string; o: OathRead } => !!x.o)
-    .sort((x, y) => (y.o.startTs || Number.MAX_SAFE_INTEGER) - (x.o.startTs || Number.MAX_SAFE_INTEGER)).slice(0, 6);
-  const details = await prisma.oathDetails.findMany({ where: { oath: { in: reads.map((r) => r.a) } } });
-  const now = Math.floor(Date.now() / 1000);
-  const bits = (n: number) => n.toString(2).split("").filter((c) => c === "1").length;
-  const STATUS = ["open (waiting for members)", "active", "settled", "cancelled"];
-  const oaths = reads.map(({ a, o }) => {
-    const d = details.find((x) => x.oath === a);
-    const elapsed = o.status === 1 && o.startTs ? Math.min(o.numDays, Math.floor((now - o.startTs) / o.daySeconds)) : o.status >= 2 ? o.numDays : 0;
-    const kept = bits(o.daysKept[wallet] ?? 0);
-    const today = o.status === 1 && o.startTs ? Math.floor((now - o.startTs) / o.daySeconds) + 1 : null;
-    const settled = o.status >= 2;
-    return {
-      name: d?.name || d?.goalText || "an Oath", status: o.status === 1 && today !== null && today > o.numDays ? "ended, waiting to be settled" : STATUS[o.status] ?? "unknown",
-      solo: o.isSolo, members: o.members.length, day: today !== null && today <= o.numDays ? `day ${today} of ${o.numDays}` : `${o.numDays} days`,
-      myKeptDays: kept, myMissedDays: Math.max(0, elapsed - kept), stakeSol: sol2(Number(o.stakeAmount)),
-      payoutSol: settled ? sol2(Number(o.payouts[wallet] ?? "0")) : null, claimed: settled ? o.claimed[wallet] ?? false : null,
-    };
-  });
-  const verdicts = await prisma.proofVerification.findMany({ where: { wallet, status: { in: ["PASS", "FAIL"] } }, orderBy: { createdAt: "desc" }, take: 4 });
-  const solBalance = await connection.getBalance(new PublicKey(wallet), "confirmed").then((l) => sol2(l)).catch(() => null);
-  // oaths[0] is the most recent (newest start first; open Oaths, not started yet, first of all).
-  return { wallet, solBalance, oaths, recentVerdicts: verdicts.map((v) => ({ when: v.createdAt.toISOString(), pass: v.status === "PASS", reason: v.reason })) };
+/** The app's own Oath names (they live on the device), sanitised: up to 20 base58 addresses -> short plain names. */
+function agentNames(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 20)) {
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(k) && typeof v === "string") {
+      const name = v.replace(/[^\p{L}\p{N} .,'’!?&()-]/gu, "").trim().slice(0, 40);
+      if (name) out[k] = name;
+    }
+  }
+  return out;
 }
+
+/** What Ask the Keeper's tools read: the asker's Oaths on chain, their details and habit proofs, receipts, balance. */
+function agentDeps(wallet: string, names: Record<string, string>): AgentDeps {
+  return {
+    wallet,
+    now: () => Math.floor(Date.now() / 1000),
+    oaths: async () => {
+      const lists = await Promise.all([0, 1, 2, 3].map((i) => connection.getProgramAccounts(programId, { filters: [{ memcmp: { offset: 139 + 44 * i, bytes: wallet } }], dataSlice: { offset: 0, length: 0 } }).catch(() => [])));
+      const addresses = [...new Set(lists.flat().map((a) => a.pubkey.toBase58()))];
+      const reads = (await Promise.all(addresses.map(async (a) => ({ a, o: await readOath(a) })))).filter((x): x is { a: string; o: OathRead } => !!x.o)
+        // Running and open Oaths first, newest first; at most 8.
+        .sort((x, y) => (Number(x.o.status >= 2) - Number(y.o.status >= 2)) || ((y.o.startTs || Number.MAX_SAFE_INTEGER) - (x.o.startTs || Number.MAX_SAFE_INTEGER))).slice(0, 8);
+      const ids = reads.map((r) => r.a);
+      const [details, proofs] = await Promise.all([
+        prisma.oathDetails.findMany({ where: { oath: { in: ids } } }),
+        prisma.habitProof.findMany({ where: { oath: { in: ids } }, select: { oath: true, wallet: true, dayIndex: true, habit: true } }),
+      ]);
+      return reads.map(({ a, o }) => {
+        const d = details.find((x) => x.oath === a);
+        return {
+          address: a, name: names[a] ?? null,
+          chain: { status: o.status, isSolo: o.isSolo, startTs: o.startTs, daySeconds: o.daySeconds, numDays: o.numDays, members: o.members, daysKept: o.daysKept, stakeAmount: o.stakeAmount, payouts: o.payouts, claimed: o.claimed },
+          details: d ? { goalText: d.goalText, habits: d.habits, habitObjects: d.habitObjects } : null,
+          proofs: proofs.filter((p) => p.oath === a),
+        };
+      });
+    },
+    balanceSol: () => connection.getBalance(new PublicKey(wallet), "confirmed").then((l) => sol2(l)).catch(() => null),
+    receipts: async (oath, day) => {
+      const rows = await prisma.proofVerification.findMany({ where: { wallet, oath, ...(day !== null ? { dayIndex: day } : {}), status: { in: ["PASS", "FAIL"] } }, orderBy: { createdAt: "desc" }, take: 8 });
+      return rows.map((v) => {
+        const reps = (v.receipt as { reps?: { exercise?: string; repCount?: number; target?: number } } | null)?.reps;
+        return { day: v.dayIndex, habit: v.habit, pass: v.status === "PASS", reason: v.reason ?? "", when: v.createdAt.toISOString(),
+          reps: reps && typeof reps.repCount === "number" ? { exercise: String(reps.exercise), counted: reps.repCount, target: Number(reps.target) } : null };
+      });
+    },
+  };
+}
+
 
 /**
  * "Ask the Keeper": push-to-talk. Send { audio: base64, mime } (or { text } for a typed question). The question is
@@ -135,7 +160,7 @@ post("/api/keeper/ask", async (req: AuthedRequest, res) => {
       question = await transcribe(bytes, typeof mime === "string" && /^audio\/[\w.+-]+$/.test(mime) ? mime : "audio/mp4");
     }
     if (!question) return res.status(422).json({ error: "The Keeper couldn't hear a question", heard: "" });
-    const answer = await answerQuestion(question, await askContext(req.wallet));
+    const answer = await askAgent(question, agentDeps(req.wallet, agentNames(req.body?.names)));
     // Say it now, so the app's GET /api/keeper/say for this exact answer is served from the cache (no second charge).
     if (!takeGlobalVoiceBudget(answer.length)) return res.status(503).json({ error: "keeper_unavailable", detail: "The Keeper's voice budget for today is spent" });
     await keeperSpeech(answer);
