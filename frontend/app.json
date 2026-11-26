@@ -72,8 +72,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": false,
-          "recordAudioAndroid": false,
+          "microphonePermission": "KEPT uses the microphone only while you hold the Keeper button to ask it a question.",
+          "recordAudioAndroid": true,
           "enableBackgroundPlayback": false
         }
       ]

@@ -12,6 +12,9 @@ export type ButtonKind = "p" | "l" | "s" | "t" | "d";
 export interface ButtonProps {
   label: string;
   onPress?: () => void;
+  /** Hold-to-talk style buttons (press and release), e.g. "Ask the Keeper". */
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   kind?: ButtonKind;
   icon?: IconName;
   /** "pinned" 54 (default), "card" 50 inside OathCard, "row" 54 with the smaller label (ButtonRow). Kind t is always 44. */
@@ -30,7 +33,7 @@ const KIND = {
   d: { bg: color.red.tint14, fg: color.red.base },
 } as const;
 
-export function Button({ label, onPress, kind = "p", icon, size = "pinned", disabled, loading, testID }: ButtonProps) {
+export function Button({ label, onPress, onPressIn, onPressOut, kind = "p", icon, size = "pinned", disabled, loading, testID }: ButtonProps) {
   const h = kind === "t" ? metrics.button.heightText : size === "card" ? metrics.button.heightCard : metrics.button.height;
   const k = KIND[kind];
   const off = disabled === true;
@@ -38,6 +41,8 @@ export function Button({ label, onPress, kind = "p", icon, size = "pinned", disa
   return (
     <PressScale
       onPress={onPress}
+      {...(onPressIn ? { onPressIn } : {})}
+      {...(onPressOut ? { onPressOut } : {})}
       disabled={off || loading}
       accessibilityLabel={label}
       accessibilityState={{ disabled: off, busy: !!loading }}

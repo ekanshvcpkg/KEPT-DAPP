@@ -354,7 +354,7 @@ interface PressScaleProps extends Omit<PressableProps, "style" | "children"> {
 /** Pressable that scales down while pressed and never has a hit area under 48 dp. */
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function PressScale({ children, style, scale = metrics.button.pressScale, hit, disabled, onLayout, ...rest }: PressScaleProps) {
+export function PressScale({ children, style, scale = metrics.button.pressScale, hit, disabled, onLayout, onPressIn, onPressOut, ...rest }: PressScaleProps) {
   const reduce = useReducedMotion();
   const s = useSharedValue(1);
   // Presses only start after mount; a press-out that's still running when the screen goes is cancelled.
@@ -381,8 +381,8 @@ export function PressScale({ children, style, scale = metrics.button.pressScale,
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       {...(slop ? { hitSlop: slop } : {})}
-      onPressIn={() => { if (!reduce) s.set(withTiming(scale, { duration: metrics.press.inMs })); }}
-      onPressOut={() => { s.set(withTiming(1, { duration: metrics.press.outMs })); }}
+      onPressIn={(e) => { if (!reduce) s.set(withTiming(scale, { duration: metrics.press.inMs })); onPressIn?.(e); }}
+      onPressOut={(e) => { s.set(withTiming(1, { duration: metrics.press.outMs })); onPressOut?.(e); }}
       onLayout={measure}
       {...rest}
       style={[style, a]}

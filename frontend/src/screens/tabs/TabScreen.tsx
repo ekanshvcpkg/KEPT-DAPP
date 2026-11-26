@@ -9,6 +9,9 @@ import { metrics } from "@/theme";
 import { useBalances, useInbox } from "@/api/queries";
 import { useGo } from "@/app/nav";
 import type { DesignId } from "@/app/routes";
+import { AskKeeper } from "@/components/keeper/AskKeeper";
+import { useMode } from "@/state/mode";
+import { useSession } from "@/state/session";
 
 type TabId = "today" | "oaths" | "bounties" | "profile";
 const TAB_SCREEN: Record<TabId, DesignId> = { today: "B1", oaths: "D0", bounties: "H1", profile: "I1" };
@@ -23,6 +26,10 @@ export function TabScreen({ tab, children, layout }: { tab: TabId; children?: Re
   const inbox = useInbox();
   const id = TAB_SCREEN[tab];
   const idle = keeperIdle(tab);
+  // "Ask the Keeper" (voice, ElevenLabs) lives on Today, in Live, once signed in.
+  const mode = useMode((s) => s.mode);
+  const signedIn = useSession((s) => !!s.token);
+  const askable = mode === "live" && signedIn && tab === "today";
   return (
     <Screen
       bottomInset={TAB_BAR_SPACE}
@@ -41,6 +48,7 @@ export function TabScreen({ tab, children, layout }: { tab: TabId; children?: Re
       }
     >
       {children}
+      {askable ? <AskKeeper /> : null}
     </Screen>
   );
 }

@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { navigationRef } from "@/app/nav";
 import type { FxKind } from "@/components/chrome";
+import { playSfx } from "@/features/keeper/sfx";
 
 /**
  * The haptic of an FX moment (motion.md §5–8): kept = success at 0 (F5), payout = success at 200,
@@ -23,12 +24,17 @@ const currentRouteKey = () => (navigationRef.isReady() ? navigationRef.getCurren
 
 export const useUi = create<UiState>()((set) => ({
   fx: null, devMenu: false,
-  playFx: (kind, feel, route) => set((s) => ({
+  playFx: (kind, feel, route) => {
+    // Each FX moment has its ElevenLabs-made sound (features/keeper/sfx.ts).
+    const f = feel ?? (kind === "embers" ? "broken" : "none");
+    if (f === "kept" || f === "payout" || f === "broken") playSfx(f);
+    set((s) => ({
     fx: {
       ...(kind ? { kind } : {}), feel: feel ?? (kind === "embers" ? "broken" : "none"), id: (s.fx?.id ?? 0) + 1,
       ...(route ?? currentRouteKey() ? { route: route ?? currentRouteKey()! } : {}),
     },
-  })),
+    }));
+  },
   clearFx: () => set({ fx: null }),
   setDevMenu: (devMenu) => set({ devMenu }),
 }));
