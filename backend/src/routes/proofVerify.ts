@@ -11,7 +11,7 @@ import { config } from "../config.js";
 import { keypairFromEnv } from "../solana.js";
 import { CheckUnavailableError } from "../v4/verdict.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
-import { parseRepHabit } from "../shared/reps.js";
+import { parseRepHabit, parseTrace } from "../shared/reps.js";
 import { publicReceiptUrl, publishReceipt, storeRepTrace } from "../v4/receiptStore.js";
 import { checkRepEvidence, REP_FREEZE_GESTURE, repFreezeObject, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
@@ -132,7 +132,8 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   // A public copy of the receipt on Supabase Storage (its bytes hash to the on-chain hash). In the background.
   void publishReceipt(hash, receipt).catch(() => undefined);
   // A rep set's pose trace, privately, to tune the counter on real sets (keypoints only). In the background.
-  if (repReceipt && rep) void storeRepTrace(hash, { trace: (req.body?.reps as { trace?: unknown } | undefined)?.trace, exercise: rep.exercise, target: rep.target,
+  // The validated trace (parseTrace: shape and size checked), not the raw upload.
+  if (repReceipt && rep) void storeRepTrace(hash, { trace: parseTrace((req.body?.reps as { trace?: unknown } | undefined)?.trace), exercise: rep.exercise, target: rep.target,
     repCount: repReceipt.repCount, phoneCount: repReceipt.phoneCount, pass, reason: verdict.reason }).catch(() => undefined);
   // The Keeper's spoken verdict, said now so the app's /api/keeper/say for it is a cache hit. The text must match the
   // app's copy exactly (frontend/src/copy/additions.json › keeper.sayKept / sayFailed). Best effort, in the background.
