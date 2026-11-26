@@ -18,6 +18,8 @@ import type { HttpClient } from "./client";
 
 type Details = { goalText: string | null; habits: string[]; habitObjects: string[] };
 
+const isRunning = (o: ChainOath) => o.status === "open" || o.status === "active";
+
 const sameObjects = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x.trim().toLowerCase() === b[i]!.trim().toLowerCase());
 
 /**
@@ -25,12 +27,15 @@ const sameObjects = (a: readonly string[], b: readonly string[]) => a.length ===
  * - The creator's phone saved them when it created the Oath. If the server has none (a solo Oath is Active the moment
  *   it is created, and the server used to refuse the save then), they are sent again.
  * - If the server has different ones, the server wins and this phone takes them.
+ * - A running Oath is (re)registered for the server's jobs (missed days, settlement): POST /api/oaths/watch is
+ *   idempotent, and a create whose follow-ups failed, or a server that lost its data, would otherwise never settle it.
  * Reads wait for it (once per Oath per app session, unless `force`), so the facts they build show the synced details.
  * Returns the server's habit objects, or null if they couldn't be read.
  */
 const synced = new Map<string, Promise<string[] | null>>();
-function syncDetails(c: HttpClient, oath: string, creator: string, force = false): Promise<string[] | null> {
+function syncDetails(c: HttpClient, oath: string, creator: string, force = false, running = false): Promise<string[] | null> {
   const run = async (): Promise<string[] | null> => {
+    if (running) await c.send("/api/oaths/watch", { oath }).catch(() => undefined);
     const d = useDeviceOaths.getState();
     const mine = useSession.getState().wallet === creator;
     const goal = d.goals[oath], habits = d.habits[oath], objects = d.habitObjects[oath];
@@ -128,7 +133,7 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     const known = useDeviceOaths.getState().known.filter((id) => !found.some((o) => o.address === id));
     const extra = (await Promise.all(known.map((id) => readOath(id).catch(() => null)))).filter((o): o is ChainOath => !!o && o.members.some((m) => m.wallet === wallet));
     const [oaths, bounty] = await Promise.all([
-      Promise.all([...found, ...extra].map(async (o) => { await syncDetails(c, o.address, o.creator); return toFacts(o, await goalOf(c, o.address)); })),
+      Promise.all([...found, ...extra].map(async (o) => { await syncDetails(c, o.address, o.creator, false, isRunning(o)); return toFacts(o, await goalOf(c, o.address)); })),
       myLiveBounty(c, wallet),
     ]);
     return bounty ? [...oaths, bounty] : oaths;
@@ -141,7 +146,7 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     }
     const o = await readOath(id).catch((e: unknown) => { throw fromRpcError(e); });
     if (!o) throw new ApiError("NOT_FOUND", `Oath ${id} not found`, 404);
-    await syncDetails(c, id, o.creator);
+    await syncDetails(c, id, o.creator, false, isRunning(o));
     const facts = toFacts(o, await goalOf(c, id));
     if (!facts.inviteCode && !facts.isSolo && facts.status === "open") {
       facts.inviteCode = await restoreInvite(c, id);
@@ -164,10 +169,11 @@ export const httpOaths = (c: HttpClient): OathsApi => ({
     return { oath: toFacts(o, { goalText: r.goalText, habits, habitObjects }), alreadyStarted: r.alreadyStarted };
   },
   register: async (oath, goal, habits, habitObjects) => {
+    // Watched first: the server's jobs (missed days, settlement) must know the Oath even if a later step fails.
+    await c.send("/api/oaths/watch", { oath: oath.id });
     await c.post("/api/oaths/details", { oath: oath.id, goalText: goal, habits, habitObjects }, DetailsResponse);
     let code = oath.isSolo ? null : await restoreInvite(c, oath.id);
     if (!oath.isSolo && !code) code = (await c.post("/api/invites", { oath: oath.id }, InviteCreateResponse)).code;
-    await c.send("/api/oaths/watch", { oath: oath.id });
     useDeviceOaths.getState().remember(oath.id, { goal, habits, habitObjects, ...(code ? { code } : {}) });
     return code;
   },
