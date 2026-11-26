@@ -40,6 +40,13 @@ export const CATALOG: readonly CatalogEntry[] = [
   e("skipping_rope", "cardio", "skipping_rope", "skipping rope", "jump rope", "jumping rope", "skip rope", "speed rope", "rope skipping", "rope jumping", "skipping", "jump roping", "jump rope workout"),
   e("yoga_mat", "mind_body", "yoga_mat", "yoga", "yoga mat", "exercise mat", "workout mat", "pilates mat", "pilates", "fitness mat", "stretching mat", "stretch", "stretching", "gym mat", "floor workout", "sun salutation"),
 
+  // ── live rep counts (the camera counts them on the phone; the Keeper checks the pose trace): the label is the proof
+  //    text, "20 push-ups", which packages/engine/src/reps.ts › parseRepHabit turns into exercise + target ──
+  ...[10, 20, 30, 50].flatMap((n) => [
+    e(`reps_pushups_${n}`, "strength", null, `${n} push ups`, `${n} pushups`, "push ups", "pushups", "push-ups", "press ups", "rep counter", "count reps", "workout", "calisthenics", "bodyweight"),
+    e(`reps_squats_${n}`, "strength", null, `${n} squats`, "squats", "squat", "bodyweight squats", "air squats", "rep counter", "count reps", "workout", "legs", "leg day"),
+  ]),
+
   // ── strength (not a dumbbell) ──
   e("kettlebell", "strength", null, "kettle bell", "kettlebells", "kettlebell swing"),
   e("barbell", "strength", null, "barbells", "bar bell", "olympic bar", "squat rack", "bench press", "deadlift", "squat"),

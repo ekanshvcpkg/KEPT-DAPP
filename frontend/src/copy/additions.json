@@ -423,7 +423,15 @@
       "laptop": "Laptop",
       "phone": "Phone",
       "tablet": "Tablet",
-      "whiteboard": "Whiteboard"
+      "whiteboard": "Whiteboard",
+      "reps_pushups_10": "10 push-ups",
+      "reps_squats_10": "10 squats",
+      "reps_pushups_20": "20 push-ups",
+      "reps_squats_20": "20 squats",
+      "reps_pushups_30": "30 push-ups",
+      "reps_squats_30": "30 squats",
+      "reps_pushups_50": "50 push-ups",
+      "reps_squats_50": "50 squats"
     },
     "quickPicks": "Common proof objects",
     "searchMore": "Not here? Search every supported object.",

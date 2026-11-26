@@ -1,0 +1,411 @@
+// ===== frontend/modules/kept-gesture/android/build.gradle — add to dependencies { } =====
+  // Same CameraX expo-camera 57.0.6 uses (node_modules/expo-camera/android/build.gradle). Its deps are `implementation`, so declare them here too.
+  def camerax_version = "1.6.0"
+  implementation "androidx.camera:camera-core:${camerax_version}"
+  implementation "androidx.camera:camera-camera2:${camerax_version}"
+  implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+  implementation "androidx.camera:camera-view:${camerax_version}"
+// Only if the compile fails with "Cannot access class 'ListenableFuture'":
+// configurations.configureEach { resolutionStrategy.force "com.google.guava:listenablefuture:1.0" }
+
+// Asset (one time, then commit):
+//   curl -L -o frontend/modules/kept-gesture/android/src/main/assets/pose_landmarker_lite.task \
+//     https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
+//   md5sum -> 04a75ddf7c811ac7a1a4523266dd7d88   size 5777746
+
+// ===== android/src/main/java/expo/modules/keptgesture/RepCounter.kt =====
+package expo.modules.keptgesture
+
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.min
+
+/** BlazePose 33-point indices, [left, right]. Angle is measured at joint b. */
+enum class Exercise(val key: String, val a: IntArray, val b: IntArray, val c: IntArray, val downDeg: Double, val upDeg: Double) {
+  PUSHUP("pushup", intArrayOf(11, 12), intArrayOf(13, 14), intArrayOf(15, 16), 95.0, 155.0), // shoulder-elbow-wrist
+  SQUAT("squat", intArrayOf(23, 24), intArrayOf(25, 26), intArrayOf(27, 28), 100.0, 160.0);  // hip-knee-ankle
+  companion object { fun of(key: String?) = entries.firstOrNull { it.key == key } ?: PUSHUP }
+}
+
+class RepCounter(exercise: Exercise) {
+  class Rep(val n: Int, val minAngle: Double, val durationMs: Long, val atMs: Long)
+  class Step(val angle: Double, val visibility: Float, val down: Boolean, val rep: Rep?)
+
+  var exercise = exercise; private set
+  var reps = 0; private set
+  private var down = false
+  private var smoothed = Double.NaN
+  private var repMin = 180.0
+  private var downSince = 0L
+  private var lastRepAt = 0L
+
+  @Synchronized fun setExercise(e: Exercise) { if (e != exercise) { exercise = e; reset() } }
+  @Synchronized fun reset() { reps = 0; down = false; smoothed = Double.NaN; repMin = 180.0; lastRepAt = 0L }
+
+  /** w,h = pixel size of the upright frame the landmarks are normalized to. */
+  @Synchronized fun update(pose: List<NormalizedLandmark>, w: Int, h: Int, tsMs: Long): Step {
+    val (angle, vis) = (0..1).map { s ->
+      val a = pose[exercise.a[s]]; val b = pose[exercise.b[s]]; val c = pose[exercise.c[s]]
+      angleDeg(a, b, c, w, h) to minOf(a.visibility().orElse(0f), b.visibility().orElse(0f), c.visibility().orElse(0f))
+    }.maxBy { it.second }
+    if (vis < MIN_VIS) return Step(angle, vis, down, null)
+    smoothed = if (smoothed.isNaN()) angle else ALPHA * angle + (1 - ALPHA) * smoothed
+    var rep: Rep? = null
+    if (!down) {
+      if (smoothed <= exercise.downDeg) { down = true; downSince = tsMs; repMin = smoothed }
+    } else {
+      repMin = min(repMin, smoothed)
+      if (smoothed >= exercise.upDeg) {
+        down = false
+        if (tsMs - lastRepAt >= MIN_REP_MS) { reps++; lastRepAt = tsMs; rep = Rep(reps, repMin, tsMs - downSince, tsMs) }
+      }
+    }
+    return Step(smoothed, vis, down, rep)
+  }
+
+  companion object {
+    const val MIN_VIS = 0.5f
+    const val ALPHA = 0.5
+    const val MIN_REP_MS = 600L
+    fun angleDeg(a: NormalizedLandmark, b: NormalizedLandmark, c: NormalizedLandmark, w: Int, h: Int): Double {
+      val r1 = atan2(((a.y() - b.y()) * h).toDouble(), ((a.x() - b.x()) * w).toDouble())
+      val r2 = atan2(((c.y() - b.y()) * h).toDouble(), ((c.x() - b.x()) * w).toDouble())
+      var deg = abs(Math.toDegrees(r1 - r2))
+      if (deg > 180.0) deg = 360.0 - deg
+      return deg
+    }
+  }
+}
+
+// ===== android/src/main/java/expo/modules/keptgesture/RepCounterView.kt =====
+package expo.modules.keptgesture
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Size
+import android.view.View
+import android.view.ViewGroup
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.lifecycle.awaitInstance
+import androidx.camera.view.PreviewView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.LifecycleOwner
+import com.google.mediapipe.framework.image.BitmapExtractor
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.framework.image.MPImage
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
+import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.viewevent.EventDispatcher
+import expo.modules.kotlin.views.ExpoView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import java.io.File
+import java.security.MessageDigest
+import java.util.UUID
+import java.util.concurrent.Executors
+
+private const val POSE_MODEL_ASSET = "pose_landmarker_lite.task"
+private const val MAX_KEYFRAMES = 20
+
+@SuppressLint("ViewConstructor")
+class RepCounterView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
+  // Event names must match Events(...) in the module definition. No type argument = Map<String, Any> payload.
+  private val onReady by EventDispatcher()
+  private val onPose by EventDispatcher()
+  private val onRep by EventDispatcher()
+  private val onError by EventDispatcher()
+
+  // Props (main thread)
+  var facing = "front"
+  var active = true
+  var poseEventIntervalMs = 100L
+  private val counter = RepCounter(Exercise.PUSHUP)
+  fun setExercise(e: Exercise) { if (e != counter.exercise) { counter.setExercise(e); clearEvidence() } }
+
+  private val main = Handler(Looper.getMainLooper())
+  private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+  private val analysisExecutor = Executors.newSingleThreadExecutor()
+  private val io = Executors.newSingleThreadExecutor()
+  @Volatile private var released = false
+
+  private val previewView = PreviewView(context).apply {
+    implementationMode = PreviewView.ImplementationMode.COMPATIBLE // TextureView: RN overlays draw on top
+    scaleType = PreviewView.ScaleType.FILL_CENTER
+  }
+  private var provider: ProcessCameraProvider? = null
+  private var preview: Preview? = null
+  private var analysis: ImageAnalysis? = null
+  private var boundFacing: String? = null
+
+  // analysisExecutor only
+  private var landmarker: PoseLandmarker? = null
+  private var modelFailed = false
+  private var lastTs = 0L
+  // MediaPipe result thread only
+  private var lastPoseEmit = 0L
+  private var bottomFrame: Bitmap? = null
+  private var bottomAngle = Double.MAX_VALUE
+  // evidence (guarded by `this`)
+  private var sessionId = UUID.randomUUID().toString()
+  private var startedAt = System.currentTimeMillis()
+  private val repEvents = mutableListOf<Map<String, Any>>()
+  private val keyframes = mutableListOf<Map<String, Any>>()
+
+  init {
+    // RN does not lay out native children; PreviewView adds its TextureView later (same handling as ExpoCameraView).
+    previewView.setOnHierarchyChangeListener(object : OnHierarchyChangeListener {
+      override fun onChildViewAdded(parent: View?, child: View?) {
+        parent?.measure(MeasureSpec.makeMeasureSpec(measuredWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
+        parent?.layout(0, 0, parent.measuredWidth, parent.measuredHeight)
+      }
+      override fun onChildViewRemoved(parent: View?, child: View?) = Unit
+    })
+    addView(previewView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+  }
+
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    val w = r - l; val h = b - t
+    previewView.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+    previewView.layout(0, 0, w, h)
+  }
+
+  override fun onAttachedToWindow() { super.onAttachedToWindow(); syncCamera() }
+  override fun onDetachedFromWindow() { unbindCamera(); super.onDetachedFromWindow() }
+
+  /** Called from OnViewDidUpdateProps and attach. */
+  fun syncCamera() {
+    if (released) return
+    if (active && isAttachedToWindow) bindCamera() else unbindCamera()
+  }
+
+  private fun bindCamera() {
+    if (analysis != null && boundFacing == facing) return
+    val owner = appContext.currentActivity as? LifecycleOwner ?: return emitError("no_activity", "The rep counter needs a foreground activity")
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+      return emitError("permission", "Camera permission is not granted")
+    }
+    scope.launch {
+      try {
+        val p = ProcessCameraProvider.awaitInstance(context.applicationContext)
+        if (released || !isAttachedToWindow || !active) return@launch
+        unbindCamera(p)
+        val selector = ResolutionSelector.Builder()
+          .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+          .setResolutionStrategy(ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+          .build()
+        val pv = Preview.Builder().setResolutionSelector(selector).build()
+        pv.setSurfaceProvider(previewView.surfaceProvider)
+        val ia = ImageAnalysis.Builder()
+          .setResolutionSelector(selector)
+          .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+          .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+          .build()
+        ia.setAnalyzer(analysisExecutor) { proxy -> analyze(proxy) }
+        val cam = if (facing == "back") CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
+        p.bindToLifecycle(owner, cam, pv, ia) // NOT unbindAll: ProcessCameraProvider is process-wide
+        provider = p; preview = pv; analysis = ia; boundFacing = facing
+        onReady(mapOf("facing" to facing))
+      } catch (e: Exception) {
+        emitError("camera", e.message ?: e.javaClass.simpleName)
+      }
+    }
+  }
+
+  private fun unbindCamera(p: ProcessCameraProvider? = provider) {
+    analysis?.clearAnalyzer()
+    val own = listOfNotNull(preview, analysis)
+    if (p != null && own.isNotEmpty()) p.unbind(*own.toTypedArray())
+    preview = null; analysis = null; boundFacing = null
+  }
+
+  // ── analysis thread ──
+  private fun analyze(proxy: ImageProxy) {
+    val rotation = proxy.imageInfo.rotationDegrees
+    val raw: Bitmap
+    try { raw = proxy.toBitmap() } catch (e: Exception) { proxy.close(); return }
+    proxy.close() // release the camera buffer before inference
+    if (released) return
+    val lm = landmarker ?: createLandmarker() ?: return
+    val upright = if (rotation == 0) raw
+      else Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, Matrix().apply { postRotate(rotation.toFloat()) }, false)
+    val ts = maxOf(SystemClock.uptimeMillis(), lastTs + 1).also { lastTs = it } // must strictly increase
+    try {
+      lm.detectAsync(BitmapImageBuilder(upright).build(), ts) // drops frames itself while busy
+    } catch (e: RuntimeException) {
+      emitError("detect", e.message ?: "detectAsync failed")
+    }
+    // Do not recycle `raw`/`upright`: MediaPipe hands `upright` back to the result listener.
+  }
+
+  private fun createLandmarker(): PoseLandmarker? {
+    if (modelFailed) return null
+    return try {
+      val options = PoseLandmarker.PoseLandmarkerOptions.builder()
+        .setBaseOptions(BaseOptions.builder().setModelAssetPath(POSE_MODEL_ASSET).setDelegate(Delegate.CPU).build())
+        .setRunningMode(RunningMode.LIVE_STREAM)
+        .setNumPoses(1)
+        .setMinPoseDetectionConfidence(0.5f)
+        .setMinPosePresenceConfidence(0.5f)
+        .setMinTrackingConfidence(0.5f)
+        .setOutputSegmentationMasks(false)
+        .setResultListener { result: PoseLandmarkerResult, input: MPImage -> onResult(result, input) }
+        .setErrorListener { e: RuntimeException -> emitError("mediapipe", e.message ?: "MediaPipe error") }
+        .build()
+      PoseLandmarker.createFromOptions(context, options).also { landmarker = it }
+    } catch (e: Exception) {
+      modelFailed = true
+      emitError("model", "Pose model failed to load: ${e.message}")
+      null
+    }
+  }
+
+  // ── MediaPipe result thread ──
+  private fun onResult(result: PoseLandmarkerResult, input: MPImage) {
+    if (released) return
+    val ts = result.timestampMs()
+    val pose = result.landmarks().firstOrNull()
+    if (pose == null || pose.size < 33) {
+      maybeEmitPose(ts) { mapOf("inFrame" to false, "reps" to counter.reps, "timestampMs" to ts.toDouble()) }
+      return
+    }
+    val step = counter.update(pose, input.width, input.height, ts)
+    if (step.down && step.angle < bottomAngle) { bottomAngle = step.angle; bottomFrame = BitmapExtractor.extract(input) }
+    step.rep?.let { rep ->
+      val frame = bottomFrame; bottomFrame = null; bottomAngle = Double.MAX_VALUE
+      val payload = mapOf<String, Any>("reps" to rep.n, "minAngle" to rep.minAngle, "durationMs" to rep.durationMs.toDouble(), "timestampMs" to rep.atMs.toDouble())
+      recordRep(rep, payload, frame)
+      main.post { if (!released) onRep(payload) }
+    }
+    if (!step.down) { bottomFrame = null; bottomAngle = Double.MAX_VALUE }
+    maybeEmitPose(ts) {
+      mapOf("inFrame" to true, "reps" to counter.reps, "angle" to step.angle, "visibility" to step.visibility.toDouble(),
+        "down" to step.down, "frameWidth" to input.width, "frameHeight" to input.height, "timestampMs" to ts.toDouble())
+    }
+  }
+
+  private inline fun maybeEmitPose(ts: Long, build: () -> Map<String, Any>) {
+    if (ts - lastPoseEmit < poseEventIntervalMs) return
+    lastPoseEmit = ts
+    val payload = build()
+    main.post { if (!released) onPose(payload) }
+  }
+
+  private fun recordRep(rep: RepCounter.Rep, payload: Map<String, Any>, frame: Bitmap?) {
+    val session: String
+    synchronized(this) { repEvents.add(payload); session = sessionId; if (frame == null || keyframes.size >= MAX_KEYFRAMES) return }
+    io.execute {
+      runCatching {
+        val dir = File(context.cacheDir, "kept-reps/$session").apply { mkdirs() }
+        val file = File(dir, "rep-${rep.n}.jpg")
+        file.outputStream().use { frame!!.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        val sha = MessageDigest.getInstance("SHA-256").digest(file.readBytes()).joinToString("") { "%02x".format(it) }
+        synchronized(this) { if (session == sessionId) keyframes.add(mapOf("rep" to rep.n, "uri" to "file://${file.absolutePath}", "sha256" to sha, "angle" to rep.minAngle)) }
+      }
+    }
+  }
+
+  private fun emitError(code: String, message: String) {
+    main.post { if (!released) onError(mapOf("code" to code, "message" to message)) }
+  }
+
+  private fun clearEvidence() = synchronized(this) {
+    sessionId = UUID.randomUUID().toString(); startedAt = System.currentTimeMillis(); repEvents.clear(); keyframes.clear()
+  }
+
+  // ── view functions (AsyncFunction; not on the UI thread) ──
+  fun finish(): Map<String, Any> {
+    io.submit {}.get() // wait for pending keyframe writes
+    synchronized(this) {
+      return mapOf("exercise" to counter.exercise.key, "reps" to counter.reps, "startedAt" to startedAt.toDouble(),
+        "endedAt" to System.currentTimeMillis().toDouble(), "events" to repEvents.toList(), "keyframes" to keyframes.toList(),
+        "model" to "MediaPipe Pose Landmarker lite (float16/1)")
+    }
+  }
+  fun reset() { counter.reset(); clearEvidence() }
+
+  fun release() {
+    if (released) return
+    released = true
+    unbindCamera()
+    scope.cancel()
+    analysisExecutor.execute { runCatching { landmarker?.close() }; landmarker = null }
+    analysisExecutor.shutdown()
+    io.shutdown()
+  }
+}
+
+// ===== KeptGestureModule.kt — inside definition() = ModuleDefinition { ... } after the existing AsyncFunctions =====
+    View(RepCounterView::class) {
+      Events("onReady", "onPose", "onRep", "onError")
+      Prop("facing") { view: RepCounterView, facing: String? -> view.facing = if (facing == "back") "back" else "front" }
+      Prop("exercise") { view: RepCounterView, exercise: String? -> view.setExercise(Exercise.of(exercise)) }
+      Prop("active") { view: RepCounterView, active: Boolean? -> view.active = active ?: true }
+      Prop("poseEventIntervalMs") { view: RepCounterView, ms: Int? -> view.poseEventIntervalMs = (ms ?: 100).coerceIn(33, 1000).toLong() }
+      OnViewDidUpdateProps { view -> view.syncCamera() }
+      OnViewDestroys { view -> view.release() }
+      AsyncFunction("finish") { view: RepCounterView -> view.finish() }
+      AsyncFunction("reset") { view: RepCounterView -> view.reset() }
+    }
+
+// ===== frontend/modules/kept-gesture/src/RepCounterView.tsx (re-export from src/index.ts) =====
+import * as React from "react";
+import { Platform, View, type ViewProps } from "react-native";
+import { requireNativeViewManager } from "expo-modules-core"; // identical to `requireNativeView` from "expo"
+
+export type Exercise = "pushup" | "squat";
+export type PoseEvent = { inFrame: boolean; reps: number; angle?: number; visibility?: number; down?: boolean; frameWidth?: number; frameHeight?: number; timestampMs: number };
+export type RepEvent = { reps: number; minAngle: number; durationMs: number; timestampMs: number };
+export type RepErrorEvent = { code: "no_activity" | "permission" | "camera" | "model" | "mediapipe" | "detect"; message: string };
+export type RepKeyframe = { rep: number; uri: string; sha256: string; angle: number };
+export type RepSession = { exercise: Exercise; reps: number; startedAt: number; endedAt: number; events: RepEvent[]; keyframes: RepKeyframe[]; model: string };
+export type RepCounterViewProps = ViewProps & {
+  exercise: Exercise;
+  facing?: "front" | "back";
+  active?: boolean;
+  poseEventIntervalMs?: number;
+  onReady?: (e: { nativeEvent: { facing: "front" | "back" } }) => void;
+  onPose?: (e: { nativeEvent: PoseEvent }) => void;
+  onRep?: (e: { nativeEvent: RepEvent }) => void;
+  onError?: (e: { nativeEvent: RepErrorEvent }) => void;
+};
+export type RepCounterViewRef = { finish(): Promise<RepSession>; reset(): Promise<void> };
+
+const NativeRepCounter: React.ComponentType<RepCounterViewProps & { ref?: React.Ref<unknown> }> | null =
+  Platform.OS === "android" ? (() => { try { return requireNativeViewManager<RepCounterViewProps>("KeptGesture"); } catch { return null; } })() : null;
+
+/** View functions (finish/reset) are attached to the native component's prototype, so they are reachable through the ref. */
+export const RepCounterView = React.forwardRef<RepCounterViewRef, RepCounterViewProps>(function RepCounterView(props, ref) {
+  return NativeRepCounter ? <NativeRepCounter {...props} ref={ref as React.Ref<unknown>} /> : <View {...props} />;
+});
+
+// usage (screen): request permission with expo-camera's useCameraPermissions() first; never mount <CameraView> at the same time.
+// const ref = useRef<RepCounterViewRef>(null); const [reps, setReps] = useState(0);
+// <RepCounterView ref={ref} style={StyleSheet.absoluteFill} exercise="pushup" facing="front"
+//   onRep={e => setReps(e.nativeEvent.reps)} onError={e => console.warn(e.nativeEvent)} />
+// <Text style={styles.count}>{reps}</Text>
+// const session = await ref.current!.finish(); // -> backend / Keeper upload
+
+// jest.setup.js, inside jest.mock("kept-gesture", ...): add
+//   RepCounterView: require("react").forwardRef((p, _r) => require("react").createElement("View", p)),
