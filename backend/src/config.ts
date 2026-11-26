@@ -22,4 +22,8 @@ export const config = {
   visionModel: process.env.VISION_MODEL || "google/gemma-3-27b-it",
   /** Keep well under a 120 s demo day: upload + judge + record_checkin must all fit. */
   visionTimeoutMs: Number(process.env.VISION_TIMEOUT_MS) || 25_000,
+  /** The Keeper's voice (ElevenLabs): the API key, the designed voice (scripts/keeper_voice_design.ts) and the TTS model. */
+  elevenLabsApiKey: process.env.ELEVENLABS_API_KEY || "",
+  keeperVoiceId: process.env.KEEPER_VOICE_ID || "",
+  elevenTtsModel: process.env.ELEVEN_TTS_MODEL || "eleven_flash_v2_5",
 };

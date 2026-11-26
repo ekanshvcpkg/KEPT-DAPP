@@ -6,6 +6,7 @@ import { Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana
 import { createAssociatedTokenAccountInstruction, createTransferInstruction, getAssociatedTokenAddress, getMint } from "@solana/spl-token";
 import { prisma } from "../db.js";
 import { config } from "../config.js";
+import { keeperSpeech, MAX_LINE_CHARS, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
 import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
@@ -60,6 +61,23 @@ v4Router.post("/admin/run-jobs", requireAdmin, asyncRoute(async (_req, res) => r
 
 v4Router.use("/api", authenticate);
 
+
+/** The Keeper says a short line in its ElevenLabs voice (MP3). Signed-in only, capped per wallet per day, cached by line. */
+get("/api/keeper/say", async (req: AuthedRequest, res) => {
+  const text = typeof req.query.text === "string" ? req.query.text.trim() : "";
+  if (!text || text.length > MAX_LINE_CHARS) return res.status(400).json({ error: `Expected ?text= of 1 to ${MAX_LINE_CHARS} characters` });
+  if (!takeVoiceQuota(req.wallet, 120)) return res.status(429).json({ error: "The Keeper has said enough for today" });
+  try {
+    const { audio, cached } = await keeperSpeech(text);
+    res.setHeader("content-type", "audio/mpeg");
+    res.setHeader("cache-control", "private, max-age=86400");
+    res.setHeader("x-keeper-cached", cached ? "1" : "0");
+    return res.send(audio);
+  } catch (e) {
+    if (e instanceof VoiceUnavailableError) return res.status(503).json({ error: "voice_unavailable", detail: e.message });
+    throw e;
+  }
+});
 
 get("/api/me", async (req: AuthedRequest, res) => {
   const seat = await prisma.sessionSeat.findUnique({ where: { wallet: req.wallet } });

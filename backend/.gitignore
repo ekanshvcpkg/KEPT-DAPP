@@ -13,3 +13,4 @@ artifacts/
 *.aab
 build/
 .cxx/
+.keeper-voice/
