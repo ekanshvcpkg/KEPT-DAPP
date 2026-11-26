@@ -26,7 +26,7 @@ import { useIsDemo } from "@/state/mode";
 import { formatSol } from "@/lib/format";
 import { RowList } from "@/components/content/Rows";
 import { color } from "@/theme";
-import { useTxExplain } from "@/state/txExplain";
+import { signingScreenMounted, useTxExplain } from "@/state/txExplain";
 import { explainRows } from "@/features/keeper/explain";
 import { keeperSay } from "@/features/keeper/voice";
 
@@ -62,10 +62,7 @@ export function SigningScreen<T>({ title, sub, task, onDone, fail }: {
   const resolve = useCallback((r: { ok: true; value: T } | { ok: false; error: unknown }): SignOutcome =>
     (r.ok ? onDone(r.value) : failureOutcome(r.error, fail)), [onDone, fail]);
   // Register before the task runs, so signAndSend waits for "Open wallet to sign" (explain before sign).
-  useEffect(() => {
-    useTxExplain.setState((s) => ({ screens: s.screens + 1 }));
-    return () => { useTxExplain.getState().pending?.cancel(); useTxExplain.setState((s) => ({ screens: s.screens - 1 })); };
-  }, []);
+  useEffect(() => signingScreenMounted(), []);
   const state = useSigningFlow(task, resolve);
   const demo = useIsDemo();
   // Transient (flows.md): hardware back can't leave while the wallet is signing; the close button cancels.

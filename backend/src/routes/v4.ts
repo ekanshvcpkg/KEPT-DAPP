@@ -6,7 +6,7 @@ import { Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana
 import { createAssociatedTokenAccountInstruction, createTransferInstruction, getAssociatedTokenAddress, getMint } from "@solana/spl-token";
 import { prisma } from "../db.js";
 import { config } from "../config.js";
-import { keeperSpeech, MAX_LINE_CHARS, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
+import { cachedSpeech, keeperSpeech, MAX_LINE_CHARS, SIGN_LINE, takeGlobalVoiceBudget, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
 import { answerQuestion, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe, type AskContext } from "../v4/ask.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
@@ -67,12 +67,18 @@ v4Router.use("/api", authenticate);
 get("/api/keeper/say", async (req: AuthedRequest, res) => {
   const text = typeof req.query.text === "string" ? req.query.text.trim() : "";
   if (!text || text.length > MAX_LINE_CHARS) return res.status(400).json({ error: `Expected ?text= of 1 to ${MAX_LINE_CHARS} characters` });
+  // Lines the server already said (verdicts, Ask the Keeper answers) are served from the cache for free.
+  const cached = await cachedSpeech(text);
+  if (cached) { res.setHeader("content-type", "audio/mpeg"); res.setHeader("x-keeper-cached", "1"); return res.send(cached); }
+  // New speech only for the explain-before-sign sentence, within the wallet's and the global daily budget.
+  if (!SIGN_LINE.test(text)) return res.status(400).json({ error: "The Keeper only says its own lines" });
   if (!takeVoiceQuota(req.wallet, 120)) return res.status(429).json({ error: "The Keeper has said enough for today" });
+  if (!takeGlobalVoiceBudget(text.length)) return res.status(503).json({ error: "voice_unavailable", detail: "The Keeper's voice budget for today is spent" });
   try {
-    const { audio, cached } = await keeperSpeech(text);
+    const { audio } = await keeperSpeech(text);
     res.setHeader("content-type", "audio/mpeg");
     res.setHeader("cache-control", "private, max-age=86400");
-    res.setHeader("x-keeper-cached", cached ? "1" : "0");
+    res.setHeader("x-keeper-cached", "0");
     return res.send(audio);
   } catch (e) {
     if (e instanceof VoiceUnavailableError) return res.status(503).json({ error: "voice_unavailable", detail: e.message });
@@ -128,6 +134,7 @@ post("/api/keeper/ask", async (req: AuthedRequest, res) => {
     if (!question) return res.status(422).json({ error: "The Keeper couldn't hear a question", heard: "" });
     const answer = await answerQuestion(question, await askContext(req.wallet));
     // Say it now, so the app's GET /api/keeper/say for this exact answer is served from the cache (no second charge).
+    if (!takeGlobalVoiceBudget(answer.length)) return res.status(503).json({ error: "keeper_unavailable", detail: "The Keeper's voice budget for today is spent" });
     await keeperSpeech(answer);
     return res.json({ question, answer });
   } catch (e) {

@@ -5,7 +5,8 @@ import { config } from "../config.js";
 import { ELEVEN_API, VoiceUnavailableError } from "./voice.js";
 
 export const MAX_QUESTION_AUDIO_BYTES = 2 * 1024 * 1024;
-export const MAX_ANSWER_CHARS = 260;
+/** Same limit as GET /api/keeper/say and the app (MAX_LINE_CHARS), so the spoken answer is never cut or re-billed. */
+export const MAX_ANSWER_CHARS = 220;
 
 /** The asker's world, as the Keeper may describe it. Built by the route from chain reads and the receipts table. */
 export type AskContext = {
@@ -30,7 +31,7 @@ export async function transcribe(audio: Buffer, mime: string, fetchImpl: typeof 
 const SYSTEM = [
   "You are the Keeper of KEPT: an old reaper, half prison warden, half bookmaker. Dry, wry, theatrical, never cruel.",
   "KEPT: friends stake SOL on a daily habit (an Oath), share one HP bar, prove each day with a photo you judge; misses pay the keepers.",
-  "Answer the user's question in at most two short spoken sentences (under 45 words), in character.",
+  "Answer the user's question in at most two short spoken sentences (under 35 words, under 200 characters), in character.",
   "Use ONLY the facts in the JSON context. If the answer isn't there, say you don't know. Never invent numbers, names or dates.",
   "oaths[0] is the user's most recent Oath: when they say 'my Oath' or 'my last Oath', talk about that one only, by name, with its own numbers. Never add up or average numbers across different Oaths unless asked about all of them.",
   "Plain spoken text only: no markdown, no asterisks, no emoji. Say SOL amounts with at most 4 decimals.",

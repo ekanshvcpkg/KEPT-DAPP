@@ -10,6 +10,7 @@ import { combinedHabitsHash, habitChallengeKey } from "../v4/habits.js";
 import { config } from "../config.js";
 import { keypairFromEnv } from "../solana.js";
 import { CheckUnavailableError } from "../v4/verdict.js";
+import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
 
 export const proofVerifyRouter = Router();
@@ -101,6 +102,10 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     gestureMatches: verdict.gestureMatches, looksLikeScreen: verdict.looksLikeScreenOrPrintout, reason: verdict.reason,
     receipt, receiptHash: hash, model: judged.model,
   } });
+  // The Keeper's spoken verdict, said now so the app's /api/keeper/say for it is a cache hit. The text must match the
+  // app's copy exactly (frontend/src/copy/additions.json › keeper.sayKept / sayFailed). Best effort, in the background.
+  const verdictLine = `${pass ? "Kept." : "Not kept."} ${verdict.reason}`.slice(0, MAX_LINE_CHARS);
+  if (config.elevenLabsApiKey && config.keeperVoiceId && takeGlobalVoiceBudget(verdictLine.length)) void keeperSpeech(verdictLine).catch(() => undefined);
   // A failed verdict is published too: the verifier wallet writes the receipt hash in an SPL Memo (in the background).
   if (!pass && config.verifierSecretKey) {
     void sendFailMemo(keypairFromEnv(config.verifierSecretKey), hash)

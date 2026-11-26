@@ -14,7 +14,7 @@ import { classifyTxError } from "./classify";
 import { connection } from "./connection";
 import { signatureFromSigned } from "./signature";
 import { decodeInstructions } from "@kept/chain";
-import { awaitTxConfirmation, useTxExplain } from "@/state/txExplain";
+import { awaitTxConfirmation, beginTx, endTx, showTx } from "@/state/txExplain";
 import type { WalletSession } from "./types";
 
 const STORAGE_KEY = "kept.mwa";
@@ -115,6 +115,7 @@ export const mwaWallet: WalletSession = {
  * the real TxService in Phase 3.
  */
 export async function signAndSend(payer: PublicKey, ixs: TransactionInstruction[]): Promise<string> {
+  const { id, epoch } = beginTx();
   try {
     const c = connection();
     const { blockhash, lastValidBlockHeight } = await c.getLatestBlockhash("confirmed");
@@ -127,11 +128,11 @@ export async function signAndSend(payer: PublicKey, ixs: TransactionInstruction[
     ]);
     if (sim.value.err) throw new Error(`Simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).join("\n")}`);
     const after = sim.value.accounts?.[0]?.lamports;
-    useTxExplain.getState().set({
+    showTx(id, {
       instructions: decodeInstructions(ixs, new PublicKey(env.programId)),
       walletChange: after !== undefined && before !== null ? BigInt(after) - BigInt(before) : null,
     });
-    await awaitTxConfirmation(); // the signing screen shows the explanation; the wallet opens on "Open wallet to sign"
+    await awaitTxConfirmation(id, epoch); // the signing screen shows the explanation; the wallet opens on "Open wallet to sign"
     const minContextSlot = await c.getSlot("confirmed");
     const latest = await c.getLatestBlockhash("confirmed");
     tx.recentBlockhash = latest.blockhash;
@@ -170,6 +171,6 @@ export async function signAndSend(payer: PublicKey, ixs: TransactionInstruction[
   } catch (e) {
     throw classifyTxError(e);
   } finally {
-    useTxExplain.getState().set(null);
+    endTx(id);
   }
 }
