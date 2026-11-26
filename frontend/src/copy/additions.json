@@ -163,7 +163,7 @@
     "slipped": "{names} missed some days. Their lost {asset} went to everyone who kept.",
     "down": "Down {amount}",
     "settlingTitle": "The last day is over.",
-    "settlingSub": "The pot settles at midnight. Results show here once it does.",
+    "settlingSub": "It settles automatically shortly after the last day ends, or settle it now. Results show here once it does.",
     "settleNow": "Settle now",
     "startsIn": "Day 1 starts in {time}",
     "gestureClosedFist": "closed fist",
