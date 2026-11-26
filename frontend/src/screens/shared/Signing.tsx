@@ -1,6 +1,6 @@
 // Shared wallet-signing pieces: the transient signing screen (C7, D1·go, D1·xs, E2·s, J1·p) and the
 // outcome screens every signature can land on (C7·no, C7·fail, M3, M4), per flows.md.
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { BackHandler, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +24,10 @@ import type { SignOutcome } from "@/app/useSigningFlow";
 import { skrWhole } from "@/features/oaths/present";
 import { useIsDemo } from "@/state/mode";
 import { formatSol } from "@/lib/format";
+import { RowList } from "@/components/content/Rows";
+import { color } from "@/theme";
+import { useTxExplain } from "@/state/txExplain";
+import { explainRows } from "@/features/keeper/explain";
 
 /** Where a failed signature goes. `retry` re-runs the same signing screen with the same params. */
 interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
@@ -56,6 +60,11 @@ export function SigningScreen<T>({ title, sub, task, onDone, fail }: {
   const { back } = useGo();
   const resolve = useCallback((r: { ok: true; value: T } | { ok: false; error: unknown }): SignOutcome =>
     (r.ok ? onDone(r.value) : failureOutcome(r.error, fail)), [onDone, fail]);
+  // Register before the task runs, so signAndSend waits for "Open wallet to sign" (explain before sign).
+  useEffect(() => {
+    useTxExplain.setState((s) => ({ screens: s.screens + 1 }));
+    return () => { useTxExplain.getState().pending?.cancel(); useTxExplain.setState((s) => ({ screens: s.screens - 1 })); };
+  }, []);
   const state = useSigningFlow(task, resolve);
   const demo = useIsDemo();
   // Transient (flows.md): hardware back can't leave while the wallet is signing; the close button cancels.
@@ -71,7 +80,25 @@ export function SigningScreen<T>({ title, sub, task, onDone, fail }: {
       <Title heading={title} sub={sub} align="center" />
       {/* Demo has no wallet: the mock approves, and the screen says so. */}
       {demo ? <Note text={t("additions.mode.simulated")} icon="information-outline" /> : <Note text={t("screens.C7.b3.text")} icon="timer-sand" />}
+      {pending && !demo ? <TxExplainer /> : null}
     </Screen>
+  );
+}
+
+/** Explain before sign: what the transaction in the wallet does, decoded and simulated before the wallet opened. */
+function TxExplainer() {
+  const e = useTxExplain((s) => s.current);
+  const pending = useTxExplain((s) => s.pending);
+  if (!e) return null;
+  return (
+    <>
+    <RowList label={t("additions.keeper.explainTitle")} rows={explainRows(e).map((r) => ({
+      title: r.title, ...(r.sub ? { sub: r.sub } : {}), ...(r.value ? { value: r.value } : {}),
+      leading: { kind: "icon" as const, icon: r.warn ? "alert-circle-outline" as const : "shield-check-outline" as const, ...(r.warn ? { fg: color.red.base } : {}) },
+      ...(r.warn ? { titleColor: color.red.base } : {}),
+    }))} />
+    {pending ? <Button kind="p" label={t("additions.keeper.explainSign")} onPress={pending.approve} /> : null}
+    </>
   );
 }
 

@@ -62,17 +62,30 @@ describe("Live sign-in", () => {
     expect(useSession.getState()).toMatchObject({ token: `fake.${wallet.address}`, wallet: wallet.address, genesis: true });
   });
 
-  it("asks the wallet with the cluster and the app identity, and reuses its auth token for the signature", async () => {
+  it("asks the wallet with the cluster and the app identity, and reuses its auth token for the signature once the identity is verified", async () => {
+    const identity = env.identity as { verified: boolean };
+    identity.verified = true;
+    try {
+      const wallet = fakeWallet();
+      installFakeWallet(wallet);
+      restoreFetch = installFakeBackend(fakeBackend());
+
+      await signIn(getApi(), getWallet());
+
+      expect(wallet.authorize).toHaveBeenCalledTimes(2); // connect, then the signing session
+      expect(wallet.authorize.mock.calls[0]![0]).toEqual({ chain: walletChain, identity: { name: env.identity.name, uri: env.identity.uri } });
+      expect(wallet.authorize.mock.calls[1]![0]).toMatchObject({ auth_token: "fake-auth-token" });
+      expect(env.identity.uri).toBe("https://keptdapp.vercel.app");
+    } finally { identity.verified = false; }
+  });
+
+  it("with an unverified identity (Phantom declines reauthorize), the signing session asks afresh instead of sending the token", async () => {
     const wallet = fakeWallet();
     installFakeWallet(wallet);
     restoreFetch = installFakeBackend(fakeBackend());
-
     await signIn(getApi(), getWallet());
-
-    expect(wallet.authorize).toHaveBeenCalledTimes(2); // connect, then the signing session
-    expect(wallet.authorize.mock.calls[0]![0]).toEqual({ chain: walletChain, identity: { name: env.identity.name, uri: env.identity.uri } });
-    expect(wallet.authorize.mock.calls[1]![0]).toMatchObject({ auth_token: "fake-auth-token" });
-    expect(env.identity.uri).toBe("https://keptdapp.vercel.app");
+    expect(wallet.authorize).toHaveBeenCalledTimes(2);
+    expect(wallet.authorize.mock.calls[1]![0]).not.toHaveProperty("auth_token");
   });
 
   it("is still a successful sign-in without a Genesis Token (A3·no)", async () => {

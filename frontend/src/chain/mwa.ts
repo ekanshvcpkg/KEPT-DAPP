@@ -13,6 +13,8 @@ import { env, walletChain } from "@/config/env";
 import { classifyTxError } from "./classify";
 import { connection } from "./connection";
 import { signatureFromSigned } from "./signature";
+import { decodeInstructions } from "@kept/chain";
+import { awaitTxConfirmation, useTxExplain } from "@/state/txExplain";
 import type { WalletSession } from "./types";
 
 const STORAGE_KEY = "kept.mwa";
@@ -54,10 +56,10 @@ async function save(next: Saved | null): Promise<void> {
  * `delegate_permission/common.get_login_creds` relation in its assetlinks.json (keptdapp.vercel.app has only
  * handle_all_urls), so every wallet step asks for a fresh Connect until that relation is added.
  */
-const REAUTHORIZE = env.identity.verified;
+const reauthorizeAllowed = (): boolean => env.identity.verified;
 
 async function authorize(wallet: Web3MobileWallet): Promise<PublicKey> {
-  const prev = REAUTHORIZE ? await load() : null;
+  const prev = reauthorizeAllowed() ? await load() : null;
   let auth;
   if (prev) {
     try {
@@ -117,8 +119,19 @@ export async function signAndSend(payer: PublicKey, ixs: TransactionInstruction[
     const c = connection();
     const { blockhash, lastValidBlockHeight } = await c.getLatestBlockhash("confirmed");
     const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(...ixs);
-    const sim = await c.simulateTransaction(tx);
+    // Simulate with the payer's account returned, so the signing screen can say exactly how much SOL leaves the wallet.
+    // The simulated balance already has the network fee taken off (checked on Devnet), so it is the full change.
+    const [sim, before] = await Promise.all([
+      c.simulateTransaction(tx, undefined, [payer]),
+      c.getBalance(payer, "confirmed").catch(() => null),
+    ]);
     if (sim.value.err) throw new Error(`Simulation failed: ${JSON.stringify(sim.value.err)}\n${(sim.value.logs ?? []).join("\n")}`);
+    const after = sim.value.accounts?.[0]?.lamports;
+    useTxExplain.getState().set({
+      instructions: decodeInstructions(ixs, new PublicKey(env.programId)),
+      walletChange: after !== undefined && before !== null ? BigInt(after) - BigInt(before) : null,
+    });
+    await awaitTxConfirmation(); // the signing screen shows the explanation; the wallet opens on "Open wallet to sign"
     const minContextSlot = await c.getSlot("confirmed");
     const latest = await c.getLatestBlockhash("confirmed");
     tx.recentBlockhash = latest.blockhash;
@@ -156,5 +169,7 @@ export async function signAndSend(payer: PublicKey, ixs: TransactionInstruction[
     throw new Error(`Transaction ${signature} confirmation timed out after 45s`);
   } catch (e) {
     throw classifyTxError(e);
+  } finally {
+    useTxExplain.getState().set(null);
   }
 }

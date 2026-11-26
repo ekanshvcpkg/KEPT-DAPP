@@ -541,6 +541,24 @@
     "receiptRow": "Receipt {n}",
     "receiptSub": "{model} · slot {slot}",
     "explorer": "View the check-in on Explorer",
-    "dayClosing": "Today closes in under 30 seconds: too late for a photo to be checked in time."
+    "dayClosing": "Today closes in under 30 seconds: too late for a photo to be checked in time.",
+    "explainTitle": "The Keeper read this transaction",
+    "explainCreate": "Stake {amount} SOL in a new Oath ({kind})",
+    "explainCreateSub": "{days} days · {len} each · Oath {oath}",
+    "explainJoin": "Join Oath {oath} and stake its amount",
+    "explainStart": "Start Oath {oath}",
+    "explainCancel": "Cancel Oath {oath}: every stake is refunded",
+    "explainSettle": "Settle Oath {oath} by the rules",
+    "explainClaim": "Claim your payout from Oath {oath}",
+    "explainOther": "{name} on Oath {oath}",
+    "explainUnknown": "Not a KEPT instruction",
+    "explainUnknownSub": "Program {program}: check it before you sign",
+    "explainWallet": "Your wallet",
+    "explainWalletSub": "If it lands: stake, account rent and network fee",
+    "kindSolo": "solo",
+    "kindGroup": "with friends",
+    "dayLen24h": "24 h",
+    "dayLenMin": "{n} min",
+    "explainSign": "Open wallet to sign"
   }
 }

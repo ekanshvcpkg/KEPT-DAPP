@@ -12,9 +12,13 @@ function fakeWallet() {
   (transact as jest.Mock).mockImplementation(async (fn: (w: unknown) => Promise<unknown>) => fn({ authorize }));
   return authorize;
 }
-function freshModule() {
+/** `verified`: the identity site grants get_login_creds, so the wallet allows silent re-authorization (env.identity.verified). */
+function freshModule(verified = true) {
   let m!: typeof import("@/chain/mwa");
-  jest.isolateModules(() => { m = require("@/chain/mwa") as typeof import("@/chain/mwa"); });
+  jest.isolateModules(() => {
+    (require("@/config/env") as { env: { identity: { verified: boolean } } }).env.identity.verified = verified;
+    m = require("@/chain/mwa") as typeof import("@/chain/mwa");
+  });
   return m.mwaWallet;
 }
 
@@ -25,6 +29,14 @@ beforeEach(async () => {
 });
 
 describe("MWA auth_token storage", () => {
+  it("with an unverified identity, never sends the saved token (Phantom declines reauthorize) and asks afresh", async () => {
+    secure.set("kept.mwa", JSON.stringify({ authToken: "old-token", address: "x" }));
+    const authorize = fakeWallet();
+    await freshModule(false).connect();
+    expect(authorize).toHaveBeenCalledTimes(1);
+    expect(authorize.mock.calls[0]![0].auth_token).toBeUndefined();
+  });
+
   it("is saved in the secure store, not AsyncStorage", async () => {
     fakeWallet();
     await freshModule().connect();

@@ -36,3 +36,18 @@ test("reads CheckinRecorded from a real Devnet record_checkin transaction's logs
     proofHash: "31c78e2c919a97d6e03ab5fe89f0b021ac771488c226cc24fbfb3018b55043ac",
   }]);
 });
+
+test("explain before sign: KEPT instructions decode to their name, args and Oath; others are flagged", async () => {
+  const { PublicKey, SystemProgram } = await import("@solana/web3.js");
+  const { createOathSolIx, claimSolIx, decodeInstructions } = await import("./index");
+  const programId = new PublicKey("7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj");
+  const creator = new PublicKey("EnD2dXFruNSTBTrZsmVT2wtDuewATAvo2hfoNqwun6hg");
+  const env = { programId, stakeMint: creator, treasury: creator, treasuryAuthority: creator, tokenProgram: creator };
+  const { ix, oath } = createOathSolIx(env, { creator, oathId: 7n, goalText: "read", objectId: 1, numDays: 3, daySeconds: 120, tzOffsetMinutes: 0, stake: 70_288_887n, isSolo: true });
+  const d = decodeInstructions([ix, claimSolIx(env, { oath, member: creator }), SystemProgram.transfer({ fromPubkey: creator, toPubkey: oath, lamports: 1 })], programId);
+  assert.equal(d.length, 3);
+  assert.deepEqual(d[0] && d[0].known && { name: d[0].name, stake: d[0].args.stake_amount, days: d[0].args.num_days, solo: d[0].args.is_solo, oath: d[0].oath },
+    { name: "create_oath_sol", stake: "70288887", days: 3, solo: true, oath: oath.toBase58() });
+  assert.deepEqual(d[1] && d[1].known && { name: d[1].name, oath: d[1].oath }, { name: "claim_sol", oath: oath.toBase58() });
+  assert.deepEqual(d[2], { known: false, program: "11111111111111111111111111111111" });
+});
