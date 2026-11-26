@@ -19,4 +19,11 @@ dependencies {
   implementation project(':expo-modules-core')
   implementation 'com.google.mediapipe:tasks-vision:0.10.35'
   implementation 'com.google.ai.edge.litertlm:litertlm-android:0.13.1'
+  // Live rep counter (RepCounterView). The same CameraX expo-camera 57.0.6 uses; its dependencies are `implementation`,
+  // so they are not on this module's classpath unless declared here too.
+  def camerax_version = "1.6.0"
+  implementation "androidx.camera:camera-core:${camerax_version}"
+  implementation "androidx.camera:camera-camera2:${camerax_version}"
+  implementation "androidx.camera:camera-lifecycle:${camerax_version}"
+  implementation "androidx.camera:camera-view:${camerax_version}"
 }

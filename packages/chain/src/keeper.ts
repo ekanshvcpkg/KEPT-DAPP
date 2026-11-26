@@ -14,6 +14,9 @@ export function canonicalJson(value: unknown): string {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
 }
 
+/** SHA-256 (hex) of UTF-8 text, e.g. a receipt file downloaded from the public bucket (its bytes are canonical JSON). */
+export const sha256HexOfText = (text: string): string => bytesToHex(sha256(utf8ToBytes(text)));
+
 /** SHA-256 (hex) of a receipt's canonical JSON: the hash the Keeper publishes. */
 export const receiptHashOf = (receipt: unknown): string => bytesToHex(sha256(utf8ToBytes(canonicalJson(receipt))));
 

@@ -580,5 +580,27 @@
     "askMicDenied": "The Keeper needs the microphone to hear you. Allow it in Settings.",
     "askNotHeard": "The Keeper didn't catch that. Hold the button and speak.",
     "askFailed": "The Keeper can't answer right now. Try again."
+  },
+  "reps": {
+    "$source": "hackathon 2026-11-26: live rep counter (docs/notes/REP_COUNTER_CONTRACT.md)",
+    "pushups": "push-ups",
+    "squats": "squats",
+    "frameHint": "Side-on, whole body in frame, phone on the floor about 2 m away",
+    "start": "Start: {target} {label}",
+    "ofTarget": "of {target} {label}",
+    "freeze": "Freeze! {gesture}",
+    "halfRep": "Not deep enough: that one didn't count",
+    "lost": "The Keeper can't see you: get back in frame",
+    "formHint": "Keep your form: that rep didn't count",
+    "cameraError": "The camera couldn't start",
+    "stop": "Stop the set",
+    "keepStill": "Keep the phone still during the set: start again",
+    "level": "Set the phone straight: level with the floor",
+    "holdTop": "Hold the top for a moment: the Keeper lost a beat"
+  },
+  "live": {
+    "$source": "hackathon 2026-11-26: live Oath updates over Supabase Realtime (features/oaths/realtime.ts)",
+    "teammateProved": "{name} just proved today",
+    "teammateKept": "{name}'s day is on Solana"
   }
 }

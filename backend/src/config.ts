@@ -29,4 +29,8 @@ export const config = {
   elevenSttModel: process.env.ELEVEN_STT_MODEL || "scribe_v3",
   /** Text model for "Ask the Keeper" answers (same OpenAI-compatible endpoint and key as the vision judge). */
   askModel: process.env.ASK_MODEL || process.env.VISION_MODEL || "google/gemma-3-27b-it",
+  /** Supabase Storage: public copies of the Keeper's receipts (bucket keeper-receipts). Optional. */
+  supabaseUrl: process.env.SUPABASE_URL || "",
+  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",
+  receiptsBucket: process.env.SUPABASE_RECEIPTS_BUCKET || "keeper-receipts",
 };

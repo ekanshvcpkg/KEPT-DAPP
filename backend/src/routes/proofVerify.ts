@@ -11,6 +11,9 @@ import { config } from "../config.js";
 import { keypairFromEnv } from "../solana.js";
 import { CheckUnavailableError } from "../v4/verdict.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
+import { parseRepHabit } from "../shared/reps.js";
+import { publicReceiptUrl, publishReceipt } from "../v4/receiptStore.js";
+import { checkRepEvidence, REP_FREEZE_OBJECT, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
 
 export const proofVerifyRouter = Router();
@@ -48,12 +51,21 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
 
   // A photo of a habit answers one challenge: the current one for that habit, and the gesture it names (not a gesture
   // the app picks). Checks sent without a habit (the legacy two-photo and Bounty flows) are bound when they are claimed.
+  // A rep habit ("20 push-ups") is proven by a live set, which may take up to REP_SET_MAX_MS after its challenge.
+  const rep = habit !== undefined ? parseRepHabit(expectedObject) : null;
   const challenge = habit !== undefined
-    ? await currentChallenge(habitChallengeKey(oath, habit), req.wallet, dayIndex, null, CHALLENGE_UPLOAD_GRACE_MS)
+    ? await currentChallenge(habitChallengeKey(oath, habit), req.wallet, dayIndex, null, CHALLENGE_UPLOAD_GRACE_MS + (rep ? REP_SET_MAX_MS : 0))
     : withContext ? await latestChallenge(oath, req.wallet, dayIndex) : null;
   if (habit !== undefined) {
     if (!challenge) return res.status(409).json({ error: "Gesture challenge expired; a new one is needed", challengeExpired: true });
     if (expectedGesture !== GESTURE_TEXT[challenge.gesture as ChallengeGesture]) return res.status(400).json({ error: "expectedGesture must be the current challenge's gesture" });
+  }
+
+  let repReceipt: RepReceipt | undefined;
+  if (rep) {
+    const checked = checkRepEvidence(req.body?.reps, rep, challenge!, image.bytes);
+    if ("error" in checked) return res.status(422).json({ error: checked.error, reps: true });
+    repReceipt = checked.receipt;
   }
 
   // The same photo (exact bytes, any wallet) can pass only once. The one exception is retrying the very same check
@@ -79,7 +91,8 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   const started = Date.now();
   let judged: Awaited<ReturnType<typeof keeper.judge>>;
   try {
-    judged = await keeper.judge(image, { object: expectedObject, gesture: expectedGesture });
+    // For a rep set the photo is the freeze frame: a person mid-workout, holding the challenge gesture.
+    judged = await keeper.judge(image, { object: rep ? REP_FREEZE_OBJECT : expectedObject, gesture: expectedGesture });
   } catch (e) {
     // The model answered but unusably: it was a paid call, so it counts toward the daily limit (not as a failed try).
     // No answer at all (down, timed out): it does not count.
@@ -94,7 +107,7 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     v: RECEIPT_VERSION, kind: "oath", wallet: req.wallet, target: withContext ? oath : null, dayIndex: withContext ? dayIndex : null, habit: habit ?? null,
     photoSha256: photoHash, expected: { object: expectedObject, gesture: expectedGesture },
     challenge: { gesture: challenge?.gesture ?? null, slot: challenge?.slot ?? null, blockhash: challenge?.blockhash ?? null, issuedAt: challenge?.issuedAt.toISOString() ?? null },
-    model: judged.model, verdict, pass, checkedAt: new Date().toISOString(),
+    model: judged.model, ...(repReceipt ? { reps: repReceipt } : {}), verdict, pass, checkedAt: new Date().toISOString(),
   };
   const hash = receiptHash(receipt);
   await prisma.proofVerification.update({ where: { id: row.id }, data: {
@@ -102,6 +115,8 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
     gestureMatches: verdict.gestureMatches, looksLikeScreen: verdict.looksLikeScreenOrPrintout, reason: verdict.reason,
     receipt, receiptHash: hash, model: judged.model,
   } });
+  // A public copy of the receipt on Supabase Storage (its bytes hash to the on-chain hash). In the background.
+  void publishReceipt(hash, receipt).catch(() => undefined);
   // The Keeper's spoken verdict, said now so the app's /api/keeper/say for it is a cache hit. The text must match the
   // app's copy exactly (frontend/src/copy/additions.json › keeper.sayKept / sayFailed). Best effort, in the background.
   const verdictLine = `${pass ? "Kept." : "Not kept."} ${verdict.reason}`.slice(0, MAX_LINE_CHARS);
@@ -126,7 +141,7 @@ proofVerifyRouter.get("/keeper/receipts/:hash", asyncRoute(async (req, res) => {
   if (!HASH.test(hash)) return res.status(400).json({ error: "Expected a 64-character hex hash" });
   const row = await prisma.proofVerification.findUnique({ where: { receiptHash: hash } });
   if (!row?.receipt) return res.status(404).json({ error: "Receipt not found" });
-  return res.json({ receipt: row.receipt, receiptHash: hash, memoSignature: row.memoSignature ?? null });
+  return res.json({ receipt: row.receipt, receiptHash: hash, memoSignature: row.memoSignature ?? null, publicUrl: publicReceiptUrl(hash) });
 }));
 
 /**

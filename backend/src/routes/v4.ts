@@ -7,6 +7,9 @@ import { createAssociatedTokenAccountInstruction, createTransferInstruction, get
 import { prisma } from "../db.js";
 import { config } from "../config.js";
 import { cachedSpeech, keeperSpeech, MAX_LINE_CHARS, SIGN_LINE, takeGlobalVoiceBudget, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
+import { parseRepHabit } from "../shared/reps.js";
+import { REP_SET_MAX_MS } from "../v4/repProof.js";
+import { broadcastOathChanged } from "../v4/realtime.js";
 import { answerQuestion, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe, type AskContext } from "../v4/ask.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
@@ -300,7 +303,10 @@ post("/api/proof/challenge", async (req: AuthedRequest, res) => {
     if (bad) return res.status(bad.status).json({ error: bad.error, done });
     const habit = req.body.habit as number;
     const challenge = await issueChallenge(habitChallengeKey(oath, habit), req.wallet, day);
-    return res.json({ phase: "habit", habit, object: texts[habit], ...challengeJson(challenge), done, habits: texts.length });
+    const json = challengeJson(challenge);
+    // A live rep set ("20 push-ups") gets the set's time on top of the photo window.
+    if (parseRepHabit(texts[habit] ?? "")) json.expiresAt = new Date(new Date(json.expiresAt).getTime() + REP_SET_MAX_MS).toISOString();
+    return res.json({ phase: "habit", habit, object: texts[habit], ...json, done, habits: texts.length });
   }
   return res.json(await dayChallenge(oath, req.wallet, day));
 });
@@ -325,7 +331,7 @@ post("/api/proof/habit", async (req: AuthedRequest, res) => {
   const bad = habitRejection({ habit, count: texts.length, done: doneRows.map((r) => r.habit) });
   if (bad) return res.status(bad.status).json({ error: bad.error });
   const h = habit as number;
-  const challenge = await currentChallenge(habitChallengeKey(oath, h), req.wallet, day, null, CHALLENGE_UPLOAD_GRACE_MS);
+  const challenge = await currentChallenge(habitChallengeKey(oath, h), req.wallet, day, null, CHALLENGE_UPLOAD_GRACE_MS + (parseRepHabit(texts[h] ?? "") ? REP_SET_MAX_MS : 0));
   if (!challenge) return res.status(409).json({ error: "Gesture challenge expired; a new one is needed", challengeExpired: true });
   const expected = { object: texts[h]!, gesture: GESTURE_TEXT[challenge.gesture as ChallengeGesture] };
   const check = await claimVerification(verificationId, req.wallet, expected);
@@ -339,6 +345,7 @@ post("/api/proof/habit", async (req: AuthedRequest, res) => {
   try {
     // The Keeper receipt hash (not the bare photo hash) is what is combined and recorded on chain, so the day can be audited.
     await prisma.habitProof.create({ data: { oath, wallet: req.wallet, dayIndex: day, habit: h, proofHash: v.receiptHash ?? v.proofHash, verificationId: v.id, object: expected.object } });
+    void broadcastOathChanged(oath, "proof", req.wallet);
   } catch {
     await releaseVerification(v.id);
     return res.status(409).json({ error: "That habit is already proven today" });
@@ -932,5 +939,6 @@ async function recordCheckin(verifier: Keypair, oath: PublicKey, member: PublicK
   await onSubmitted(sig);
   const confirmation = await connection.confirmTransaction(sig, "confirmed");
   if (confirmation.value.err) throw new Error(`Verifier check-in failed: ${JSON.stringify(confirmation.value.err)}`);
+  void broadcastOathChanged(oath.toBase58(), "checkin", member.toBase58());
   return sig;
 }

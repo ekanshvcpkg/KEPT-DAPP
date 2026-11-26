@@ -62,7 +62,7 @@
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
             "useLegacyPackaging": true,
-            "extraProguardRules": "# Mobile Wallet Adapter: kept whole, its wallet round trip can only be tested on a phone.\n-keep class com.solana.** { *; }\n-keep class com.solanamobile.** { *; }"
+            "extraProguardRules": "# Mobile Wallet Adapter: kept whole, its wallet round trip can only be tested on a phone.\n-keep class com.solana.** { *; }\n-keep class com.solanamobile.** { *; }\n# MediaPipe tasks (rep counter pose landmarker): its JNI layer looks up Java classes and protobuf fields by name.\n-keep class com.google.mediapipe.** { *; }\n-keep class com.google.protobuf.** { *; }\n-dontwarn com.google.mediapipe.**\n-dontwarn com.google.protobuf.**"
           }
         }
       ],

@@ -162,7 +162,7 @@ export function httpProof(c: HttpClient): ProofApi {
       // read them as milliseconds (1970) and every challenge expired the moment it arrived (F2c).
       return { habit, dayIndex, object: r.object, gesture: GESTURE[r.gesture]!, expiresAt: r.expiresAt };
     },
-    submit: async (oath, challenge, image) => {
+    submit: async (oath, challenge, image, _imageUri, reps) => {
       if (oath.bountyId || !image) return { status: "unavailable" };
       const object = challenge.object;
       const gesture = GESTURE_TEXT[challenge.gesture];
@@ -171,6 +171,7 @@ export function httpProof(c: HttpClient): ProofApi {
       try {
         checked = await c.post("/proof/verify", {
           photo: image, expectedObject: object, expectedGesture: gesture, oath: oath.id, dayIndex: challenge.dayIndex, habit: challenge.habit,
+          ...(reps ? { reps } : {}),
         }, VerifyResponse);
       } catch (e) {
         // The Keeper could not judge (model down or slow): not the user's miss and not a counted try. They retry (F2b).

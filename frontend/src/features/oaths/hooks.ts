@@ -1,7 +1,7 @@
 // Oath queries and actions for screens. Lists and single Oaths come from the `oaths` API slice and are
 // turned into views with the engine; actions run the TxService for the Oath's source and then the
 // backend follow-ups, then refresh the queries.
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getApi, useApi } from "@/api";
 import { queryClient } from "@/api/queries";
@@ -16,6 +16,11 @@ import { habitProofTexts, habitsReady, programIdOf, savedHabits } from "./habits
 import { oathView } from "./model";
 import type { OathFacts, OathSource } from "./model";
 import { mockOaths } from "./mockStore";
+import { useToast } from "@/components/chrome";
+import { t } from "@/copy";
+import { useMode } from "@/state/mode";
+import { shortWallet } from "./names";
+import { firstToAnnounce, subscribeOath } from "./realtime";
 
 const oathKeys = {
   all: ["oaths"] as const,
@@ -35,6 +40,7 @@ export function useOathList() {
   const names = useDeviceOaths((s) => s.names);
   const avatar = useSession((s) => s.avatar);
   const views = useMemo(() => (q.data ?? []).map((f) => oathView(withName(f, names, { wallet, avatar }), now, wallet)), [q.data, now, wallet, names, avatar]);
+  useOathLive(q.data);
   return { ...q, views };
 }
 
@@ -47,7 +53,34 @@ export function useOath(id: string | undefined) {
   const names = useDeviceOaths((s) => s.names);
   const avatar = useSession((s) => s.avatar);
   const view = useMemo(() => (q.data ? oathView(withName(q.data, names, { wallet, avatar }), now, wallet) : null), [q.data, now, wallet, names, avatar]);
+  useOathLive(q.data ? [q.data] : undefined);
   return { ...q, view };
+}
+
+/**
+ * Live updates (Supabase Realtime, features/oaths/realtime.ts): when the backend says one of these Oaths changed, its
+ * queries refetch at once instead of on the 30 s poll, and a teammate's proof shows a toast. Live mode only.
+ */
+function useOathLive(oaths: readonly OathFacts[] | undefined) {
+  const live = useMode((s) => s.mode) === "live";
+  const wallet = useSession((s) => s.wallet);
+  const toast = useToast();
+  const latest = useRef({ oaths, wallet, toast });
+  useEffect(() => { latest.current = { oaths, wallet, toast }; });
+  const ids = live ? (oaths ?? []).filter((o) => o.source === "chain").map((o) => o.id).sort().join(",") : "";
+  useEffect(() => {
+    if (!ids) return;
+    const offs = ids.split(",").map((id) => subscribeOath(id, (e) => {
+      void queryClient.invalidateQueries({ queryKey: oathKeys.one(e.oath) });
+      void queryClient.invalidateQueries({ queryKey: ["oaths", "list"] });
+      const { oaths: now, wallet: me, toast: show } = latest.current;
+      if (!e.wallet || e.wallet === me || !firstToAnnounce(e, Date.now())) return;
+      const member = now?.find((o) => o.id === e.oath)?.members.find((m) => m.wallet === e.wallet);
+      const name = member?.name ?? shortWallet(e.wallet);
+      show(t(e.reason === "checkin" ? "additions.live.teammateKept" : "additions.live.teammateProved", { name }));
+    }));
+    return () => offs.forEach((off) => off());
+  }, [ids]);
 }
 
 /** Device-side facts: a local name (P1-7), and my avatar from this device (D-40) when the data has none. */

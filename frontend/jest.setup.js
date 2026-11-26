@@ -88,6 +88,13 @@ jest.mock("kept-gesture", () => {
     onDeviceModelProgress: jest.fn(() => () => {}),
     analyzeDevicePhoto: jest.fn(async (_uri, _object, gesture) => verdict.buildVerdict(
       { proofHash: "a".repeat(64), gestureSeen: "Thumb_Up", modelText: '{"objectPresent":true,"objectConfidence":0.9,"looksLikeScreenOrPrintout":false,"reason":"ok"}', model: "test", ms: 1 }, gesture)),
+    // The live rep counter camera: a plain View carrying its props (tests fire onPose/onReady/onError on it), and a ref
+    // whose capture() answers a fixed frame.
+    RepCounterView: require("react").forwardRef(function RepCounterView(props, ref) {
+      const React = require("react");
+      React.useImperativeHandle(ref, () => ({ capture: jest.fn(async () => ({ jpeg: "/9j/", sha256: "b".repeat(64), t: 0 })) }), []);
+      return React.createElement("View", { testID: "rep-counter", ...props });
+    }),
   };
 });
 

@@ -5,6 +5,8 @@ import type { DevicePhotoVerdict, RawDeviceAnalysis } from "./verdict";
 
 export { buildVerdict, canonicalGesture, gestureMatches, parseModelAnswer } from "./verdict";
 export type { DevicePhotoVerdict, ModelAnswer, RawDeviceAnalysis } from "./verdict";
+export { RepCounterView } from "./RepCounterView";
+export type { RepCapture, RepCounterErrorCode, RepCounterErrorEvent, RepCounterFacing, RepCounterHandle, RepCounterViewProps, RepPoseEvent } from "./RepCounterView";
 
 export const GEMMA_MODEL_BYTES = 2_588_147_712;
 export type DeviceModelsStatus = {

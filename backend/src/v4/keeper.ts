@@ -29,6 +29,8 @@ export type Receipt = {
   /** The challenge the photo answers: its gesture is derived from the Solana blockhash at `slot` when one is known. */
   challenge: { gesture: string | null; slot: number | null; blockhash: string | null; issuedAt: string | null };
   model: string;
+  /** A live rep set's recount and liveness (repProof.ts); absent for photo proofs, so their hashes are unchanged. */
+  reps?: import("./repProof.js").RepReceipt;
   verdict: PhotoVerdict;
   pass: boolean;
   checkedAt: string;

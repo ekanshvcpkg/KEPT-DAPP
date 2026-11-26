@@ -17,6 +17,10 @@ export const env = {
   /** Perf measurement only (scripts/perf.mts): every Keeper holds its still pose. */
   keeperStill: process.env.EXPO_PUBLIC_KEEPER_STILL === "1",
   /** MWA app identity shown by the wallet. The URI should serve /.well-known/assetlinks.json. */
+  /** Supabase project URL: the Keeper's receipts are public files there (bucket keeper-receipts); empty = backend only. */
+  supabaseUrl: (process.env.EXPO_PUBLIC_SUPABASE_URL || "").replace(/\/$/, ""),
+  /** Supabase publishable key (public by design): live Oath updates over Supabase Realtime. Empty = polling only. */
+  supabasePublishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "",
   identity: {
     name: process.env.EXPO_PUBLIC_APP_IDENTITY_NAME || "KEPT",
     uri: process.env.EXPO_PUBLIC_APP_IDENTITY_URI || "https://keptdapp.vercel.app",

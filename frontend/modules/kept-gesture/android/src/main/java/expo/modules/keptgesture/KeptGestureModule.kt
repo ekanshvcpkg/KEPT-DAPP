@@ -18,6 +18,7 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizer
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -106,6 +107,20 @@ class KeptGestureModule : Module() {
     AsyncFunction("analyze") { uri: String, expectedObject: String, expectedGesture: String ->
       check(isSupportedDevice()) { UNSUPPORTED_DEVICE }
       analyze(uri, expectedObject, expectedGesture)
+    }
+
+    // Live rep counter camera (docs/notes/REP_COUNTER_CONTRACT.md). Props are applied in a batch, then syncCamera()
+    // binds or unbinds once, so a facing change and an active change in the same render don't rebind twice.
+    View(RepCounterView::class) {
+      Events("onReady", "onPose", "onError")
+      Prop("active") { view, active: Boolean? -> view.active = active ?: false }
+      Prop("facing") { view, facing: String? -> view.facing = if (facing == "back") "back" else "front" }
+      Prop("sampleIntervalMs") { view, ms: Double? ->
+        view.sampleIntervalMs = (ms?.toLong() ?: DEFAULT_SAMPLE_INTERVAL_MS).coerceIn(20L, 1000L)
+      }
+      OnViewDidUpdateProps { view -> view.syncCamera() }
+      OnViewDestroys { view -> view.release() }
+      AsyncFunction("capture") { view: RepCounterView, promise: Promise -> view.capture(promise) }
     }
   }
 

@@ -42,9 +42,10 @@ export const CATALOG: readonly CatalogEntry[] = [
 
   // ── live rep counts (the camera counts them on the phone; the Keeper checks the pose trace): the label is the proof
   //    text, "20 push-ups", which packages/engine/src/reps.ts › parseRepHabit turns into exercise + target ──
+  //    Each search word means one entry (plain "push ups" is the photo proof): the counts lead to their own set.
   ...[10, 20, 30, 50].flatMap((n) => [
-    e(`reps_pushups_${n}`, "strength", null, `${n} push ups`, `${n} pushups`, "push ups", "pushups", "push-ups", "press ups", "rep counter", "count reps", "workout", "calisthenics", "bodyweight"),
-    e(`reps_squats_${n}`, "strength", null, `${n} squats`, "squats", "squat", "bodyweight squats", "air squats", "rep counter", "count reps", "workout", "legs", "leg day"),
+    e(`reps_pushups_${n}`, "strength", null, `${n} push ups`, `${n} pushups`, ...(n === 20 ? ["rep counter", "count reps", "live push ups", "counted push ups"] : [])),
+    e(`reps_squats_${n}`, "strength", null, `${n} squats`, ...(n === 20 ? ["bodyweight squats", "air squats", "live squats", "counted squats", "leg day"] : [])),
   ]),
 
   // ── strength (not a dumbbell) ──

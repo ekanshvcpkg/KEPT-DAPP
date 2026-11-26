@@ -22,7 +22,9 @@ import { clock as hms } from "@/lib/format";
 import { useScreenFocused } from "@/lib/focus";
 import { color, metrics } from "@/theme";
 import { getApi, isApiError } from "@/api";
-import type { Challenge, ProofOutcome } from "@/api";
+import type { Challenge, ProofOutcome, RepEvidence } from "@/api";
+import { parseRepHabit } from "@kept/engine";
+import { RepSet } from "./RepSet";
 import { useGo, useParams } from "@/app/nav";
 import type { DesignId } from "@/app/routes";
 import { oathActions, refreshOaths, useOath } from "@/features/oaths/hooks";
@@ -42,8 +44,9 @@ const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (
 
 /** The proof in progress: today's challenge per habit and the last shot (kept for a retry on F2b). */
 type ProofFeedback = { objectPresent?: boolean; gestureMatches?: boolean };
-const useProof = create<{ challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null; set(p: Partial<{ challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null }>): void }>((set) => ({
-  challenges: {}, feedback: {}, image: null, imageUri: null, set: (p) => set(p),
+type ProofState = { challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null; reps: RepEvidence | null };
+const useProof = create<ProofState & { set(p: Partial<ProofState>): void }>((set) => ({
+  challenges: {}, feedback: {}, image: null, imageUri: null, reps: null, set: (p) => set(p),
 }));
 const key = (id: string, habit: number) => `${id}:${habit}`;
 /** Tests: seed a challenge as if it was issued earlier. */
@@ -170,6 +173,23 @@ function Shoot() {
   useEffect(() => { if (perm && !perm.granted) replace("F1·perm", { id, habit }); }, [perm, replace, id, habit]);
   useEffect(() => { if (c && c.expiresAt <= now) replace("F2c", { id, habit }); }, [c, now, replace, id, habit]);
   const left = c ? Math.max(0, c.expiresAt - now) : 0;
+  // A rep habit ("20 push-ups") is proven by a live counted set, not a photo. The photo camera is never mounted here,
+  // so expo-camera can't unbind the rep counter's camera.
+  const rep = h ? parseRepHabit(h.object) : null;
+  if (rep) {
+    return (
+      <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} scroll={false}>
+        {c && perm?.granted && focused ? (
+          <RepSet exercise={rep.exercise} target={rep.target} gesture={c.gesture} gestureLabel={gestureText(c.gesture)}
+            onDone={(evidence, freezeJpeg) => {
+              useProof.getState().set({ image: freezeJpeg, imageUri: null, reps: evidence });
+              go("F2", { id, habit });
+            }}
+            onAbort={() => close()} />
+        ) : null}
+      </Screen>
+    );
+  }
   const shoot = async () => {
     if (busy) return;
     setBusy(true);
@@ -178,7 +198,7 @@ function Shoot() {
       const shot = await captureShot(cam.current, mock ? DEMO_CAPTURE_TIMEOUT_MS : CAPTURE_TIMEOUT_MS);
       const image = photoToUse(shot?.base64 ?? null, mock);
       if (!image) { toast(t("additions.camera.failed")); return; }
-      useProof.getState().set({ image, imageUri: shot?.uri ?? null });
+      useProof.getState().set({ image, imageUri: shot?.uri ?? null, reps: null });
       go("F2", { id, habit });
     } finally {
       setBusy(false);
@@ -210,8 +230,8 @@ function Check() {
   useEffect(() => {
     if (!view || !c || started.current) return;
     started.current = true;
-    const { image, imageUri } = useProof.getState();
-    void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined).then(
+    const { image, imageUri, reps } = useProof.getState();
+    void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined, reps ?? undefined).then(
       (r) => {
         if (r.status === "fail") useProof.getState().set({ feedback: { ...useProof.getState().feedback, [key(id, habit)]: { objectPresent: r.objectPresent, gestureMatches: r.gestureMatches } } });
         // The Keeper says its verdict out loud (Live; ElevenLabs).

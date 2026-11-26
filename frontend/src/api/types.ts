@@ -125,10 +125,19 @@ export type ProofOutcome =
   | { status: "unavailable" }
   | { status: "expired" };
 
+/** A live rep set's evidence (screens/proof/RepSet.tsx): the backend recounts the trace with the same engine. */
+export type RepEvidence = {
+  trace: import("@kept/engine").Trace;
+  reps: { startT: number; bottomT: number; endT: number }[];
+  phoneCount: number;
+  freeze: { afterRep: number; promptT: number; t: number; gesture: string; sha256: string } | null;
+  keyframes: { kind: "final"; t: number; jpeg: string; sha256: string }[];
+};
+
 export interface ProofApi {
   challenge(oath: OathFacts, habit: number, dayIndex: number, avoid?: GestureLabel): Promise<Challenge>;
   /** `image` is base64 JPEG from the camera. */
-  submit(oath: OathFacts, c: Challenge, image: string, imageUri?: string): Promise<ProofOutcome>;
+  submit(oath: OathFacts, c: Challenge, image: string, imageUri?: string, reps?: RepEvidence): Promise<ProofOutcome>;
 }
 
 export interface KeptApi {
