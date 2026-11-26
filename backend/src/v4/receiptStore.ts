@@ -19,3 +19,18 @@ export async function publishReceipt(hash: string, receipt: Receipt, fetchImpl: 
   }).catch(() => null);
   return res?.ok ? publicReceiptUrl(hash) : null;
 }
+
+/**
+ * A rep set's pose trace, kept privately (bucket rep-traces, not public) so the counter can be tuned on real sets: body
+ * keypoints and timings only (no image, no wallet), named by the receipt hash so its verdict can be looked up. Best effort.
+ */
+export async function storeRepTrace(hash: string, data: { trace: unknown; exercise: string; target: number; repCount: number; phoneCount: number | null; pass: boolean; reason: string }, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  if (!config.supabaseUrl || !config.supabaseSecretKey) return false;
+  const res = await fetchImpl(`${config.supabaseUrl}/storage/v1/object/${config.repTracesBucket}/traces/${hash}.json`, {
+    method: "POST",
+    headers: { apikey: config.supabaseSecretKey, authorization: `Bearer ${config.supabaseSecretKey}`, "content-type": "application/json", "x-upsert": "true" },
+    body: JSON.stringify({ ...data, storedAt: new Date().toISOString() }),
+    signal: AbortSignal.timeout(15_000),
+  }).catch(() => null);
+  return !!res?.ok;
+}

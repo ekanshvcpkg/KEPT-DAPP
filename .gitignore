@@ -65,3 +65,6 @@ test-ledger/
 # Phase 4.5 screenshots and compare page (local only)
 artifacts/
 frontend/modules/kept-gesture/android/.gradle/
+
+# Real rep-set pose traces pulled from Supabase for tuning (backend/scripts/fetch_rep_traces.ts)
+docs/notes/real-sets/

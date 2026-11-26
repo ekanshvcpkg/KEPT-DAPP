@@ -33,4 +33,6 @@ export const config = {
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseSecretKey: process.env.SUPABASE_SECRET_KEY || "",
   receiptsBucket: process.env.SUPABASE_RECEIPTS_BUCKET || "keeper-receipts",
+  /** Private bucket for rep-set pose traces (keypoints only, no images, no wallet), used to tune the counter on real sets. */
+  repTracesBucket: process.env.SUPABASE_REP_TRACES_BUCKET || "rep-traces",
 };

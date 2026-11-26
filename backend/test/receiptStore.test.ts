@@ -51,3 +51,21 @@ test('broadcastOathChanged pings channel oath:<address> with the secret key, bes
     assert.equal(await broadcastOathChanged('O', 'proof', 'W'), false);
   } finally { Object.assign(config, old); }
 });
+
+test('storeRepTrace keeps the pose trace in the private bucket, without the wallet', async () => {
+  const { storeRepTrace } = await import('../src/v4/receiptStore.js');
+  const old = { ...config };
+  try {
+    Object.assign(config, { supabaseUrl: 'https://x.supabase.co', supabaseSecretKey: 'sk', repTracesBucket: 'rep-traces' });
+    let seen: { url: string; body: string; headers: Record<string, string> } | null = null;
+    const ok = await storeRepTrace('h1', { trace: { t: [1], p: [] }, exercise: 'pushup', target: 10, repCount: 10, phoneCount: 10, pass: true, reason: 'ok' },
+      (async (url: string, init: RequestInit) => { seen = { url, body: String(init.body), headers: init.headers as Record<string, string> }; return new Response('{}', { status: 200 }); }) as unknown as typeof fetch);
+    assert.equal(ok, true);
+    assert.equal(seen!.url, 'https://x.supabase.co/storage/v1/object/rep-traces/traces/h1.json');
+    assert.equal(seen!.headers['cache-control'], undefined, 'not a public, cacheable object');
+    const body = JSON.parse(seen!.body);
+    assert.deepEqual(Object.keys(body).sort(), ['exercise', 'pass', 'phoneCount', 'reason', 'repCount', 'storedAt', 'target', 'trace']);
+    Object.assign(config, { supabaseUrl: '' });
+    assert.equal(await storeRepTrace('h', { trace: null, exercise: 'squat', target: 1, repCount: 0, phoneCount: null, pass: false, reason: '' }), false);
+  } finally { Object.assign(config, old); }
+});
