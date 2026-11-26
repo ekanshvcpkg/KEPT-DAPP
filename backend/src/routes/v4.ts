@@ -108,12 +108,12 @@ async function askContext(wallet: string): Promise<AskContext> {
     return {
       name: d?.name || d?.goalText || "an Oath", status: o.status === 1 && today !== null && today > o.numDays ? "ended, waiting to be settled" : STATUS[o.status] ?? "unknown",
       solo: o.isSolo, members: o.members.length, day: today !== null && today <= o.numDays ? `day ${today} of ${o.numDays}` : `${o.numDays} days`,
-      myKeptDays: kept, myMissedDays: Math.max(0, elapsed - kept), stakeSol: Number(o.stakeAmount) / 1e9,
-      payoutSol: settled ? Number(o.payouts[wallet] ?? "0") / 1e9 : null, claimed: settled ? o.claimed[wallet] ?? false : null,
+      myKeptDays: kept, myMissedDays: Math.max(0, elapsed - kept), stakeSol: sol2(Number(o.stakeAmount)),
+      payoutSol: settled ? sol2(Number(o.payouts[wallet] ?? "0")) : null, claimed: settled ? o.claimed[wallet] ?? false : null,
     };
   });
   const verdicts = await prisma.proofVerification.findMany({ where: { wallet, status: { in: ["PASS", "FAIL"] } }, orderBy: { createdAt: "desc" }, take: 4 });
-  const solBalance = await connection.getBalance(new PublicKey(wallet), "confirmed").then((l) => l / 1e9).catch(() => null);
+  const solBalance = await connection.getBalance(new PublicKey(wallet), "confirmed").then((l) => sol2(l)).catch(() => null);
   // oaths[0] is the most recent (newest start first; open Oaths, not started yet, first of all).
   return { wallet, solBalance, oaths, recentVerdicts: verdicts.map((v) => ({ when: v.createdAt.toISOString(), pass: v.status === "PASS", reason: v.reason })) };
 }
@@ -902,6 +902,9 @@ type OathRead = {
   /** Rules the Oath was created under (rules v1 for accounts that predate terms). */
   terms: OathTerms; rulesVersion: number;
 };
+/** Lamports as SOL rounded to two decimals: what the Keeper says aloud ("about 0.07 SOL"), never nine digits. */
+const sol2 = (lamports: number) => Math.round(lamports / 1e7) / 100;
+
 async function readOath(address: string): Promise<OathRead | null> {
   try {
     const pk = new PublicKey(address);

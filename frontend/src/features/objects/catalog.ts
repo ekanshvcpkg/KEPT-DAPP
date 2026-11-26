@@ -167,7 +167,7 @@ export const CATALOG: readonly CatalogEntry[] = [
 ];
 
 /**
- * The six objects C2 offers as quick picks: the most common and the most distinct on camera. All eight supported
- * objects stay reachable by search. The model's reading of any of them is unmeasured (BACKEND_GAPS P1-26).
+ * The quick picks C2 offers (catalog entry keys): the live rep sets first (counted on the phone, recounted by the
+ * server), then the program's most common objects, the most distinct on camera. Everything else is reachable by search.
  */
-export const QUICK_PICK_OBJECTS: readonly ObjectId[] = ["dumbbell", "book", "water_bottle", "guitar", "running_shoe", "plant"];
+export const QUICK_PICK_OBJECTS: readonly string[] = ["reps_pushups_10", "reps_squats_10", "dumbbell", "book", "water_bottle", "guitar", "running_shoe", "plant", "yoga_mat"];

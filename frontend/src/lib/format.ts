@@ -71,3 +71,23 @@ export function formatSol(lamports: bigint): string {
   const frac = (abs % 1_000_000_000n).toString().padStart(9, "0").replace(/0+$/, "");
   return (lamports < 0n ? "−" : "") + (frac ? `${whole}.${frac}` : whole.toString());
 }
+
+// ── Spoken amounts ── the Keeper reads money aloud rounded ("about 0.07 SOL"), never nine digits; screens keep exact values.
+const spoken2 = (sol: number) => (Math.round(sol * 100) / 100).toString();
+
+/** A wallet change as the Keeper says it: "down about 0.07 SOL", "up less than 0.01 SOL", "unchanged", "not known". */
+export function spokenSolChange(lamports: bigint | null): string {
+  if (lamports === null) return "not known";
+  if (lamports === 0n) return "unchanged";
+  const dir = lamports < 0n ? "down" : "up";
+  const abs = lamports < 0n ? -lamports : lamports;
+  return abs < 10_000_000n ? `${dir} less than 0.01 SOL` : `${dir} about ${spoken2(Number(abs) / 1e9)} SOL`;
+}
+
+/** Decimal numbers with three or more decimals in a sentence, rounded for speech: "Stake 0.070786437 SOL" → "Stake about 0.07 SOL". */
+export function speakableAmounts(text: string): string {
+  return text.replace(/\b(\d+\.\d{3,})\b/g, (m) => {
+    const n = Number(m);
+    return n > 0 && n < 0.01 ? "less than 0.01" : `about ${spoken2(n)}`;
+  });
+}

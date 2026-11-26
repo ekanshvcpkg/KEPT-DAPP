@@ -58,7 +58,7 @@ export function ProofObjectPicker({ value, onPick, onActiveChange }: { value: st
       {active ? null : (
         <>
           <Text variant="monoLabel">{t("additions.objects.quickPicks")}</Text>
-          <OptionGrid mode="tile" cols={3} value={value === null ? -1 : QUICK_PICK_OBJECTS.indexOf(value as (typeof QUICK_PICK_OBJECTS)[number])} onChange={(q) => { haptic.light(); onPick(QUICK_PICK_OBJECTS[q]!); }}
+          <OptionGrid mode="tile" cols={3} value={value === null ? -1 : QUICK_PICK_OBJECTS.indexOf(value)} onChange={(q) => { haptic.light(); onPick(QUICK_PICK_OBJECTS[q]!); }}
             items={QUICK_PICK_OBJECTS.map((key) => ({ title: entryLabel(key), icon: entryIcon(key) }))} />
         </>
       )}

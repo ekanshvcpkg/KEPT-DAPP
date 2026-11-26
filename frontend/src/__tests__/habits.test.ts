@@ -2,6 +2,8 @@
 // proof object, and that saving commits a habit's name and proof object together.
 import { OBJECTS } from "@kept/config";
 import { QUICK_PICK_OBJECTS } from "@/features/objects/catalog";
+import { proofTextOf } from "@/features/objects/proof";
+import { parseRepHabit } from "@kept/engine";
 import { habitEntries, habitPatch, habitProblem, habitProofTexts, habitsReady, programIdOf, removeHabit, saveHabit, savedHabits, validObjectId } from "@/features/oaths/habits";
 
 const draft = (habits: string[], entries?: string[], ids?: number[]) => ({ habits, ...(entries ? { habitObjectEntries: entries } : {}), ...(ids ? { habitObjectIds: ids } : {}) });
@@ -86,10 +88,12 @@ describe("saving and removing", () => {
 });
 
 describe("quick picks", () => {
-  it("are six of the program's eight objects, in the program's order", () => {
-    expect(QUICK_PICK_OBJECTS).toHaveLength(6);
-    const ids = QUICK_PICK_OBJECTS.map((id) => OBJECTS.findIndex((o) => o.id === id));
+  it("lead with the live rep sets, then program objects in the program's order, all real catalog entries", () => {
+    expect(QUICK_PICK_OBJECTS.slice(0, 2)).toEqual(["reps_pushups_10", "reps_squats_10"]);
+    expect(QUICK_PICK_OBJECTS.slice(0, 2).map((k) => parseRepHabit(proofTextOf(k) ?? ""))).toEqual([{ exercise: "pushup", target: 10 }, { exercise: "squat", target: 10 }]);
+    const ids = QUICK_PICK_OBJECTS.slice(2).map((id) => OBJECTS.findIndex((o) => o.id === id));
     expect(ids.every((i) => i >= 0)).toBe(true);
     expect([...ids].sort((a, b) => a - b)).toEqual(ids);
+    expect(QUICK_PICK_OBJECTS.length % 3).toBe(0); // a full 3-column grid
   });
 });

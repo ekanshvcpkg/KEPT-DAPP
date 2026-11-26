@@ -12,7 +12,7 @@ import type { Exercise, RepEvent, Trace } from "@kept/engine";
 import type { RepEvidence } from "@/api";
 import { t } from "@/copy";
 import { Button } from "@/components/actions";
-import { Chip, ChipRow, Title } from "@/components/content/Basics";
+import { Chip, ChipRow } from "@/components/content/Basics";
 import { Icon, Text, loopCycles, useAnimationLifecycle } from "@/components/primitives";
 import { color, duration, metrics, radius, type as typeStyles } from "@/theme";
 import { haptic } from "@/lib/haptics";
@@ -76,6 +76,8 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
   const startT = useRef<number | null>(null);
   const pauseOpen = useRef<[number, number] | null>(null);
   const [count, setCount] = useState(0);
+  // During a set: false until the counter sees the start position (then "Go!"), back to false after a camera stall.
+  const [inPosition, setInPosition] = useState(false);
   const [hint, setHint] = useState<string | null>(t("additions.reps.frameHint"));
   const tilted = useRef(false);
   // Start waits for a level phone: the first onPose with |tilt| <= TILT_MAX (and none tilted since).
@@ -91,6 +93,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     freeze.current = null; freezeJpeg.current = null;
     startT.current = null; lastT.current = -1;
     setCount(0);
+    setInPosition(false);
     setPhase("setup");
     setHint(t(why));
     haptic.light();
@@ -137,6 +140,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       else if (e.n === freezeAt && !freeze.current) startFreeze(e.endT, e.n);
     } else if (e.type === "ready") {
       setHint(null);
+      setInPosition(true);
     } else if ((e.type === "half_rep" || e.type === "lost") && e.t - lastJab.current > 8000) {
       lastJab.current = e.t;
       sayLine(e.type === "half_rep" ? "halfRep" : "lost");
@@ -146,6 +150,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     } else if (e.type === "setup") {
       // After a camera stall the counter resumes on a short hold at the top.
       setHint(t("additions.reps.holdTop"));
+      setInPosition(false);
     }
   }, [target, finish, startFreeze, freezeAt]);
 
@@ -218,6 +223,11 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
         <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: metrics.screen.gap, alignItems: "center" }}>
           <Text style={[typeStyles.displayLg, { color: color.text.primary }]} accessibilityLiveRegion="polite">{String(count)}</Text>
           <Text style={[typeStyles.monoLabel, { color: color.text.secondary }]}>{t("additions.reps.ofTarget", { target, label })}</Text>
+          {phase === "counting" ? (
+            <Text style={[typeStyles.titleXl, { color: inPosition ? color.lime.base : color.text.primary, textAlign: "center" }]} accessibilityLiveRegion="polite">
+              {inPosition ? t("additions.reps.statusGo") : t(exercise === "pushup" ? "additions.reps.statusPositionPushup" : "additions.reps.statusPositionSquat")}
+            </Text>
+          ) : null}
         </View>
         {phase === "freeze" ? (
           <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: metrics.screen.gap, alignItems: "center" }}>
@@ -228,13 +238,8 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
         ) : null}
       </View>
       {hint ? <ChipRow justify="center"><Chip text={hint} icon="information-outline" tone="grey" /></ChipRow> : null}
-      {/* Known before the set starts: at "Freeze!" the phone is 2 m away. */}
-      {phase === "setup" ? (
-        <View style={{ alignItems: "center", gap: metrics.screen.gap / 2 }}>
-          <RaiseHandCue size={metrics.screen.gap * 3} />
-          <Title heading={t("additions.reps.freezeHint")} align="center" />
-        </View>
-      ) : null}
+      {/* Before the set: how to place the phone and where to stand, step by step. The freeze move is shown only when it happens. */}
+      {phase === "setup" ? <SetupSteps exercise={exercise} /> : null}
       {phase === "setup" ? <Button kind="l" icon="arm-flex" label={t("additions.reps.start", { target, label })} onPress={start} disabled={!level} /> : null}
       {phase === "counting" || phase === "freeze" ? <Button kind="t" label={t("additions.reps.stop")} onPress={onAbort} /> : null}
     </View>
@@ -257,5 +262,23 @@ function RaiseHandCue({ size }: { size: number }) {
     <Animated.View onLayout={onLayout} style={a} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Icon name="human-greeting" size={size} color={color.lime.base} />
     </Animated.View>
+  );
+}
+
+/** The setup steps for an exercise: phone placement, where to stand, how to begin. */
+function SetupSteps({ exercise }: { exercise: Exercise }) {
+  const keys = exercise === "pushup"
+    ? (["additions.reps.stepPushup1", "additions.reps.stepPushup2", "additions.reps.stepPushup3"] as const)
+    : (["additions.reps.stepSquat1", "additions.reps.stepSquat2", "additions.reps.stepSquat3"] as const);
+  return (
+    <View style={{ gap: metrics.screen.gap / 2 }} accessibilityRole="list">
+      <Text style={[typeStyles.monoLabel, { color: color.text.secondary }]}>{t("additions.reps.stepsTitle")}</Text>
+      {keys.map((k, i) => (
+        <View key={k} style={{ flexDirection: "row", gap: metrics.screen.gap / 2, alignItems: "flex-start" }}>
+          <Text style={[typeStyles.monoValue, { color: color.lime.base }]}>{String(i + 1)}</Text>
+          <Text style={[typeStyles.body, { color: color.text.primary, flex: 1 }]}>{t(k)}</Text>
+        </View>
+      ))}
+    </View>
   );
 }

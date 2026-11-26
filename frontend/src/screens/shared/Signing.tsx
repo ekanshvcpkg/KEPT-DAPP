@@ -23,7 +23,7 @@ import { useSigningFlow } from "@/app/useSigningFlow";
 import type { SignOutcome } from "@/app/useSigningFlow";
 import { skrWhole } from "@/features/oaths/present";
 import { useIsDemo } from "@/state/mode";
-import { formatSol } from "@/lib/format";
+import { formatSol, speakableAmounts, spokenSolChange } from "@/lib/format";
 import { RowList } from "@/components/content/Rows";
 import { color } from "@/theme";
 import { signingScreenMounted, useTxExplain } from "@/state/txExplain";
@@ -91,7 +91,7 @@ function TxExplainer() {
   useEffect(() => {
     if (!e || !pending) return;
     const first = explainRows(e)[0];
-    if (first) keeperSay(t("additions.keeper.saySign", { what: first.title, change: e.walletChange === null ? "?" : formatSol(e.walletChange) }));
+    if (first) keeperSay(t("additions.keeper.saySign", { what: speakableAmounts(first.title), change: spokenSolChange(e.walletChange) }));
   }, [e, pending]);
   if (!e) return null;
   return (

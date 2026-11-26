@@ -36,7 +36,7 @@ export function takeGlobalVoiceBudget(chars: number, cap = Number(process.env.VO
  * ("{what}. Your wallet: {change} SOL. Sign only if that is what you meant."), with a short, plain "what". Verdicts and
  * Ask the Keeper answers are spoken by the server first (so the app's request is a cache hit).
  */
-export const SIGN_LINE = /^[\p{L}\p{N} .,()…'’:+-]{3,110}\. Your wallet: [−+-]?[\d.?]{1,14} SOL\. Sign only if that is what you meant\.$/u;
+export const SIGN_LINE = /^[\p{L}\p{N} .,()…'’:+-]{3,110}\. Your wallet: (?:(?:down|up) (?:about \d{1,6}(?:\.\d{1,2})?|less than 0\.01) SOL|unchanged|not known)\. Sign only if that is what you meant\.$/u;
 
 /** MP3 bytes of the Keeper saying `text`; from the cache when this exact line was said before. */
 export async function keeperSpeech(text: string, fetchImpl: typeof fetch = fetch): Promise<{ audio: Buffer; cached: boolean }> {
