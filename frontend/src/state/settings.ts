@@ -20,9 +20,11 @@ interface SettingsState {
   deckHintSeen: boolean;
   /** Demo only: the create flow opens on a pre-filled Oath (features/oaths/showcase.ts), for filming. */
   demoPrefill: boolean;
+  /** The Keeper speaks verdicts and transaction explanations (ElevenLabs). */
+  keeperVoice: boolean;
   setNotify(k: keyof SettingsState["notify"], on: boolean): void;
   setVisibility(k: keyof SettingsState["visibility"], a: Audience): void;
-  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill">>): void;
+  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill" | "keeperVoice">>): void;
   follow(name: string): void;
 }
 
@@ -38,6 +40,7 @@ const DEFAULTS: SettingsData = {
   profileTipSeen: false,
   deckHintSeen: false,
   demoPrefill: true,
+  keeperVoice: true,
 };
 
 export const useSettings = create<SettingsState>()(persist((set) => ({

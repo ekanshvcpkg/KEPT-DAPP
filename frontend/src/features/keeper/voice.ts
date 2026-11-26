@@ -5,6 +5,7 @@ import type { AudioPlayer } from "expo-audio";
 import { env } from "@/config/env";
 import { useMode } from "@/state/mode";
 import { useSession } from "@/state/session";
+import { useSettings } from "@/state/settings";
 
 const MAX_CHARS = 220;
 let player: AudioPlayer | null = null;
@@ -12,7 +13,7 @@ let player: AudioPlayer | null = null;
 export function keeperSay(text: string | undefined | null): void {
   const line = (text ?? "").trim().slice(0, MAX_CHARS);
   const token = useSession.getState().token;
-  if (!line || !token || useMode.getState().mode !== "live") {
+  if (!line || !token || useMode.getState().mode !== "live" || !useSettings.getState().keeperVoice) {
     if (__DEV__) console.warn("[kept] keeperSay skipped", { line: !!line, token: !!token, mode: useMode.getState().mode });
     return;
   }

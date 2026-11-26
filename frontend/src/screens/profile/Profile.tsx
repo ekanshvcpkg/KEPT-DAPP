@@ -189,6 +189,7 @@ export function I4() {
   const genesis = useSession((s) => s.genesis);
   const notify = useSettings((s) => s.notify);
   const setNotify = useSettings((s) => s.setNotify);
+  const keeperVoice = useSettings((s) => s.keeperVoice);
   const stats = useStats();
   const faucet = async () => {
     try { const amount = await walletActions.faucet(); toast(t("toasts.17", { amount: skrWhole(amount) })); }
@@ -233,7 +234,10 @@ export function I4() {
       ]} />
       <RowList label={t("screens.I4.b1.label")} rows={(["nudges", "deadline", "reviews", "results"] as const).map((key, i) => ({
         title: t(`screens.I4.b1.r${i}.t` as CopyKey), sub: t(`screens.I4.b1.r${i}.s` as CopyKey), leading: { kind: "icon" as const, icon: NOTIFY_ICON[i]!, fg: color.text.primary }, toggle: { on: notify[key], onChange: (on: boolean) => setNotify(key, on) },
-      }))} />
+      })).concat([{
+        title: t("additions.keeper.voiceSetting"), sub: t("additions.keeper.voiceSettingSub"), leading: { kind: "icon" as const, icon: "shield-check-outline" as const, fg: color.text.primary },
+        toggle: { on: keeperVoice, onChange: (on: boolean) => useSettings.getState().set({ keeperVoice: on }) },
+      }])} />
       <RowList label={t("screens.I4.b2.label")} rows={[
         ...account,
         { title: t("screens.I4.b2.r1.t"), sub: env.cluster === "devnet" ? t("screens.I4.b2.r1.s") : env.cluster, value: t("screens.I4.b2.r1.r"), valueColor: color.orange.base, leading: { kind: "icon", icon: "web" } },

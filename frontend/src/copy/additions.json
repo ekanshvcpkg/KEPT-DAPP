@@ -562,6 +562,8 @@
     "explainSign": "Open wallet to sign",
     "sayKept": "Kept. {reason}",
     "sayFailed": "Not kept. {reason}",
-    "saySign": "{what}. Your wallet: {change} SOL. Sign only if that is what you meant."
+    "saySign": "{what}. Your wallet: {change} SOL. Sign only if that is what you meant.",
+    "voiceSetting": "The Keeper's voice",
+    "voiceSettingSub": "Says verdicts and reads transactions aloud"
   }
 }
