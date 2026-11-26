@@ -24,9 +24,14 @@ interface SettingsState {
   keeperVoice: boolean;
   /** The Keeper's hype during a live rep set: "clean" (default) or "noFilter" (swearing at the set; features/keeper/hypeLines.ts). */
   hypeLanguage: "clean" | "noFilter";
+  /**
+   * Live: the wallet sees KEPT as its own site, https://kept-keeper.vercel.app (verified: its assetlinks.json grants
+   * get_login_creds), and re-authorizes silently (chain/mwa.ts). Off (default): the build's identity (EXPO_PUBLIC_APP_IDENTITY_*).
+   */
+  verifiedIdentity: boolean;
   setNotify(k: keyof SettingsState["notify"], on: boolean): void;
   setVisibility(k: keyof SettingsState["visibility"], a: Audience): void;
-  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill" | "keeperVoice" | "hypeLanguage">>): void;
+  set(p: Partial<Pick<SettingsState, "findByName" | "anyoneInvite" | "socials" | "profileTipSeen" | "deckHintSeen" | "demoPrefill" | "keeperVoice" | "hypeLanguage" | "verifiedIdentity">>): void;
   follow(name: string): void;
 }
 
@@ -44,6 +49,7 @@ const DEFAULTS: SettingsData = {
   demoPrefill: true,
   keeperVoice: true,
   hypeLanguage: "clean",
+  verifiedIdentity: false,
 };
 
 export const useSettings = create<SettingsState>()(persist((set) => ({

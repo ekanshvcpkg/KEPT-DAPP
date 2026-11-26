@@ -46,7 +46,7 @@ export const metrics = {
   option: { radius: 20, gap: 8, tilt: 2 },
   input: { padX: 18, padY: 16, radius: 22, ring: 1.5, sugH: 34, sugPadX: 13, sugRadius: 17 },
   segmented: { pad: 4, radius: 24, gap: 4, item: 38, itemRadius: 19 },
-  row: { minH: 60, padL: 8, padR: 12, padY: 8, radius: 18, tile: 40, tileRadius: 12, gap: 11, listGap: 6, chevron: 20 },
+  row: { minH: 60, padL: 8, padR: 12, padY: 8, radius: 18, tile: 40, tileRadius: 12, gap: 11, listGap: 6, chevron: 20, dimOpacity: 0.55 },
   toggle: { w: 46, h: 28, radius: 14, knob: 22, inset: 3, on: 21 },
   breakdown: { padX: 16, padY: 4, radius: 22, rowH: 44, totalH: 54 },
   banner: { pad: 14, radius: 20, gap: 12, tile: 38, tileRadius: 12, icon: 20 },

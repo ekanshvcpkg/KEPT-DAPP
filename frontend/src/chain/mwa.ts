@@ -2,6 +2,8 @@
 // auth_token is remembered so the user connects once; later requests re-authorize silently and fall
 // back to a full authorize if the wallet rejects the token. It's a credential, so it's kept in
 // expo-secure-store (Android Keystore); an older build's AsyncStorage copy is moved on first read.
+// The identity the wallet sees is the build's (EXPO_PUBLIC_APP_IDENTITY_*) or, with Settings › "Wallet identity: KEPT's
+// own site" on, VERIFIED_IDENTITY; a token belongs to the identity it was issued for and is dropped when that changes.
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { secureStore } from "@/lib/secureStore";
 import { AppState } from "react-native";
@@ -14,15 +16,26 @@ import { classifyTxError } from "./classify";
 import { connection } from "./connection";
 import { signatureFromSigned } from "./signature";
 import { decodeInstructions } from "@kept/chain";
+import { useSettings } from "@/state/settings";
 import { awaitTxConfirmation, beginTx, endTx, showTx } from "@/state/txExplain";
 import type { WalletSession } from "./types";
 
 const STORAGE_KEY = "kept.mwa";
 /** How long to wait for the app to be in front again after the wallet returns. */
 const FOREGROUND_WAIT_MS = 30_000;
-const identity = { name: env.identity.name, uri: env.identity.uri };
 
-type Saved = { authToken: string; address: string };
+/**
+ * KEPT's own site (repo site/): its /.well-known/assetlinks.json grants `delegate_permission/common.get_login_creds` to
+ * the debug and release signing keys, so a wallet can verify the app is who it says it is.
+ */
+export const VERIFIED_IDENTITY = { name: "KEPT", uri: "https://kept-keeper.vercel.app" } as const;
+const verifiedOn = (): boolean => useSettings.getState().verifiedIdentity;
+/** The identity the wallet is asked with: KEPT's own site when the setting is on, else the build's. */
+export const walletIdentity = (): { name: string; uri: string } =>
+  verifiedOn() ? { ...VERIFIED_IDENTITY } : { name: env.identity.name, uri: env.identity.uri };
+
+/** `identity`: the URI the token was issued for (a token saved before it was recorded: the build's). */
+type Saved = { authToken: string; address: string; identity?: string };
 let saved: Saved | null | undefined;
 
 async function load(): Promise<Saved | null> {
@@ -53,16 +66,26 @@ async function save(next: Saved | null): Promise<void> {
 /**
  * Silent re-authorization with the saved auth token is only used when the wallet has verified KEPT's identity.
  * Phantom declines `reauthorize` for a dApp whose identity URI isn't linked to the app with the
- * `delegate_permission/common.get_login_creds` relation in its assetlinks.json. KEPT's own site,
- * https://kept-keeper.vercel.app (repo site/), grants it for the debug and release signing keys, so builds with
+ * `delegate_permission/common.get_login_creds` relation in its assetlinks.json. KEPT's own site (VERIFIED_IDENTITY)
+ * grants it for the debug and release signing keys, so the Settings switch and builds with
  * EXPO_PUBLIC_APP_IDENTITY_VERIFIED=1 re-authorize silently.
  */
-const reauthorizeAllowed = (): boolean => env.identity.verified;
+const reauthorizeAllowed = (): boolean => verifiedOn() || env.identity.verified;
+
+/** The saved token, if it was issued for this identity; one issued for another identity is dropped. */
+async function tokenFor(uri: string): Promise<Saved | null> {
+  const prev = await load();
+  if (!prev) return null;
+  if ((prev.identity ?? env.identity.uri) === uri) return prev;
+  await save(null);
+  return null;
+}
 
 async function authorize(wallet: Web3MobileWallet): Promise<PublicKey> {
-  const prev = reauthorizeAllowed() ? await load() : null;
+  const identity = walletIdentity();
+  const prev = await tokenFor(identity.uri);
   let auth;
-  if (prev) {
+  if (prev && reauthorizeAllowed()) {
     try {
       auth = await wallet.authorize({ chain: walletChain, identity, auth_token: prev.authToken });
     } catch {
@@ -73,7 +96,7 @@ async function authorize(wallet: Web3MobileWallet): Promise<PublicKey> {
   const account = auth.accounts[0];
   if (!account) throw new Error("Wallet authorized but returned no account");
   const key = new PublicKey(Buffer.from(account.address, "base64"));
-  await save({ authToken: auth.auth_token, address: key.toBase58() });
+  await save({ authToken: auth.auth_token, address: key.toBase58(), identity: identity.uri });
   return key;
 }
 

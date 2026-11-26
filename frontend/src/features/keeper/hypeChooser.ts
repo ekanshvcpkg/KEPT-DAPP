@@ -1,7 +1,7 @@
 // Which hype line the Keeper says (or none), from what just happened in a rep set. Pure and deterministic given `rng`:
-// the coach (hypeCoach.ts) supplies the clock-derived inputs and plays the clip.
+// the coach (hypeCoach.ts) supplies the clock-derived inputs, picks the tier that fits (pickHype) and plays the clip.
 import { hypeIds } from "./hypeLines";
-import type { HypeLang, HypeSituation } from "./hypeLines";
+import type { HypeLang, HypeSituation, HypeTier } from "./hypeLines";
 
 export type HypeEvent =
   | { kind: "start" } // the counter saw the start position for the first time
@@ -63,14 +63,27 @@ export function hypeSituation(input: Omit<HypeInput, "lang" | "lastId" | "used">
   }
 }
 
-/** Picks a line for the moment: a random variant of its situation in the chosen language, never the last one again. */
-export function chooseHype(input: HypeInput, rng: () => number = Math.random): string | null {
-  const situation = hypeSituation(input, rng);
-  if (!situation) return null;
-  const ids = hypeIds(situation, input.lang);
-  const pool = ids.length > 1 ? ids.filter((id) => id !== input.lastId) : ids;
-  const fresh = input.used ? pool.filter((id) => !input.used!.has(id)) : pool;
+export interface HypePick extends Pick<HypeInput, "lang" | "lastId" | "used"> {
+  /** "long" (default) or "short" (hypeLines.ts: only the moments inside the rep rhythm have short lines). */
+  tier?: HypeTier;
+  /** Only lines that fit (the coach: ends before the next rep). */
+  fits?: (id: string) => boolean;
+}
+
+/**
+ * A random line of the situation in the language and tier that fits: never the last one again (none, rather than a
+ * repeat), fresh ones first.
+ */
+export function pickHype(situation: HypeSituation, o: HypePick, rng: () => number = Math.random): string | null {
+  const pool = hypeIds(situation, o.lang, o.tier).filter((id) => id !== o.lastId && (!o.fits || o.fits(id)));
+  const fresh = o.used ? pool.filter((id) => !o.used!.has(id)) : pool;
   const from = fresh.length ? fresh : pool;
   if (!from.length) return null;
   return from[Math.min(from.length - 1, Math.floor(rng() * from.length))]!;
+}
+
+/** Picks a long line for the moment: a random variant of its situation in the chosen language, never the last one again. */
+export function chooseHype(input: HypeInput, rng: () => number = Math.random): string | null {
+  const situation = hypeSituation(input, rng);
+  return situation ? pickHype(situation, input, rng) : null;
 }

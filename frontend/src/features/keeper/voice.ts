@@ -6,6 +6,7 @@ import { env } from "@/config/env";
 import { useMode } from "@/state/mode";
 import { useSession } from "@/state/session";
 import { useSettings } from "@/state/settings";
+import { silenceHype } from "./countVoice";
 
 /** Same as the backend (backend/src/v4/voice.ts › MAX_LINE_CHARS): longer lines would be cut and never cached. */
 const MAX_CHARS = 320;
@@ -19,6 +20,7 @@ export function keeperSay(text: string | undefined | null): void {
     return;
   }
   if (__DEV__) console.warn("[kept] keeperSay", line);
+  silenceHype(); // one Keeper at a time: a rep set's hype line (the done line still playing) stops for this one
   try {
     const source = { uri: `${env.apiUrl}/api/keeper/say?text=${encodeURIComponent(line)}`, headers: { authorization: `Bearer ${token}` } };
     if (player) player.replace(source);

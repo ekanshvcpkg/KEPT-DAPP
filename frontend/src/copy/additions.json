@@ -209,7 +209,9 @@
     "manyOaths": "{n} Oaths",
     "lockedOne": "{amount} SKR · 1 Oath",
     "receiveSol": "Receive SOL",
-    "noWalletApp": "No wallet found. Install Phantom or Solflare."
+    "noWalletApp": "No wallet found. Install Phantom or Solflare.",
+    "identitySetting": "Wallet identity: KEPT's own site",
+    "identitySettingSub": "Verified link to kept-keeper.vercel.app. Turn off if your wallet won't connect"
   },
   "profile": {
     "privateOaths": "{name} keeps their Oaths private"

@@ -216,9 +216,8 @@ describe("onboarding on mocks", () => {
     await saveBtn(true);
     await fireEvent.changeText(field, "read 10 pages");
     await saveBtn(true);
-    // Six quick picks. Everything else is found by search.
-    for (const o of ["Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant"]) expect(screen.getByLabelText(o)).toBeTruthy();
-    expect(screen.queryByLabelText("Yoga mat")).toBeNull();
+    // The quick picks: live rep sets first, then the program's objects. Everything else is found by search.
+    for (const o of ["10 push-ups", "10 squats", "Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant", "Yoga mat"]) expect(screen.getByLabelText(o)).toBeTruthy();
     expect(screen.queryByLabelText("Kettlebell")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Book"));
     expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();

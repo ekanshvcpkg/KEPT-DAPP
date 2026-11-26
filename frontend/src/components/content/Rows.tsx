@@ -31,7 +31,7 @@ export interface RowProps {
   onPress?: () => void;
   /** For a screen reader, when the title alone isn't enough ("Kettlebell, not available yet"). */
   a11yLabel?: string;
-  /** A choice row: selected / disabled are announced. */
+  /** A choice row: selected / disabled are announced. A disabled toggle row is dimmed and can't be switched. */
   selected?: boolean;
   disabled?: boolean;
 }
@@ -69,10 +69,10 @@ function Row(p: RowProps) {
       ) : null}
       {p.trailing}
       {p.chevron ? <Icon name="chevron-right" size={metrics.row.chevron} color={color.text.tertiary} /> : null}
-      {p.toggle ? <Toggle on={p.toggle.on} onChange={p.toggle.onChange} label={p.title} /> : null}
+      {p.toggle ? <Toggle on={p.toggle.on} onChange={p.toggle.onChange} label={p.title} disabled={p.disabled} /> : null}
     </View>
   );
-  if (p.toggle) return body;
+  if (p.toggle) return p.disabled ? <View style={{ opacity: metrics.row.dimOpacity }}>{body}</View> : body;
   const state = p.selected !== undefined || p.disabled !== undefined ? { accessibilityState: { ...(p.selected !== undefined ? { selected: p.selected } : {}), ...(p.disabled !== undefined ? { disabled: p.disabled } : {}) } } : {};
   return p.onPress ? <PressScale onPress={p.onPress} accessibilityLabel={p.a11yLabel ?? p.title} {...state}>{body}</PressScale> : body;
 }
@@ -101,15 +101,15 @@ export function rowListItems(key: string, rows: RowProps[], opts: { label?: stri
   return items;
 }
 
-/** Toggle: 46×28, knob 22 at x 3 / 21, 150 ms. */
-export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+/** Toggle: 46×28, knob 22 at x 3 / 21, 150 ms. `disabled`: announced, and a press does nothing. */
+export function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange: (on: boolean) => void; label: string; disabled?: boolean }) {
   const reduce = useReducedMotion();
   const k = useSharedValue(on ? 1 : 0);
   const onLayout = useAnimationLifecycle([k], () => { k.set(reduce ? (on ? 1 : 0) : withTiming(on ? 1 : 0, { duration: duration.toggle })); }, [on, reduce]);
   // The knob slides with a transform (motion rework: no layout animation); it sits at x 3, moves to x 21.
   const knob = useAnimatedStyle(() => ({ transform: [{ translateX: (metrics.toggle.on - metrics.toggle.inset) * k.value }] }));
   return (
-    <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={label} onPress={() => onChange(!on)} hitSlop={10}>
+    <Pressable accessibilityRole="switch" accessibilityState={{ checked: on, ...(disabled ? { disabled: true } : {}) }} accessibilityLabel={label} onPress={() => onChange(!on)} disabled={disabled} hitSlop={10}>
       <View style={{ width: metrics.toggle.w, height: metrics.toggle.h, borderRadius: metrics.toggle.radius, backgroundColor: on ? color.lime.base : color.line.toggleOff }}>
         <Animated.View onLayout={onLayout} style={[{ position: "absolute", top: metrics.toggle.inset, left: metrics.toggle.inset, width: metrics.toggle.knob, height: metrics.toggle.knob, borderRadius: metrics.toggle.knob / 2, backgroundColor: on ? color.text.onLime : color.extra.toggleKnobOff }, knob]} />
       </View>

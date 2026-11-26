@@ -191,6 +191,7 @@ export function I4() {
   const setNotify = useSettings((s) => s.setNotify);
   const keeperVoice = useSettings((s) => s.keeperVoice);
   const hypeLanguage = useSettings((s) => s.hypeLanguage);
+  const verifiedIdentity = useSettings((s) => s.verifiedIdentity);
   const stats = useStats();
   const faucet = async () => {
     try { const amount = await walletActions.faucet(); toast(t("toasts.17", { amount: skrWhole(amount) })); }
@@ -208,6 +209,11 @@ export function I4() {
     useSession.getState().signOut();
     await setAppMode(null);
     resetStack(["A1"]);
+  };
+  /** Live: which identity the wallet sees (chain/mwa.ts). Its saved authorization belongs to the old one: drop it. */
+  const switchIdentity = (on: boolean) => {
+    useSettings.getState().set({ verifiedIdentity: on });
+    void getWallet().forget();
   };
   /** Demo: wipe it and start over on A1, or put the sample account back the way it began. */
   const leaveDemo = async () => { await exitDemo(); resetStack(["A1"]); };
@@ -233,17 +239,24 @@ export function I4() {
         { title: t("screens.I4.b0.r5.t"), sub: t("screens.I4.b0.r5.s"), leading: { kind: "icon", icon: "eye-outline" }, chevron: true, onPress: () => go("I7") },
         ...(canCreate ? [{ title: t("screens.I4.b0.r6.t"), sub: t("screens.I4.b0.r6.s"), leading: { kind: "icon" as const, icon: "bullhorn-outline" as const }, chevron: true, onPress: () => go("K1") }] : []),
       ]} />
-      <RowList label={t("screens.I4.b1.label")} rows={(["nudges", "deadline", "reviews", "results"] as const).map((key, i) => ({
+      <RowList label={t("screens.I4.b1.label")} rows={[...(["nudges", "deadline", "reviews", "results"] as const).map((key, i) => ({
         title: t(`screens.I4.b1.r${i}.t` as CopyKey), sub: t(`screens.I4.b1.r${i}.s` as CopyKey), leading: { kind: "icon" as const, icon: NOTIFY_ICON[i]!, fg: color.text.primary }, toggle: { on: notify[key], onChange: (on: boolean) => setNotify(key, on) },
-      })).concat([{
+      })), {
         title: t("additions.keeper.voiceSetting"), sub: t("additions.keeper.voiceSettingSub"), leading: { kind: "icon" as const, icon: "shield-check-outline" as const, fg: color.text.primary },
         toggle: { on: keeperVoice, onChange: (on: boolean) => useSettings.getState().set({ keeperVoice: on }) },
       }, {
+        // Only heard with the Keeper's voice on: dimmed and locked while it's off.
         title: t("additions.keeper.hypeSetting"), sub: t("additions.keeper.hypeSettingSub"), leading: { kind: "icon" as const, icon: "fire" as const, fg: color.text.primary },
         toggle: { on: hypeLanguage === "noFilter", onChange: (on: boolean) => useSettings.getState().set({ hypeLanguage: on ? "noFilter" : "clean" }) },
-      }])} />
+        disabled: !keeperVoice,
+      }]} />
       <RowList label={t("screens.I4.b2.label")} rows={[
         ...account,
+        // Live only: the identity the wallet sees (Demo has no real wallet).
+        ...(demo ? [] : [{
+          title: t("additions.wallet.identitySetting"), sub: t("additions.wallet.identitySettingSub"), leading: { kind: "icon" as const, icon: "link-variant" as const, fg: color.text.primary },
+          toggle: { on: verifiedIdentity, onChange: switchIdentity },
+        }]),
         { title: t("screens.I4.b2.r1.t"), sub: env.cluster === "devnet" ? t("screens.I4.b2.r1.s") : env.cluster, value: t("screens.I4.b2.r1.r"), valueColor: color.orange.base, leading: { kind: "icon", icon: "web" } },
         ...(env.cluster === "devnet" ? [{
           title: t("screens.I4.b2.r2.t"), sub: genesis ? t("screens.I4.b2.r2.s") : t("additions.wallet.faucetGenesisRequired"),

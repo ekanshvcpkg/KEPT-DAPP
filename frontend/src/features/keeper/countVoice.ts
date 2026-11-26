@@ -1,7 +1,8 @@
 // The Keeper counting reps out loud: clips pre-generated in the custom KEPT Keeper voice (ElevenLabs,
 // backend/scripts/keeper_count_voice.ts) and bundled, so counting is instant and offline. Metro needs static requires.
 // Hype lines (hypeLines.ts, backend/scripts/keeper_hype_voice.ts) play on their own player and never over a count or a
-// set line: those cut a hype line off, and the coach (hypeCoach.ts) waits for the clip playing now (keeperBusyMs).
+// set line: those cut a hype line off, and the coach (hypeCoach.ts) waits for the clip playing now (keeperBusyMs). Any
+// other Keeper line (voice.ts) silences them, waiting ones included (silenceHype).
 import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
 import { useSettings } from "@/state/settings";
@@ -77,10 +78,24 @@ const MS = durations as Record<string, number>;
 // When the clip the Keeper is saying now ends (Date.now() ms).
 let busyUntil = 0;
 let hypePlayer: AudioPlayer | null = null;
+// Bumped by silenceHype(): a hype line scheduled before it never plays.
+let hypeEpoch = 0;
+// When the hype line playing now ends (busyUntil, unless a count or set line came after it).
+let hypeUntil = -1;
 
 /** Cuts off a hype line that is playing. */
 export function stopHype(): void {
   try { hypePlayer?.pause(); } catch { /* nothing playing */ }
+}
+
+/**
+ * Another Keeper line is starting (the spoken verdict, a transaction read aloud, an answer: voice.ts): the hype line
+ * playing stops and the ones still waiting (the done line after the set) never play.
+ */
+export function silenceHype(): void {
+  hypeEpoch++;
+  stopHype();
+  if (busyUntil === hypeUntil) busyUntil = 0; // the line stopped: the Keeper isn't saying it any more
 }
 
 // Three players in rotation: a new number replaces one still playing instead of queueing behind it.
@@ -130,7 +145,7 @@ export function sayHype(id: string): number {
     return 0;
   }
   const ms = hypeMs(id);
-  busyUntil = Date.now() + ms;
+  busyUntil = hypeUntil = Date.now() + ms;
   return ms;
 }
 
@@ -140,8 +155,11 @@ export function sayHype(id: string): number {
  * (tests).
  */
 export function repSetHype(target: number, set: Pick<HypeCoachDeps, "schedule" | "canSpeak"> & Partial<HypeCoachDeps>): HypeCoach {
+  const { schedule, ...rest } = set;
   return new HypeCoach(target, {
     now: Date.now, busyMs: () => keeperBusyMs(), play: sayHype, clipMs: hypeMs,
-    lang: () => useSettings.getState().hypeLanguage, ...set,
+    lang: () => useSettings.getState().hypeLanguage, ...rest,
+    // A line waiting when another Keeper line starts (silenceHype) is dropped.
+    schedule: (ms, fn, keep) => { const epoch = hypeEpoch; schedule(ms, () => { if (epoch === hypeEpoch) fn(); }, keep); },
   });
 }

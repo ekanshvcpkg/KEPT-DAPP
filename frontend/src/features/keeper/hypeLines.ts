@@ -3,7 +3,10 @@
 // (the default) and "noFilter" (Settings: swearing at the set, never slurs, never about identity, body, sex or
 // self-harm). Pure data, no React Native imports: backend/scripts/keeper_hype_voice.ts reads it to generate the clips
 // (frontend/assets/voice/hype/<id>.mp3, bundled through hypeSources.ts), and the tests check every id has its clip.
-// Keep each line short (HYPE_MAX_CHARS, about 1–2 s spoken) so it fits between two reps.
+// Two tiers: the long lines (HYPE_MAX_CHARS, about 1.3–2.4 s spoken) for every situation, and a SHORT tier (1–3 words,
+// HYPE_SHORT_MAX_CHARS, spoken in about 0.9 s or less) for the moments inside the rep rhythm (streak, milestones, slow,
+// half rep, fault): at 1.5–2.5 s a rep, a long line rarely ends before the next count, a short one usually does. The coach
+// (hypeCoach.ts) plays a long line when it fits and falls back to a short one; start and done stay long.
 
 export type HypeLang = "clean" | "noFilter";
 export type HypeSituation =
@@ -21,6 +24,8 @@ export type HypeSituation =
   | "resume"; // counting again after the Freeze photo
 
 export const HYPE_MAX_CHARS = 60;
+export const HYPE_SHORT_MAX_CHARS = 20;
+export type HypeTier = "long" | "short";
 
 const TEXTS: Record<HypeSituation, Record<HypeLang, readonly string[]>> = {
   start: {
@@ -73,18 +78,40 @@ const TEXTS: Record<HypeSituation, Record<HypeLang, readonly string[]>> = {
   },
 };
 
+/** The short tier: only the moments between two counts. Same character, a breath long. */
+const SHORT: Partial<Record<HypeSituation, Record<HypeLang, readonly string[]>>> = {
+  streak: { clean: ["Again.", "Lovely.", "That's it."], noFilter: ["Fucking move.", "Bloody go.", "Arse in gear."] },
+  first: { clean: ["One. Barely."], noFilter: ["One. Bloody hell."] },
+  halfway: { clean: ["Halfway, champ."], noFilter: ["Bloody halfway."] },
+  threeLeft: { clean: ["Three left."], noFilter: ["Three, damn it."] },
+  last: { clean: ["Last one."], noFilter: ["Last bloody one."] },
+  slow: { clean: ["Move it."], noFilter: ["Move, damn it."] },
+  halfRep: { clean: ["Deeper."], noFilter: ["Get bloody down."] },
+  fault: { clean: ["Sloppy."], noFilter: ["Bloody sloppy."] },
+  back: { clean: ["There you are.", "Welcome back."], noFilter: ["Finally, damn it.", "About bloody time."] },
+  resume: { clean: ["Back to it.", "Carry on."], noFilter: ["Back, damn it.", "Bloody carry on."] },
+};
+
 export const HYPE_SITUATIONS = Object.keys(TEXTS) as HypeSituation[];
+export const HYPE_SHORT_SITUATIONS = Object.keys(SHORT) as HypeSituation[];
 export const HYPE_LANGS: readonly HypeLang[] = ["clean", "noFilter"];
 
-export interface HypeLine { id: string; situation: HypeSituation; lang: HypeLang; text: string }
+export interface HypeLine { id: string; situation: HypeSituation; lang: HypeLang; tier: HypeTier; text: string }
 
-/** `start-clean-1`, `start-nofilter-1`, …: the id is also the clip's file name (frontend/assets/voice/hype/<id>.mp3). */
-const idOf = (situation: HypeSituation, lang: HypeLang, i: number) => `${situation}-${lang === "clean" ? "clean" : "nofilter"}-${i + 1}`;
+/**
+ * `start-clean-1`, `start-nofilter-1`, … (long) and `streak-clean-s1`, … (short): the id is also the clip's file name
+ * (frontend/assets/voice/hype/<id>.mp3).
+ */
+const idOf = (situation: HypeSituation, lang: HypeLang, tier: HypeTier, i: number) =>
+  `${situation}-${lang === "clean" ? "clean" : "nofilter"}-${tier === "short" ? "s" : ""}${i + 1}`;
 
-export const HYPE_LINES: readonly HypeLine[] = HYPE_SITUATIONS.flatMap((situation) =>
-  HYPE_LANGS.flatMap((lang) => TEXTS[situation][lang].map((text, i) => ({ id: idOf(situation, lang, i), situation, lang, text }))));
+const linesOf = (tier: HypeTier, texts: Partial<Record<HypeSituation, Record<HypeLang, readonly string[]>>>): HypeLine[] =>
+  HYPE_SITUATIONS.flatMap((situation) => HYPE_LANGS.flatMap((lang) =>
+    (texts[situation]?.[lang] ?? []).map((text, i) => ({ id: idOf(situation, lang, tier, i), situation, lang, tier, text }))));
 
-/** The line ids for a situation in a language, in manifest order. */
-export function hypeIds(situation: HypeSituation, lang: HypeLang): string[] {
-  return HYPE_LINES.filter((l) => l.situation === situation && l.lang === lang).map((l) => l.id);
+export const HYPE_LINES: readonly HypeLine[] = [...linesOf("long", TEXTS), ...linesOf("short", SHORT)];
+
+/** The line ids for a situation in a language and tier (long unless said), in manifest order. */
+export function hypeIds(situation: HypeSituation, lang: HypeLang, tier: HypeTier = "long"): string[] {
+  return HYPE_LINES.filter((l) => l.situation === situation && l.lang === lang && l.tier === tier).map((l) => l.id);
 }

@@ -1,11 +1,11 @@
 // The Keeper's hype during one rep set: turns the set's moments into lines (hypeChooser.ts) and times them so he never
 // talks over himself. A line waits for the clip playing now (the count, "Freeze!") to end, plays only if nothing newer
-// happened meanwhile and the set may hear it (counting, not the Freeze; the done line after the set), and is skipped if
-// the next rep would come before it ends (from the set's rep cadence). A count that comes anyway cuts the line off
-// (countVoice.ts). No React Native here: the clock, timers and audio come in as deps, so tests drive it directly.
-import { chooseHype } from "./hypeChooser";
+// happened meanwhile and the set may hear it (counting, not the Freeze; the done line after the set), and must end
+// before the next rep (from the set's rep cadence): a long line when one fits, else a short one (hypeLines.ts), else
+// nothing. A count that comes anyway cuts the line off (countVoice.ts). No React Native here: the clock, timers and
+// audio come in as deps, so tests drive it directly.
+import { hypeSituation, pickHype } from "./hypeChooser";
 import type { HypeEvent } from "./hypeChooser";
-import { HYPE_LINES } from "./hypeLines";
 import type { HypeLang, HypeSituation } from "./hypeLines";
 
 export interface HypeCoachDeps {
@@ -24,13 +24,17 @@ export interface HypeCoachDeps {
   rng?: () => number;
 }
 
-/** A breath between the count and the line after it. */
+/**
+ * Every bundled Keeper clip ends in at least 0.19 s of silence (measured at -45 dB: ElevenLabs' tail), so a clip counts
+ * as over this much before its file ends: a line may start in the count's silent tail, and the next count may land in
+ * the line's (cutting off nothing you'd hear).
+ */
+export const HYPE_TAIL_MS = 150;
+/** A breath between the count and the line after it, on top of the count's silent tail. */
 export const HYPE_AFTER_MS = 150;
 /** A line must end at least this long before the predicted next rep. */
 export const NEXT_REP_MARGIN_MS = 200;
 const DEFAULT_CADENCE_MS = 2500;
-
-const SITUATION = new Map(HYPE_LINES.map((l) => [l.id, l.situation]));
 
 export class HypeCoach {
   private lastAt = -Infinity;
@@ -49,7 +53,7 @@ export class HypeCoach {
   /** The counter saw the start position: the first time the set's opener, after losing you a welcome back. */
   ready(): void {
     if (!this.started) { this.started = true; this.say({ kind: "start" }, false); }
-    else if (this.wasLost) this.say({ kind: "back" }, false);
+    else if (this.wasLost) this.say({ kind: "back" }, true);
     this.wasLost = false;
   }
 
@@ -67,7 +71,7 @@ export class HypeCoach {
   halfRep(): boolean { return this.started && this.say({ kind: "halfRep" }, true); }
   fault(): boolean { return this.started && this.say({ kind: "fault" }, true); }
   /** Counting again after the Freeze photo (a camera stall: lost(), then a welcome back at the next ready). */
-  resume(): void { if (this.started) this.say({ kind: "resume" }, false); }
+  resume(): void { if (this.started) this.say({ kind: "resume" }, true); }
   /** The set is complete. True when a done line was picked (the caller then skips its generic one). */
   done(): boolean { return this.say({ kind: "done" }, false); }
 
@@ -80,21 +84,22 @@ export class HypeCoach {
 
   private say(event: HypeEvent, beforeNextRep: boolean): boolean {
     const now = this.d.now();
-    const id = chooseHype({
+    const situation = hypeSituation({
       event, target: this.target, sinceLastMs: now - this.lastAt, repsSinceHype: this.repN - this.hypeRep,
-      lang: this.d.lang(), lastId: this.lastId, used: this.used,
     }, this.d.rng);
-    if (!id) return false;
-    const situation = SITUATION.get(id)!;
+    if (!situation) return false;
     const seq = ++this.seq; // a newer moment drops a pending line, even when its own line doesn't fit
     const nextRepAt = beforeNextRep ? now + this.cadence() : Infinity;
-    const wait = this.d.busyMs() + HYPE_AFTER_MS;
-    // It can't end before the next rep even if nothing else happens: say so now, so the caller's own line plays instead.
-    if (now + wait + this.d.clipMs(id) > nextRepAt - NEXT_REP_MARGIN_MS) return false;
+    const endsInTime = (at: number) => (id: string) => at + this.d.clipMs(id) - HYPE_TAIL_MS <= nextRepAt - NEXT_REP_MARGIN_MS;
+    const wait = Math.max(0, this.d.busyMs() - HYPE_TAIL_MS) + HYPE_AFTER_MS;
+    // A long line if one ends before the next rep, else a short one. None: say so now, so the caller's own line plays.
+    const pick = { lang: this.d.lang(), lastId: this.lastId, used: this.used, fits: endsInTime(now + wait) };
+    const id = pickHype(situation, pick, this.d.rng) ?? pickHype(situation, { ...pick, tier: "short" }, this.d.rng);
+    if (!id) return false;
     this.d.schedule(wait, () => {
-      if (seq !== this.seq || this.d.busyMs() > 0 || !this.d.canSpeak(situation)) return;
+      if (seq !== this.seq || this.d.busyMs() > HYPE_TAIL_MS || !this.d.canSpeak(situation)) return;
       const t = this.d.now();
-      if (t + this.d.clipMs(id) > nextRepAt - NEXT_REP_MARGIN_MS) return;
+      if (!endsInTime(t)(id)) return;
       if (this.d.play(id) <= 0) return;
       this.lastAt = t; this.lastId = id; this.used.add(id); this.hypeRep = this.repN;
     }, event.kind === "done");

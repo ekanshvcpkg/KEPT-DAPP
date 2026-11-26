@@ -221,6 +221,8 @@ export function Gallery() {
             { title: k("screens.I1.b5.r0.t"), sub: k("screens.I1.b5.r0.s"), leading: { kind: "icon", icon: "eye-outline" }, chevron: true, onPress: noop },
             { title: k("screens.I1.b4.r0.t"), sub: k("screens.I1.b4.r0.s"), leading: { kind: "mark" }, toggle: { on, onChange: setOn } },
             { title: k("screens.I1.b4.r1.t"), sub: k("screens.I1.b4.r1.s"), leading: { kind: "avatar", config: avatar }, value: k("screens.I1.b4.r1.r") },
+            // Disabled toggle row: dimmed, announced, a press does nothing (I4 "The Keeper, no filter" with the voice off).
+            { title: k("additions.keeper.hypeSetting"), sub: k("additions.keeper.hypeSettingSub"), leading: { kind: "icon", icon: "fire" }, toggle: { on: false, onChange: noop }, disabled: true },
           ]} />
           <Toggle on={!on} onChange={(v) => setOn(!v)} label={k("screens.I1.b4.r0.t")} />
           <Breakdown rows={[0, 1, 2, 3].map((i) => ({ label: k(`screens.L1.b3.row${i}.l`), value: k(`screens.L1.b3.row${i}.v`), total: i === 3, ...(i === 2 ? { color: color.lime.base } : {}) }))} />

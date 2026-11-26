@@ -1,6 +1,7 @@
-// The Keeper's hype lines in a live rep set: the manifest and its bundled clips, the chooser (cooldowns, variety,
-// language), the coach's timing (never over a count, never in the Freeze, skipped when the next rep comes first), the
-// player (Keeper voice setting) and the Settings switch for the "no filter" set.
+// The Keeper's hype lines in a live rep set: the manifest and its bundled clips (long lines, and a short tier for the
+// moments inside the rep rhythm), the chooser (cooldowns, variety, language, tier), the coach's timing (never over a
+// count, never in the Freeze, a short line when a long one can't end before the next rep, nothing when neither can), the
+// player (Keeper voice setting; another Keeper line silences it) and the Settings switch for the "no filter" set.
 import { existsSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
@@ -10,15 +11,18 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { t } from "@/copy";
 import { I4 } from "@/screens/profile/Profile";
+import { useMode } from "@/state/mode";
+import { useSession } from "@/state/session";
 import { useSettings } from "@/state/settings";
-import { HYPE_LANGS, HYPE_LINES, HYPE_MAX_CHARS, HYPE_SITUATIONS, hypeIds } from "@/features/keeper/hypeLines";
-import { HYPE_GAP_MS, SLOW_REP_MS, chooseHype, hypeSituation, repMilestone } from "@/features/keeper/hypeChooser";
+import { HYPE_LANGS, HYPE_LINES, HYPE_MAX_CHARS, HYPE_SHORT_MAX_CHARS, HYPE_SHORT_SITUATIONS, HYPE_SITUATIONS, hypeIds } from "@/features/keeper/hypeLines";
+import { HYPE_GAP_MS, SLOW_REP_MS, chooseHype, hypeSituation, pickHype, repMilestone } from "@/features/keeper/hypeChooser";
 import type { HypeInput } from "@/features/keeper/hypeChooser";
-import { HYPE_AFTER_MS, HypeCoach } from "@/features/keeper/hypeCoach";
+import { HYPE_AFTER_MS, HYPE_TAIL_MS, HypeCoach, NEXT_REP_MARGIN_MS } from "@/features/keeper/hypeCoach";
 import type { HypeCoachDeps } from "@/features/keeper/hypeCoach";
 import { HYPE_SOURCES } from "@/features/keeper/hypeSources";
 import durations from "@/features/keeper/voiceDurations.gen.json";
-import { keeperBusyMs, repSetHype, sayCount, sayHype } from "@/features/keeper/countVoice";
+import { keeperBusyMs, repSetHype, sayCount, sayHype, silenceHype } from "@/features/keeper/countVoice";
+import { keeperSay } from "@/features/keeper/voice";
 
 const HYPE_DIR = join(__dirname, "../../assets/voice/hype");
 const SWEAR = /\b(fuck\w*|shit\w*|shite|bloody|damn\w*|arse\w*|crap|hell|bollocks|sod|bastard\w*)\b/i;
@@ -27,9 +31,13 @@ const player = (jest.requireMock("expo-audio") as { __player: { play: jest.Mock;
 const seq = (...v: number[]) => { let i = 0; return () => v[i++ % v.length]!; };
 const input = (p: Partial<HypeInput> & Pick<HypeInput, "event">): HypeInput =>
   ({ target: 10, sinceLastMs: Infinity, repsSinceHype: 0, lang: "clean", ...p });
+/** Each bundled clip's real length in ms ("count-7", "freeze", "hype/streak-clean-s1"). */
+const MS = durations as Record<string, number>;
+const clipLen = (id: string) => MS[`hype/${id}`]!;
+const isShort = (id: string) => /-s\d+$/.test(id);
 
 describe("hype manifest", () => {
-  it("has 3–4 short variants per situation in both languages, unique ids and texts", () => {
+  it("has 3–4 long variants per situation in both languages, unique ids and texts", () => {
     for (const s of HYPE_SITUATIONS) for (const lang of HYPE_LANGS) {
       const n = hypeIds(s, lang).length;
       expect([s, lang, n >= 3 && n <= 4]).toEqual([s, lang, true]);
@@ -40,6 +48,23 @@ describe("hype manifest", () => {
     }
     expect(new Set(HYPE_LINES.map((l) => l.id)).size).toBe(HYPE_LINES.length);
     expect(new Set(HYPE_LINES.map((l) => l.text)).size).toBe(HYPE_LINES.length);
+  });
+
+  it("has a short tier (1–3 words) only for the moments inside the rep rhythm, 6–16 lines per language", () => {
+    expect([...HYPE_SHORT_SITUATIONS].sort()).toEqual(["back", "fault", "first", "halfRep", "halfway", "last", "resume", "slow", "streak", "threeLeft"]);
+    for (const s of HYPE_SITUATIONS) for (const lang of HYPE_LANGS) {
+      const n = hypeIds(s, lang, "short").length;
+      expect([s, lang, HYPE_SHORT_SITUATIONS.includes(s) ? n >= 1 && n <= 3 : n === 0]).toEqual([s, lang, true]);
+    }
+    for (const lang of HYPE_LANGS) {
+      const short = HYPE_LINES.filter((l) => l.tier === "short" && l.lang === lang);
+      expect(short.length).toBeGreaterThanOrEqual(6);
+      expect(short.length).toBeLessThanOrEqual(16);
+    }
+    for (const l of HYPE_LINES.filter((x) => x.tier === "short")) {
+      expect([l.id, isShort(l.id), l.text.length <= HYPE_SHORT_MAX_CHARS, l.text.split(/\s+/).length <= 3]).toEqual([l.id, true, true, true]);
+    }
+    expect(HYPE_LINES.filter((l) => l.tier === "long").every((l) => !isShort(l.id))).toBe(true);
   });
 
   it("keeps the clean set clean, and the no-filter set actually swears", () => {
@@ -57,17 +82,21 @@ describe("hype manifest", () => {
     const files = readdirSync(HYPE_DIR).filter((f) => f.endsWith(".mp3")).sort();
     expect(files).toEqual(HYPE_LINES.map((l) => `${l.id}.mp3`).sort());
     expect(Object.keys(HYPE_SOURCES).sort()).toEqual(HYPE_LINES.map((l) => l.id).sort());
-    const ms = durations as Record<string, number>;
-    let bytes = 0;
+    let bytes = 0, shortBytes = 0;
     for (const l of HYPE_LINES) {
       const file = join(HYPE_DIR, `${l.id}.mp3`);
       expect(existsSync(file)).toBe(true);
       bytes += statSync(file).size;
+      if (l.tier === "short") shortBytes += statSync(file).size;
       expect(HYPE_SOURCES[l.id]).toBeTruthy();
-      // 1–2 s spoken (a little slack for the voice's pauses), so a line fits between two reps.
-      expect([l.id, ms[`hype/${l.id}`]! >= 600 && ms[`hype/${l.id}`]! <= 3000]).toEqual([l.id, true]);
+      const ms = clipLen(l.id);
+      // Long: 1–2 s spoken (a little slack for the voice's pauses). Short: about 0.9 s spoken, plus the voice's silent
+      // tail (HYPE_TAIL_MS), so it fits between two reps at 2 s a rep.
+      if (l.tier === "long") expect([l.id, ms >= 600 && ms <= 3000]).toEqual([l.id, true]);
+      else expect([l.id, ms >= 300 && ms - HYPE_TAIL_MS <= 1000]).toEqual([l.id, true]);
     }
     expect(bytes).toBeLessThan(1.5 * 1024 * 1024);
+    expect(shortBytes).toBeLessThan(200 * 1024);
   });
 });
 
@@ -119,10 +148,22 @@ describe("hype chooser", () => {
     // All used: still never the last one.
     expect(chooseHype(input({ event: { kind: "start" }, used: new Set(ids), lastId: ids[1] }), () => 0.5)).not.toBe(ids[1]);
   });
+
+  it("picks from the tier asked for, only lines that fit, and none rather than the last one again", () => {
+    expect(pickHype("streak", { lang: "clean", tier: "short" }, () => 0)).toBe("streak-clean-s1");
+    expect(pickHype("streak", { lang: "noFilter", tier: "short" }, () => 0.99)).toBe("streak-nofilter-s3");
+    expect(pickHype("start", { lang: "clean", tier: "short" }, () => 0)).toBeNull(); // no short opener
+    // Only the lines that fit: under 1 s, the long tier has none.
+    const short = (id: string) => clipLen(id) < 1000;
+    expect(pickHype("halfway", { lang: "clean", fits: short }, () => 0)).toBeNull();
+    expect(pickHype("halfway", { lang: "clean", tier: "short", fits: short }, () => 0)).toBe("halfway-clean-s1");
+    // A situation with one short line: never twice in a row.
+    expect(pickHype("halfRep", { lang: "clean", tier: "short", lastId: "halfRep-clean-s1" }, () => 0)).toBeNull();
+  });
 });
 
 /** A coach on a fake clock: schedule() queues, flush() runs what's due, play() records and makes the Keeper busy. */
-function fakeCoach(target: number, o: { canSpeak?: () => boolean; play?: (id: string) => number; lang?: "clean" | "noFilter"; rng?: () => number } = {}) {
+function fakeCoach(target: number, o: { canSpeak?: () => boolean; play?: (id: string) => number; lang?: "clean" | "noFilter"; rng?: () => number; real?: boolean } = {}) {
   let now = 0, busyUntil = 0;
   const queue: { at: number; fn: () => void; keep: boolean }[] = [];
   const played: { id: string; at: number }[] = [];
@@ -131,8 +172,8 @@ function fakeCoach(target: number, o: { canSpeak?: () => boolean; play?: (id: st
     schedule: (ms, fn, keep) => { queue.push({ at: now + ms, fn, keep: !!keep }); },
     busyMs: () => Math.max(0, busyUntil - now),
     canSpeak: o.canSpeak ?? (() => true),
-    play: o.play ?? ((id) => { played.push({ id, at: now }); busyUntil = now + 1500; return 1500; }),
-    clipMs: () => 1500,
+    play: o.play ?? ((id) => { const ms = o.real ? clipLen(id) : 1500; played.push({ id, at: now }); busyUntil = now + ms; return ms; }),
+    clipMs: (id) => (o.real ? clipLen(id) : 1500),
     lang: () => o.lang ?? "clean",
     rng: o.rng ?? seq(0.1, 0.7, 0.4, 0.9, 0.2),
   };
@@ -150,7 +191,30 @@ function fakeCoach(target: number, o: { canSpeak?: () => boolean; play?: (id: st
   };
   /** The Keeper says a count of ms (what sayCount does to the busy clock). */
   const count = (ms = 700) => { busyUntil = now + ms; };
-  return { coach, advance, count, played, queue, setBusy: (ms: number) => { busyUntil = now + ms; } };
+  return { coach, advance, count, played, queue, now: () => now, setBusy: (ms: number) => { busyUntil = now + ms; } };
+}
+
+/**
+ * A steady set on the real clip lengths: "Begin", then a rep every `every` ms (each count its own clip), "Freeze!" after
+ * rep `freezeAfter` (3.5 s, the coach may not speak), then the done line. Returns what played and when each count was.
+ */
+function steadySet(target: number, every: number, o: { lang: "clean" | "noFilter"; rng: () => number; freezeAfter: number }) {
+  let freeze = false;
+  const f = fakeCoach(target, { real: true, lang: o.lang, rng: o.rng, canSpeak: () => !freeze });
+  const counts: { at: number; ms: number }[] = [];
+  let freezeWindow: [number, number] = [0, 0];
+  f.setBusy(MS.go!); f.coach.ready(); f.advance(3000);
+  for (let n = 1; n <= target; n++) {
+    counts.push({ at: f.now(), ms: MS[`count-${n}`]! });
+    f.count(MS[`count-${n}`]!); f.coach.rep(n, every - 300);
+    if (n === target) { f.coach.done(); f.advance(4000); break; }
+    if (n === o.freezeAfter) {
+      f.setBusy(MS.freeze!); freeze = true; freezeWindow = [f.now(), f.now() + 3500];
+      f.advance(3500); freeze = false; f.coach.resume();
+    }
+    f.advance(every);
+  }
+  return { played: f.played, counts, freezeWindow };
 }
 
 describe("hype coach", () => {
@@ -158,7 +222,7 @@ describe("hype coach", () => {
     const f = fakeCoach(10);
     f.setBusy(1358); // "Begin. I'm counting."
     f.coach.ready();
-    expect(f.queue[0]!.at).toBe(1358 + HYPE_AFTER_MS);
+    expect(f.queue[0]!.at).toBe(1358 - HYPE_TAIL_MS + HYPE_AFTER_MS); // in the clip's silent tail, plus a breath
     f.advance(1000);
     expect(f.played).toEqual([]);
     f.advance(1000);
@@ -178,7 +242,7 @@ describe("hype coach", () => {
     // Rep 1 of a slow, steady set: "first" fits after the count.
     f.count(); f.coach.rep(1, 3000); f.advance(3500);
     expect(f.played.map((p) => p.id)[1]).toMatch(/^first-clean-/);
-    expect(f.played[1]!.at).toBeGreaterThanOrEqual(5000 + 700 + HYPE_AFTER_MS);
+    expect(f.played[1]!.at).toBeGreaterThanOrEqual(5000 + 700 - HYPE_TAIL_MS + HYPE_AFTER_MS);
     // Halfway at the freeze: the line is dropped.
     f.count(); f.coach.rep(4, 3000); f.advance(3500); f.count(); freeze = true; f.coach.rep(5, 3000); f.advance(5000);
     expect(f.played.some((p) => p.id.startsWith("halfway"))).toBe(false);
@@ -193,7 +257,8 @@ describe("hype coach", () => {
   });
 
   it("a newer moment replaces a pending line; a line that didn't play doesn't count", () => {
-    const f = fakeCoach(10);
+    // Real clip lengths: right after the Freeze the coach checks the line ends before the next rep (a short one fits).
+    const f = fakeCoach(10, { real: true });
     f.coach.ready(); f.advance(5000);
     f.setBusy(1306); // "Freeze!" just started
     f.coach.resume(); f.coach.resume(); // the freeze end and the counter's "setup" right after
@@ -251,6 +316,51 @@ describe("hype coach", () => {
     f.advance(3000);
     expect(f.played).toHaveLength(before);
   });
+
+  it("plays a long line when one ends before the next rep, else a short one, else nothing (real clip lengths)", () => {
+    // 3 s a rep: room for a long line after the count (rng 0.9: no plain-rep line at rep 4, so halfway is due at 5).
+    const slow = fakeCoach(10, { real: true, rng: () => 0.9 });
+    slow.coach.ready(); slow.advance(5000);
+    for (let n = 1; n <= 5; n++) { slow.count(MS[`count-${n}`]); slow.coach.rep(n, 2500); slow.advance(3000); }
+    expect(slow.played.map((p) => p.id).slice(1)).toEqual([expect.stringMatching(/^first-clean-\d$/), expect.stringMatching(/^halfway-clean-\d$/)]);
+    // 2 s a rep: no long halfway line ends before rep 6; the short one does.
+    const brisk = fakeCoach(10, { real: true, rng: () => 0.9 });
+    brisk.coach.ready(); brisk.advance(5000);
+    for (let n = 1; n <= 5; n++) { brisk.count(MS[`count-${n}`]); brisk.coach.rep(n, 1700); brisk.advance(2000); }
+    const halfway = brisk.played.find((p) => p.id.startsWith("halfway-"))!;
+    expect(halfway.id).toBe("halfway-clean-s1");
+    expect(halfway.at + clipLen(halfway.id) - HYPE_TAIL_MS).toBeLessThanOrEqual(brisk.now() - NEXT_REP_MARGIN_MS);
+    // 1.2 s a rep: no long line fits; only the shortest clips may, and each still ends before the next count.
+    const fast = fakeCoach(10, { real: true });
+    fast.coach.ready(); fast.advance(5000);
+    const countAt: number[] = [];
+    for (let n = 1; n <= 9; n++) { countAt.push(fast.now()); fast.count(MS[`count-${n}`]); fast.coach.rep(n, 1000); fast.advance(1200); }
+    const [opener, ...mid] = fast.played;
+    expect(opener!.id).toMatch(/^start-/);
+    for (const p of mid) {
+      expect(p.id).toMatch(/-s\d$/);
+      const next = countAt.find((c) => c > p.at)!;
+      expect(p.at + clipLen(p.id) - HYPE_TAIL_MS).toBeLessThanOrEqual(next);
+    }
+  });
+
+  it("a 20-rep set at 2 s a rep with the Freeze gets several mid-set lines, never over a count, never in the Freeze", () => {
+    for (const lang of HYPE_LANGS) for (const rng of [seq(0.13, 0.62, 0.38, 0.91, 0.27), seq(0.5), seq(0.9, 0.1)]) {
+      const r = steadySet(20, 2000, { lang, rng, freezeAfter: 8 });
+      const mid = r.played.filter((p) => !/^(start|done|back|resume)-/.test(p.id));
+      expect([lang, mid.length >= 4]).toEqual([lang, true]);
+      expect(mid.some((p) => isShort(p.id))).toBe(true);
+      for (const p of mid) {
+        const last = r.counts.filter((c) => c.at <= p.at).at(-1)!;
+        const next = r.counts.find((c) => c.at > p.at);
+        // After the count's words, and over (bar its silent tail) before the next count.
+        expect([p.id, p.at >= last.at + last.ms - HYPE_TAIL_MS]).toEqual([p.id, true]);
+        if (next) expect([p.id, p.at + clipLen(p.id) - HYPE_TAIL_MS <= next.at]).toEqual([p.id, true]);
+      }
+      expect(r.played.filter((p) => p.at >= r.freezeWindow[0] && p.at < r.freezeWindow[1])).toEqual([]);
+      expect(r.played.at(-1)!.id).toMatch(/^done-/);
+    }
+  });
 });
 
 describe("hype player", () => {
@@ -267,6 +377,33 @@ describe("hype player", () => {
     expect(keeperBusyMs()).toBeGreaterThan(0);
     sayCount(3);
     expect(player.pause).toHaveBeenCalled();
+  });
+
+  it("another Keeper line (the spoken verdict) stops the hype line playing and drops the one still waiting", () => {
+    jest.useFakeTimers();
+    try {
+      useMode.setState({ mode: "live" }); useSession.setState({ token: "tok" });
+      const heard: string[] = [];
+      const hype = () => repSetHype(10, { schedule: (ms, fn) => { setTimeout(fn, ms); }, canSpeak: () => true, play: (id) => { heard.push(id); return sayHype(id); } });
+      // Waiting: the opener is due in 150 ms; the verdict starts first.
+      hype().ready();
+      keeperSay("Kept. Barely.");
+      jest.advanceTimersByTime(5000);
+      expect(heard).toEqual([]);
+      // Playing: the verdict cuts it off.
+      hype().ready();
+      jest.advanceTimersByTime(1000);
+      expect(heard).toEqual([expect.stringMatching(/^start-clean-/)]);
+      player.pause.mockClear();
+      keeperSay("Not kept.");
+      expect(player.pause).toHaveBeenCalled();
+      // A plain silenceHype() does the same for a line still waiting.
+      hype().ready(); silenceHype(); jest.advanceTimersByTime(5000);
+      expect(heard).toHaveLength(1);
+    } finally {
+      jest.useRealTimers();
+      useMode.setState({ mode: null }); useSession.setState({ token: null });
+    }
   });
 
   it("speaks in the language picked in Settings", () => {
@@ -292,8 +429,8 @@ describe("Settings › The Keeper, no filter", () => {
   const Stack = createNativeStackNavigator();
   const safe = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 24, left: 0, right: 0, bottom: 16 } };
 
-  it("is off (clean) by default and switches the hype language", async () => {
-    useSettings.getState().set({ hypeLanguage: "clean" });
+  it("is off (clean) by default, switches the hype language, and is locked while the Keeper's voice is off", async () => {
+    useSettings.getState().set({ hypeLanguage: "clean", keeperVoice: true });
     // No retries, no garbage-collection timers: nothing outlives the test.
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
     const view = await render(
@@ -314,6 +451,15 @@ describe("Settings › The Keeper, no filter", () => {
     expect(useSettings.getState().hypeLanguage).toBe("noFilter");
     await fireEvent.press(screen.getByRole("switch", { name: t("additions.keeper.hypeSetting") }));
     expect(useSettings.getState().hypeLanguage).toBe("clean");
+    // The Keeper's voice off: nothing to hear, so the switch is dimmed and locked.
+    await fireEvent.press(screen.getByRole("switch", { name: t("additions.keeper.voiceSetting") }));
+    expect(useSettings.getState().keeperVoice).toBe(false);
+    const locked = screen.getByRole("switch", { name: t("additions.keeper.hypeSetting") });
+    expect(locked.props.accessibilityState).toMatchObject({ checked: false, disabled: true });
+    await fireEvent.press(locked);
+    expect(useSettings.getState().hypeLanguage).toBe("clean");
+    await fireEvent.press(screen.getByRole("switch", { name: t("additions.keeper.voiceSetting") }));
+    expect(screen.getByRole("switch", { name: t("additions.keeper.hypeSetting") }).props.accessibilityState.disabled).toBeFalsy();
     await act(async () => { view.unmount(); });
     queryClient.clear();
   });
