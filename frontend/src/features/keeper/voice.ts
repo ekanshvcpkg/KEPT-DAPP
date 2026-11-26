@@ -12,13 +12,18 @@ let player: AudioPlayer | null = null;
 export function keeperSay(text: string | undefined | null): void {
   const line = (text ?? "").trim().slice(0, MAX_CHARS);
   const token = useSession.getState().token;
-  if (!line || !token || useMode.getState().mode !== "live") return;
+  if (!line || !token || useMode.getState().mode !== "live") {
+    if (__DEV__) console.warn("[kept] keeperSay skipped", { line: !!line, token: !!token, mode: useMode.getState().mode });
+    return;
+  }
+  if (__DEV__) console.warn("[kept] keeperSay", line);
   try {
     const source = { uri: `${env.apiUrl}/api/keeper/say?text=${encodeURIComponent(line)}`, headers: { authorization: `Bearer ${token}` } };
     if (player) player.replace(source);
     else player = createAudioPlayer(source);
     player.play();
-  } catch {
+  } catch (e) {
     // no audio: the screen already says it in text
+    if (__DEV__) console.warn("[kept] keeperSay failed", e instanceof Error ? e.message : String(e));
   }
 }
