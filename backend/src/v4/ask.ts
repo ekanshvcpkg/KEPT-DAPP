@@ -67,17 +67,18 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
       const res = await fetchImpl(config.visionApiUrl, {
         method: "POST", signal: AbortSignal.timeout(Math.max(3_000, deadline - Date.now())),
         headers: { "content-type": "application/json", authorization: `Bearer ${config.openApiKey}` },
-        body: JSON.stringify({ model: config.askModel, temperature: 0.4, max_tokens: 400, messages, ...(round < MAX_TOOL_ROUNDS ? { tools: TOOLS, tool_choice: "auto" } : {}) }),
+        // No hidden reasoning: some providers enable it by default and it can use the whole budget, leaving no answer.
+        body: JSON.stringify({ model: config.askModel, temperature: 0.4, max_tokens: 1200, reasoning: { enabled: false }, messages, ...(round < MAX_TOOL_ROUNDS ? { tools: TOOLS, tool_choice: "auto" } : {}) }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
-      const json = (await res.json()) as { error?: { message?: string; code?: unknown }; choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[] };
+      const json = (await res.json()) as { error?: { message?: string; code?: unknown }; provider?: string; usage?: unknown; choices?: { finish_reason?: string; message?: { content?: string | null; tool_calls?: ToolCall[] } }[] };
       // OpenRouter can report a provider error inside an HTTP 200.
       if (json.error || !json.choices?.length) throw new Error(`model error: ${JSON.stringify(json.error ?? "no choices").slice(0, 300)}`);
       const msg = json.choices[0]?.message;
       const calls = msg?.tool_calls ?? [];
       if (!calls.length) {
         const text = speakable(msg?.content ?? "");
-        if (!text) throw new Error("empty answer");
+        if (!text) throw new Error(`empty answer (finish ${json.choices[0]?.finish_reason}, provider ${json.provider}, usage ${JSON.stringify(json.usage)})`);
         return text;
       }
       messages.push({ role: "assistant", content: msg?.content ?? null, tool_calls: calls });
@@ -115,7 +116,7 @@ export async function answerQuestion(question: string, ctx: AskContext, fetchImp
     method: "POST", signal: AbortSignal.timeout(20_000),
     headers: { "content-type": "application/json", authorization: `Bearer ${config.openApiKey}` },
     body: JSON.stringify({
-      model: config.askModel, temperature: 0.4, max_tokens: 160,
+      model: config.askModel, temperature: 0.4, max_tokens: 800, reasoning: { enabled: false },
       messages: [{ role: "system", content: SYSTEM }, { role: "user", content: `Context (JSON):\n${JSON.stringify(ctx)}\n\nQuestion: ${question.slice(0, 400)}` }],
     }),
   }).catch(() => null);
