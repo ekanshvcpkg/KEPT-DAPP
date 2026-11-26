@@ -26,7 +26,7 @@ const vector = JSON.parse(readFileSync(join(__dirname, "../../../packages/engine
 test("a recorded 8 push-up set yields evidence the server's recount accepts", async () => {
   jest.useFakeTimers();
   const done = jest.fn<void, [RepEvidence, string | null]>();
-  await render(<RepSet exercise="pushup" target={8} gesture="thumbs_up" gestureLabel="thumbs up" freezeAfter={4}
+  await render(<RepSet exercise="pushup" target={8} gesture="thumbs_up" freezeAfter={4}
     secondsLeft={() => 300} onNoTime={jest.fn()} onDone={done} onAbort={jest.fn()} />);
   const pose = async (ts: number, p: number[]) => {
     mockClockT = ts;

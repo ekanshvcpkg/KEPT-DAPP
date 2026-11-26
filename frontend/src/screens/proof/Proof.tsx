@@ -189,7 +189,7 @@ function Shoot() {
     return (
       <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} scroll={false}>
         {c && perm?.granted && focused ? (
-          <RepSet exercise={rep.exercise} target={rep.target} gesture={c.gesture} gestureLabel={gestureText(c.gesture)}
+          <RepSet exercise={rep.exercise} target={rep.target} gesture={c.gesture}
             {...(c.freezeAfter ? { freezeAfter: c.freezeAfter } : {})}
             secondsLeft={() => c.expiresAt - nowSeconds()} onNoTime={() => replace("F2c", { id, habit })}
             onCounting={onCounting}

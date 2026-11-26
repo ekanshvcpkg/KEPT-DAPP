@@ -599,7 +599,9 @@
     "holdTop": "Hold the top for a moment: the Keeper lost a beat",
     "restart": "The camera lost the set: start again",
     "tooLong": "That set took too long: start again",
-    "noFreeze": "The Freeze photo didn't take: start again"
+    "noFreeze": "The Freeze photo didn't take: start again",
+    "freezeHand": "Freeze! Raise one hand",
+    "freezeHint": "At “Freeze!” hold still and raise one hand"
   },
   "live": {
     "$source": "hackathon 2026-11-26: live Oath updates over Supabase Realtime (features/oaths/realtime.ts)",

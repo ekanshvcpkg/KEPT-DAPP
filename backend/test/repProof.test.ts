@@ -36,7 +36,7 @@ test('an honest set passes, and the receipt records the server recount', () => {
   assert.ok('receipt' in r, JSON.stringify(r));
   assert.equal(r.receipt.repCount, 8);
   assert.equal(r.receipt.target, 8);
-  assert.deepEqual(r.receipt.freeze, { afterRep: 4, gesture: 'Thumb_Up', t: 8550 });
+  assert.deepEqual(r.receipt.freeze, { afterRep: 4, gesture: 'hand_up', t: 8550 });
   assert.equal(r.receipt.durationMs, 16950);
   assert.match(r.receipt.traceSha256, /^[0-9a-f]{64}$/);
 });
@@ -66,7 +66,7 @@ rejects('a freeze at a rep the server did not pick', evidence(), /wrong rep/, { 
 
 test('the app label for the gesture is not compared (the vision model checks the photo for the challenge gesture)', () => {
   const r = checkRepEvidence(evidence({ freeze: { afterRep: 4, t: 8550, gesture: 'anything', sha256: sha } }), habit, challenge, photo, now);
-  assert.ok('receipt' in r); assert.equal(r.receipt.freeze!.gesture, 'Thumb_Up');
+  assert.ok('receipt' in r); assert.equal(r.receipt.freeze!.gesture, 'hand_up');
 });
 
 test('freezeAfterRep stays between 30% and 70% of the set and varies with the challenge', () => {

@@ -7,7 +7,15 @@ import { canonicalJson } from "./keeper.js";
 
 /** A set may take up to 4 minutes after its challenge was issued. */
 export const REP_SET_MAX_MS = 240_000;
-/** What the vision model is asked to see in the freeze frame (with the challenge gesture, one hand up). */
+/**
+ * The freeze move: one hand raised. The freeze frame is the pose camera's frame (640×480): from 2 m away a finger sign
+ * is a few pixels and can't be read, a raised hand can. Freshness comes from the rep the freeze follows (the server's
+ * pick from the challenge's blockhash) and the trace being usable once, not from which hand sign it is.
+ */
+export const REP_FREEZE_GESTURE = "one hand raised (lifted off the floor or held up in the air; any hand shape counts)";
+export const REP_FREEZE_MOVE = "hand_up";
+
+/** What the vision model is asked to see in the freeze frame (with REP_FREEZE_GESTURE). */
 export const repFreezeObject = (exercise: Exercise) => exercise === "pushup"
   ? "a person mid push-up workout: on the floor in a plank or push-up position (one hand may be raised)"
   : "a person mid squat workout: standing with bent knees or in a squat (one hand may be raised)";
@@ -92,7 +100,7 @@ export function checkRepEvidence(
     // checks the freeze frame for it. The rep it comes after is the server's pick.
     if (k !== freezeAfterRep(challenge, habit.target)) return { error: "The freeze came at the wrong rep" };
     if (f.sha256 !== photoHash) return { error: "The photo isn't the freeze frame" };
-    freeze = { afterRep: k, gesture: challenge.gesture, t: f.t };
+    freeze = { afterRep: k, gesture: REP_FREEZE_MOVE, t: f.t };
   }
 
   const keyframes = (Array.isArray(ev.keyframes) ? ev.keyframes : []).slice(0, 4).flatMap((k: { kind?: unknown; t?: unknown; jpeg?: unknown }) =>

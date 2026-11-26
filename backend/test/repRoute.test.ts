@@ -77,10 +77,10 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
     const photo = frame(3);
     const ok = await verify(photo, evidence(photo));
     assert.equal(ok.status, 200, JSON.stringify(ok.body)); assert.equal(ok.body.pass, true);
-    assert.match(asked.at(-1)!.object, /push-up/); assert.equal(asked.at(-1)!.gesture, 'thumbs up');
+    assert.match(asked.at(-1)!.object, /push-up/); assert.match(asked.at(-1)!.gesture, /hand raised/);
     const receipt = (await (await fetch(`${base}/keeper/receipts/${ok.body.receiptHash}`)).json() as any).receipt;
     assert.equal(receipt.reps.repCount, 8); assert.equal(receipt.reps.target, 8); assert.equal(receipt.reps.exercise, 'pushup');
-    assert.deepEqual(receipt.reps.freeze, { afterRep: 4, gesture: 'Thumb_Up', t: 8550 });
+    assert.deepEqual(receipt.reps.freeze, { afterRep: 4, gesture: 'hand_up', t: 8550 });
 
     // The same set again (new photo, same trace) is refused: a trace proves one set once.
     rows.get(ok.body.verificationId).receipt = receipt;

@@ -4,6 +4,7 @@
 // which recounts it with the same engine (docs/notes/REP_COUNTER_CONTRACT.md); the phone's number is only a display.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { RepCounterView } from "kept-gesture";
 import type { RepCounterHandle } from "kept-gesture";
 import { RepCounter } from "@kept/engine";
@@ -12,8 +13,8 @@ import type { RepEvidence } from "@/api";
 import { t } from "@/copy";
 import { Button } from "@/components/actions";
 import { Chip, ChipRow, Title } from "@/components/content/Basics";
-import { Text } from "@/components/primitives";
-import { color, metrics, radius, type as typeStyles } from "@/theme";
+import { Icon, Text, loopCycles, useAnimationLifecycle } from "@/components/primitives";
+import { color, duration, metrics, radius, type as typeStyles } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { sayCount, sayLine } from "@/features/keeper/countVoice";
 
@@ -32,8 +33,8 @@ const MAX_SET_MS = 235_000;
 /** Seconds a set may need, so it isn't started on a challenge about to expire (~3 s a rep plus the freeze). */
 export const repSetSeconds = (target: number) => target * 3 + 20;
 
-export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, secondsLeft, onCounting, onNoTime, onDone, onAbort }: {
-  exercise: Exercise; target: number; gesture: string; gestureLabel: string;
+export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, onCounting, onNoTime, onDone, onAbort }: {
+  exercise: Exercise; target: number; gesture: string;
   /** The server's pick of the rep after which "Freeze!" comes (the challenge's freezeAfter); a local pick without it (Demo). */
   freezeAfter?: number;
   /** Seconds left on the challenge, and what to do when a set wouldn't fit in them. */
@@ -220,13 +221,41 @@ export function RepSet({ exercise, target, gesture, gestureLabel, freezeAfter, s
         </View>
         {phase === "freeze" ? (
           <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: metrics.screen.gap, alignItems: "center" }}>
-            <Title heading={t("additions.reps.freeze", { gesture: gestureLabel })} align="center" />
+            {/* Read from 2 m away: the move to make, large and moving. */}
+            <RaiseHandCue size={metrics.screen.gap * 7} />
+            <Text style={[typeStyles.displayLg, { color: color.text.primary, textAlign: "center" }]}>{t("additions.reps.freezeHand")}</Text>
           </View>
         ) : null}
       </View>
       {hint ? <ChipRow justify="center"><Chip text={hint} icon="information-outline" tone="grey" /></ChipRow> : null}
+      {/* Known before the set starts: at "Freeze!" the phone is 2 m away. */}
+      {phase === "setup" ? (
+        <View style={{ alignItems: "center", gap: metrics.screen.gap / 2 }}>
+          <RaiseHandCue size={metrics.screen.gap * 3} />
+          <Title heading={t("additions.reps.freezeHint")} align="center" />
+        </View>
+      ) : null}
       {phase === "setup" ? <Button kind="l" icon="arm-flex" label={t("additions.reps.start", { target, label })} onPress={start} disabled={!level} /> : null}
       {phase === "counting" || phase === "freeze" ? <Button kind="t" label={t("additions.reps.stop")} onPress={onAbort} /> : null}
     </View>
+  );
+}
+
+/**
+ * The freeze move, shown as a figure raising one hand: it lifts and tilts in a loop (motion tokens; still under Reduce
+ * Motion, and the loop stops within the app's loop budget).
+ */
+function RaiseHandCue({ size }: { size: number }) {
+  const reduce = useReducedMotion();
+  const p = useSharedValue(0);
+  const onLayout = useAnimationLifecycle([p], () => {
+    if (reduce) return;
+    p.set(withRepeat(withSequence(withTiming(1, { duration: duration.pop }), withTiming(0, { duration: duration.pop })), loopCycles(duration.pop * 2), false));
+  }, [reduce]);
+  const a = useAnimatedStyle(() => ({ transform: [{ translateY: -size * 0.12 * p.value }, { rotate: `${-12 * p.value}deg` }, { scale: 1 + 0.08 * p.value }] }));
+  return (
+    <Animated.View onLayout={onLayout} style={a} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Icon name="human-greeting" size={size} color={color.lime.base} />
+    </Animated.View>
   );
 }

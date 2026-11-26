@@ -13,7 +13,7 @@ import { CheckUnavailableError } from "../v4/verdict.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
 import { parseRepHabit } from "../shared/reps.js";
 import { publicReceiptUrl, publishReceipt } from "../v4/receiptStore.js";
-import { checkRepEvidence, repFreezeObject, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
+import { checkRepEvidence, REP_FREEZE_GESTURE, repFreezeObject, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
 
 export const proofVerifyRouter = Router();
@@ -106,7 +106,7 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   let judged: Awaited<ReturnType<typeof keeper.judge>>;
   try {
     // For a rep set the photo is the freeze frame: a person mid-workout, holding the challenge gesture.
-    judged = await keeper.judge(image, { object: rep ? repFreezeObject(rep.exercise) : expectedObject, gesture: expectedGesture });
+    judged = await keeper.judge(image, rep ? { object: repFreezeObject(rep.exercise), gesture: REP_FREEZE_GESTURE } : { object: expectedObject, gesture: expectedGesture });
   } catch (e) {
     // The model answered but unusably: it was a paid call, so it counts toward the daily limit (not as a failed try).
     // No answer at all (down, timed out): it does not count.
