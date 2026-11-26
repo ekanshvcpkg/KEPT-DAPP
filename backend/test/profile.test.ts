@@ -39,3 +39,12 @@ test("identity and reputation expose the flat fields alongside the original ones
   assert.deepEqual(identityFields({ genesis: false, source: null }), { verifiedSeeker: false, method: "none" });
   assert.deepEqual(reputationFields({ kept: 12, missed: 2 }, { kept: 3, missed: 1 }), { kept: 12, missed: 2, oathsKept: 3, oathsBroken: 1 });
 });
+
+test('the Devnet mock allowlist: listed wallets, or every wallet with "*"', async () => {
+  const { mockAllowed, mockAllowlistActive } = await import('../src/genesis.js');
+  assert.equal(mockAllowed(['A', 'B'], 'A'), true);
+  assert.equal(mockAllowed(['A', 'B'], 'C'), false);
+  assert.equal(mockAllowed(['*'], 'C'), true);
+  assert.equal(mockAllowed([], 'C'), false);
+  assert.equal(mockAllowlistActive(true, 'https://api.mainnet-beta.solana.com'), false, 'never on mainnet, "*" or not');
+});

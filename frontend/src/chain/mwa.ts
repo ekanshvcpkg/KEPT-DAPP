@@ -53,8 +53,9 @@ async function save(next: Saved | null): Promise<void> {
 /**
  * Silent re-authorization with the saved auth token is only used when the wallet has verified KEPT's identity.
  * Phantom declines `reauthorize` for a dApp whose identity URI isn't linked to the app with the
- * `delegate_permission/common.get_login_creds` relation in its assetlinks.json (keptdapp.vercel.app has only
- * handle_all_urls), so every wallet step asks for a fresh Connect until that relation is added.
+ * `delegate_permission/common.get_login_creds` relation in its assetlinks.json. KEPT's own site,
+ * https://kept-keeper.vercel.app (repo site/), grants it for the debug and release signing keys, so builds with
+ * EXPO_PUBLIC_APP_IDENTITY_VERIFIED=1 re-authorize silently.
  */
 const reauthorizeAllowed = (): boolean => env.identity.verified;
 

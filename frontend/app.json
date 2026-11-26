@@ -22,6 +22,11 @@
           "data": [
             {
               "scheme": "https",
+              "host": "kept-keeper.vercel.app",
+              "pathPrefix": "/o/"
+            },
+            {
+              "scheme": "https",
               "host": "keptdapp.vercel.app",
               "pathPrefix": "/o/"
             }

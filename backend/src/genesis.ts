@@ -24,6 +24,11 @@ export async function genesisIdentity(wallet: string): Promise<GenesisIdentity> 
   return identity;
 }
 
+/** Whether the Devnet mock allowlist (SGT_MOCK_ALLOWLIST) lets this wallet in: listed, or the list is "*". */
+export function mockAllowed(allowlist: readonly string[], wallet: string): boolean {
+  return allowlist.includes("*") || allowlist.includes(wallet);
+}
+
 export function mockAllowlistActive(sgtMock: boolean, rpcUrl: string): boolean {
   return sgtMock && !rpcUrl.includes("mainnet");
 }
@@ -31,7 +36,8 @@ export function mockAllowlistActive(sgtMock: boolean, rpcUrl: string): boolean {
 async function lookupGenesis(wallet: string): Promise<GenesisIdentity> {
   const none: GenesisIdentity = { genesis: false, genesisMint: null, source: null };
   if (mockAllowlistActive(config.sgtMock, config.devnetRpcUrl)) {
-    return config.sgtMockAllowlist.includes(wallet) ? { genesis: true, genesisMint: `mock-sgt-${wallet}`, source: "devnet_allowlist" } : none;
+    // "*" lets every wallet in (a public Devnet demo for judges and testers); the mock never runs on mainnet.
+    return mockAllowed(config.sgtMockAllowlist, wallet) ? { genesis: true, genesisMint: `mock-sgt-${wallet}`, source: "devnet_allowlist" } : none;
   }
   if (!config.genesisGroup) return none;
   const accounts = await connection.getParsedTokenAccountsByOwner(new PublicKey(wallet), { programId: TOKEN_2022_PROGRAM_ID }, "confirmed");

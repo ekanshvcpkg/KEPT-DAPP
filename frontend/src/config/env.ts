@@ -23,7 +23,7 @@ export const env = {
   supabasePublishableKey: process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "",
   identity: {
     name: process.env.EXPO_PUBLIC_APP_IDENTITY_NAME || "KEPT",
-    uri: process.env.EXPO_PUBLIC_APP_IDENTITY_URI || "https://keptdapp.vercel.app",
+    uri: process.env.EXPO_PUBLIC_APP_IDENTITY_URI || "https://kept-keeper.vercel.app",
     /** Set to 1 once the identity site's assetlinks.json grants get_login_creds (wallets then re-authorize silently). */
     verified: process.env.EXPO_PUBLIC_APP_IDENTITY_VERIFIED === "1",
   },

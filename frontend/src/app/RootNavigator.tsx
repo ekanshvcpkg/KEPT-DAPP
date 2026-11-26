@@ -103,7 +103,7 @@ const momentIds = ROUTES.filter((r) => presentation(r.id) === "moment");
  */
 export function routeInvite(url: string | null): string | null {
   if (!url) return url;
-  const code = url.match(/^(?:kept:\/\/join\/|https:\/\/keptdapp\.vercel\.app\/o\/)([^/?#]+)/i)?.[1];
+  const code = url.match(/^(?:kept:\/\/join\/|https:\/\/(?:kept-keeper|keptdapp)\.vercel\.app\/o\/)([^/?#]+)/i)?.[1];
   if (!code) return url;
   const inviteUrl = `kept://join/${code}`;
   const s = useSession.getState();
@@ -141,7 +141,7 @@ function devLink(url: string): boolean {
 }
 
 const linking: LinkingOptions<ParamListBase> = {
-  prefixes: ["kept://", "https://keptdapp.vercel.app"],
+  prefixes: ["kept://", "https://kept-keeper.vercel.app", "https://keptdapp.vercel.app"],
   config: { screens: { [routeName("E1")]: "join/:code" } },
   getInitialURL: async () => { const url = await Linking.getInitialURL(); return url && devLink(url) ? null : routeInvite(url); },
   subscribe: (listener) => {

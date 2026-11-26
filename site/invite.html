@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>You're invited to an Oath · KEPT</title>
+  <meta name="theme-color" content="#131313">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="/icon.png">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/"><span class="mark" aria-hidden="true">K</span>KEPT</a>
+  </header>
+  <main>
+    <h1>You're invited to an Oath.</h1>
+    <p class="lead">Open this invite in the KEPT app on your Android phone to see the Oath, its habits and its stake, and to join it.</p>
+    <p><a id="open" class="button" href="kept://">Open in KEPT</a></p>
+    <p>Invite code: <strong id="code">…</strong></p>
+    <div class="note">No KEPT app yet? It runs on Solana Devnet with test tokens: see the <a href="/">home page</a>.</div>
+  </main>
+  <script>
+    var code = decodeURIComponent((location.pathname.split("/o/")[1] || "").split("/")[0]);
+    document.getElementById("code").textContent = code || "missing";
+    if (code) document.getElementById("open").href = "kept://join/" + encodeURIComponent(code);
+  </script>
+</body>
+</html>
