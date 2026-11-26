@@ -13,7 +13,7 @@ import { CheckUnavailableError } from "../v4/verdict.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
 import { parseRepHabit } from "../shared/reps.js";
 import { publicReceiptUrl, publishReceipt } from "../v4/receiptStore.js";
-import { checkRepEvidence, REP_FREEZE_OBJECT, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
+import { checkRepEvidence, repFreezeObject, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
 
 export const proofVerifyRouter = Router();
@@ -79,6 +79,11 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
       gestureSeen: prior.gestureSeen, gestureMatches: prior.gestureMatches, looksLikeScreenOrPrintout: prior.looksLikeScreen, reason: prior.reason, model: prior.model, ms: 0, retry: true });
   }
 
+  // A pose trace proves one set once: the same trace (any wallet) can't pass again for another day or habit.
+  if (repReceipt && await prisma.proofVerification.findFirst({ where: { status: "PASS", receipt: { path: ["reps", "traceSha256"], equals: repReceipt.traceSha256 } } })) {
+    return res.status(409).json({ error: "That rep set was already used; do a new set", reps: true });
+  }
+
   const session = withContext && habit === undefined ? await findSession(oath, req.wallet, dayIndex) : null;
   const context = withContext ? { oath, dayIndex, sessionId: session?.id ?? null, ...(habit !== undefined ? { habit } : {}) } : {};
   const row = await prisma.proofVerification.create({ data: { wallet: req.wallet, proofHash: photoHash, photoHash, expectedObject, expectedGesture, ...context } });
@@ -92,7 +97,7 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   let judged: Awaited<ReturnType<typeof keeper.judge>>;
   try {
     // For a rep set the photo is the freeze frame: a person mid-workout, holding the challenge gesture.
-    judged = await keeper.judge(image, { object: rep ? REP_FREEZE_OBJECT : expectedObject, gesture: expectedGesture });
+    judged = await keeper.judge(image, { object: rep ? repFreezeObject(rep.exercise) : expectedObject, gesture: expectedGesture });
   } catch (e) {
     // The model answered but unusably: it was a paid call, so it counts toward the daily limit (not as a failed try).
     // No answer at all (down, timed out): it does not count.

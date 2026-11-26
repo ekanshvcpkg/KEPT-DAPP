@@ -84,6 +84,8 @@ export type ProofChallenge = z.infer<typeof ProofChallengeResponse>;
 export const HabitChallengeResponse = z.object({
   phase: z.literal("habit"), habit: z.number().int().min(0), object: z.string(), gesture: ChallengeGesture,
   issuedAt: IsoTime, expiresAt: IsoTime, done: z.array(z.number().int()), habits: z.number().int().min(1),
+  /** Rep habits: the rep after which the app calls "Freeze!" (the server's pick; backend/src/v4/repProof.ts). */
+  freezeAfter: z.number().int().min(0).optional(),
 });
 export type HabitChallenge = z.infer<typeof HabitChallengeResponse>;
 // POST /api/proof/habit: the day is kept once every habit has its photo.

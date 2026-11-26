@@ -26,7 +26,10 @@ export const explorerTx = (signature: string) => `https://explorer.solana.com/tx
 /** The receipt file from the public bucket, if its bytes hash to `hash` (else null, so the caller falls back). */
 async function publicReceipt(hash: string): Promise<z.output<typeof ReceiptResponse> | null> {
   try {
-    const res = await fetch(`${env.supabaseUrl}/storage/v1/object/public/keeper-receipts/receipts/${hash}.json`);
+    // React Native's fetch has no timeout of its own: a stalled Supabase must fall back to the backend, not hang the audit.
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(`${env.supabaseUrl}/storage/v1/object/public/keeper-receipts/receipts/${hash}.json`, { signal: ctrl.signal }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     const text = await res.text();
     if (sha256HexOfText(text) !== hash) return null;

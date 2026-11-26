@@ -1,7 +1,7 @@
 // Live Oath updates through Supabase Realtime Broadcast. When a member's proof lands or a day is recorded on chain, the
 // server pings channel `oath:<address>`; every phone in that Oath refetches it (from the chain and this API), so HP bars
-// and the members' days move without pulling to refresh. The ping carries no data the app trusts: a forged one only
-// causes a refetch. Best effort, never awaited by the request.
+// and the members' days move without pulling to refresh. The channel is public, so the app treats a ping as a hint:
+// it refetches (coalesced) and only names real members in its toast. Best effort, never awaited by the request.
 import { config } from "../config.js";
 
 export type OathChange = "proof" | "checkin";

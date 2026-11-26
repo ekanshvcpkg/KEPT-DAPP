@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { checkRepEvidence, jpegSize } from '../src/v4/repProof.js';
+import { checkRepEvidence, freezeAfterRep, jpegSize } from '../src/v4/repProof.js';
 
 // The golden vector "freeze-resume": 8 push-ups with a 3.5 s freeze pause [7050, 10500] after rep 4.
 const vectors = JSON.parse(readFileSync(new URL('../../packages/engine/test-vectors/reps-vectors.json', import.meta.url), 'utf8'));
@@ -16,7 +16,10 @@ function jpeg(w: number, h: number): Buffer {
 }
 const photo = jpeg(640, 480);
 const sha = createHash('sha256').update(photo).digest('hex');
-const challenge = { gesture: 'thumbs_up', issuedAt: new Date(1_000_000) };
+// The server picks the freeze rep from the challenge; this blockhash makes it rep 4, where the vector's freeze is.
+const issued = new Date(1_000_000);
+const blockhash = Array.from({ length: 200 }, (_, i) => `bh${i}`).find((bh) => freezeAfterRep({ blockhash: bh, issuedAt: issued }, 8) === 4)!;
+const challenge = { gesture: 'Thumb_Up', issuedAt: issued, blockhash };
 const now = 1_000_000 + 20_000;
 const evidence = (over: Record<string, unknown> = {}) => ({
   trace, reps: 8, phoneCount: 8, freeze: { afterRep: 4, promptT: 6850, t: 8550, gesture: 'thumbs_up', sha256: sha }, keyframes: [], ...over,
@@ -33,7 +36,7 @@ test('an honest set passes, and the receipt records the server recount', () => {
   assert.ok('receipt' in r, JSON.stringify(r));
   assert.equal(r.receipt.repCount, 8);
   assert.equal(r.receipt.target, 8);
-  assert.deepEqual(r.receipt.freeze, { afterRep: 4, gesture: 'thumbs_up', t: 8550 });
+  assert.deepEqual(r.receipt.freeze, { afterRep: 4, gesture: 'Thumb_Up', t: 8550 });
   assert.equal(r.receipt.durationMs, 16950);
   assert.match(r.receipt.traceSha256, /^[0-9a-f]{64}$/);
 });
@@ -59,6 +62,20 @@ rejects('a photo whose shape is not the trace frame', evidence(), /frame shape/,
 rejects('a freeze photo that is not the uploaded photo', evidence({ freeze: { afterRep: 4, t: 8550, gesture: 'thumbs_up', sha256: 'f'.repeat(64) } }), /isn't the freeze frame/);
 rejects('a freeze outside its pause', evidence({ freeze: { afterRep: 4, t: 12_000, gesture: 'thumbs_up', sha256: sha } }), /during the freeze/);
 rejects('a freeze not between the reps it names', evidence({ freeze: { afterRep: 6, t: 8550, gesture: 'thumbs_up', sha256: sha } }), /between two reps/);
-rejects('another gesture', evidence({ freeze: { afterRep: 4, t: 8550, gesture: 'peace', sha256: sha } }), /gesture/);
+rejects('a freeze at a rep the server did not pick', evidence(), /wrong rep/, { habit: { exercise: 'pushup', target: 7 } });
+
+test('the app label for the gesture is not compared (the vision model checks the photo for the challenge gesture)', () => {
+  const r = checkRepEvidence(evidence({ freeze: { afterRep: 4, t: 8550, gesture: 'anything', sha256: sha } }), habit, challenge, photo, now);
+  assert.ok('receipt' in r); assert.equal(r.receipt.freeze!.gesture, 'Thumb_Up');
+});
+
+test('freezeAfterRep stays between 30% and 70% of the set and varies with the challenge', () => {
+  for (const target of [2, 3, 10, 20, 50]) {
+    const picks = new Set(Array.from({ length: 64 }, (_, i) => freezeAfterRep({ blockhash: `b${i}`, issuedAt: issued }, target)));
+    for (const k of picks) { assert.ok(k >= 1 && k <= Math.max(1, target - 1), `${target}: ${k}`); assert.ok(k >= Math.ceil(target * 0.3) && k <= Math.max(Math.ceil(target * 0.3), Math.floor(target * 0.7))); }
+    if (target >= 10) assert.ok(picks.size > 1);
+  }
+  assert.equal(freezeAfterRep({ blockhash: 'x', issuedAt: issued }, 1), 0);
+});
 rejects('no freeze', evidence({ trace: { ...trace, pauses: [] }, freeze: null }), /no freeze/);
 rejects('a pause in a one-rep set', evidence(), /unexpected pause/, { habit: { exercise: 'pushup', target: 1 } });

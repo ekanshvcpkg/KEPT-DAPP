@@ -160,7 +160,7 @@ export function httpProof(c: HttpClient): ProofApi {
       useDeviceOaths.getState().setHabitsDone(oath.id, dayIndex, r.done);
       // The schema (IsoTime) already turns the backend's ISO timestamps into unix seconds. Converting again
       // read them as milliseconds (1970) and every challenge expired the moment it arrived (F2c).
-      return { habit, dayIndex, object: r.object, gesture: GESTURE[r.gesture]!, expiresAt: r.expiresAt };
+      return { habit, dayIndex, object: r.object, gesture: GESTURE[r.gesture]!, expiresAt: r.expiresAt, ...(r.freezeAfter ? { freezeAfter: r.freezeAfter } : {}) };
     },
     submit: async (oath, challenge, image, _imageUri, reps) => {
       if (oath.bountyId || !image) return { status: "unavailable" };
@@ -176,6 +176,9 @@ export function httpProof(c: HttpClient): ProofApi {
       } catch (e) {
         // The Keeper could not judge (model down or slow): not the user's miss and not a counted try. They retry (F2b).
         if (isApiError(e) && e.status === 503) return { status: "unavailable" };
+        // A rep set the Keeper's recount refused (422) or already used (409): the user does a new set (F2a), and hears why.
+        // Not a model call, so not a counted try.
+        if (reps && isApiError(e) && (e.status === 422 || (e.status === 409 && /rep set/.test(e.message)))) return { status: "fail", attempts: 0, reason: e.message };
         throw e;
       }
       if (!checked.pass || !checked.verificationId) return {

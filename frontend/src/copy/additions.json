@@ -596,7 +596,10 @@
     "stop": "Stop the set",
     "keepStill": "Keep the phone still during the set: start again",
     "level": "Set the phone straight: level with the floor",
-    "holdTop": "Hold the top for a moment: the Keeper lost a beat"
+    "holdTop": "Hold the top for a moment: the Keeper lost a beat",
+    "restart": "The camera lost the set: start again",
+    "tooLong": "That set took too long: start again",
+    "noFreeze": "The Freeze photo didn't take: start again"
   },
   "live": {
     "$source": "hackathon 2026-11-26: live Oath updates over Supabase Realtime (features/oaths/realtime.ts)",

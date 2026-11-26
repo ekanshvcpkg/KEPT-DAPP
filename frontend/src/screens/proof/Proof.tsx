@@ -171,7 +171,11 @@ function Shoot() {
   const [now, setNow] = useState(nowSeconds);
   useEffect(() => { const i = setInterval(() => setNow(nowSeconds()), 1000); return () => clearInterval(i); }, []);
   useEffect(() => { if (perm && !perm.granted) replace("F1·perm", { id, habit }); }, [perm, replace, id, habit]);
-  useEffect(() => { if (c && c.expiresAt <= now) replace("F2c", { id, habit }); }, [c, now, replace, id, habit]);
+  // A running rep set isn't cut off when the app's window ends: the server allows its set time past it, and Start
+  // checked that the set fits (RepSet repSetSeconds).
+  const counting = useRef(false);
+  const onCounting = useCallback((on: boolean) => { counting.current = on; }, []);
+  useEffect(() => { if (c && c.expiresAt <= now && !counting.current) replace("F2c", { id, habit }); }, [c, now, replace, id, habit]);
   const left = c ? Math.max(0, c.expiresAt - now) : 0;
   // A rep habit ("20 push-ups") is proven by a live counted set, not a photo. The photo camera is never mounted here,
   // so expo-camera can't unbind the rep counter's camera.
@@ -181,6 +185,9 @@ function Shoot() {
       <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} scroll={false}>
         {c && perm?.granted && focused ? (
           <RepSet exercise={rep.exercise} target={rep.target} gesture={c.gesture} gestureLabel={gestureText(c.gesture)}
+            {...(c.freezeAfter ? { freezeAfter: c.freezeAfter } : {})}
+            secondsLeft={() => c.expiresAt - nowSeconds()} onNoTime={() => replace("F2c", { id, habit })}
+            onCounting={onCounting}
             onDone={(evidence, freezeJpeg) => {
               useProof.getState().set({ image: freezeJpeg, imageUri: null, reps: evidence });
               go("F2", { id, habit });

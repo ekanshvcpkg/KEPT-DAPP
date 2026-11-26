@@ -70,16 +70,22 @@ function useOathLive(oaths: readonly OathFacts[] | undefined) {
   const ids = live ? (oaths ?? []).filter((o) => o.source === "chain").map((o) => o.id).sort().join(",") : "";
   useEffect(() => {
     if (!ids) return;
+    // The channel is public, so a ping is only a hint: refetches are coalesced (one per Oath per second at most), and a
+    // toast names only a wallet that really is a member of that Oath. The refetched data is what the screens show.
+    const pending = new Map<string, ReturnType<typeof setTimeout>>();
     const offs = ids.split(",").map((id) => subscribeOath(id, (e) => {
-      void queryClient.invalidateQueries({ queryKey: oathKeys.one(e.oath) });
-      void queryClient.invalidateQueries({ queryKey: ["oaths", "list"] });
+      if (!pending.has(e.oath)) pending.set(e.oath, setTimeout(() => {
+        pending.delete(e.oath);
+        void queryClient.invalidateQueries({ queryKey: oathKeys.one(e.oath) });
+        void queryClient.invalidateQueries({ queryKey: ["oaths", "list"] });
+      }, 1000));
       const { oaths: now, wallet: me, toast: show } = latest.current;
-      if (!e.wallet || e.wallet === me || !firstToAnnounce(e, Date.now())) return;
+      if (!e.wallet || e.wallet === me) return;
       const member = now?.find((o) => o.id === e.oath)?.members.find((m) => m.wallet === e.wallet);
-      const name = member?.name ?? shortWallet(e.wallet);
-      show(t(e.reason === "checkin" ? "additions.live.teammateKept" : "additions.live.teammateProved", { name }));
+      if (!member || !firstToAnnounce(e, Date.now())) return;
+      show(t(e.reason === "checkin" ? "additions.live.teammateKept" : "additions.live.teammateProved", { name: member.name ?? shortWallet(e.wallet) }));
     }));
-    return () => offs.forEach((off) => off());
+    return () => { offs.forEach((off) => off()); pending.forEach(clearTimeout); };
   }, [ids]);
 }
 

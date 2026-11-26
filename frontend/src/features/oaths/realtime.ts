@@ -1,6 +1,7 @@
 // Live Oath updates over Supabase Realtime (Broadcast). The backend pings channel `oath:<address>` when a member's
 // proof lands or a day is recorded on chain (backend/src/v4/realtime.ts); each phone in the Oath then refetches it.
-// The ping is only a hint to refetch: nothing in it is trusted, so a forged ping just causes a refresh.
+// The channel is public (anyone with the app's publishable key can send on it), so a ping is only a hint: the app
+// refetches (coalesced) and shows what the refetched data says; a toast names only a real member of the Oath.
 //
 // A small client for Supabase Realtime's Phoenix protocol over React Native's built-in WebSocket (join, heartbeat,
 // broadcast), so the app adds no dependency. One socket, ref-counted channels, reconnect with backoff, closed while

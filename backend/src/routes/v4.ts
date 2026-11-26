@@ -8,7 +8,7 @@ import { prisma } from "../db.js";
 import { config } from "../config.js";
 import { cachedSpeech, keeperSpeech, MAX_LINE_CHARS, SIGN_LINE, takeGlobalVoiceBudget, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
 import { parseRepHabit } from "../shared/reps.js";
-import { REP_SET_MAX_MS } from "../v4/repProof.js";
+import { freezeAfterRep, REP_SET_MAX_MS } from "../v4/repProof.js";
 import { broadcastOathChanged } from "../v4/realtime.js";
 import { answerQuestion, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe, type AskContext } from "../v4/ask.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
@@ -305,8 +305,9 @@ post("/api/proof/challenge", async (req: AuthedRequest, res) => {
     const challenge = await issueChallenge(habitChallengeKey(oath, habit), req.wallet, day);
     const json = challengeJson(challenge);
     // A live rep set ("20 push-ups") gets the set's time on top of the photo window.
-    if (parseRepHabit(texts[habit] ?? "")) json.expiresAt = new Date(new Date(json.expiresAt).getTime() + REP_SET_MAX_MS).toISOString();
-    return res.json({ phase: "habit", habit, object: texts[habit], ...json, done, habits: texts.length });
+    const rep = parseRepHabit(texts[habit] ?? "");
+    if (rep) json.expiresAt = new Date(new Date(json.expiresAt).getTime() + REP_SET_MAX_MS).toISOString();
+    return res.json({ phase: "habit", habit, object: texts[habit], ...json, ...(rep ? { freezeAfter: freezeAfterRep(challenge, rep.target) } : {}), done, habits: texts.length });
   }
   return res.json(await dayChallenge(oath, req.wallet, day));
 });

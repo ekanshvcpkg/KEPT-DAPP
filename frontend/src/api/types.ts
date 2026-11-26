@@ -117,7 +117,7 @@ export interface OathsApi {
 /** A gesture the backend may ask for. The design has three; the backend draws from five (BACKEND_GAPS P0-3). */
 export type GestureLabel = "thumbs_up" | "victory" | "open_palm" | "closed_fist" | "pointing_up";
 /** One photo proves one habit: `object` is what the model looks for (the habit's own object, as text) and `gesture` what the server asked for. */
-export interface Challenge { habit: number; dayIndex: number; object: string; gesture: GestureLabel; expiresAt: number }
+export interface Challenge { habit: number; dayIndex: number; object: string; gesture: GestureLabel; expiresAt: number; freezeAfter?: number }
 export type ProofOutcome =
   /** `dayKept`: this was the last habit of the day. */
   | { status: "pass"; dayKept: boolean; reason?: string }

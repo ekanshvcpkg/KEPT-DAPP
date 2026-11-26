@@ -7,8 +7,22 @@ import { canonicalJson } from "./keeper.js";
 
 /** A set may take up to 4 minutes after its challenge was issued. */
 export const REP_SET_MAX_MS = 240_000;
-/** What the vision model is asked to see in the freeze frame (with the challenge gesture). */
-export const REP_FREEZE_OBJECT = "a person exercising";
+/** What the vision model is asked to see in the freeze frame (with the challenge gesture, one hand up). */
+export const repFreezeObject = (exercise: Exercise) => exercise === "pushup"
+  ? "a person mid push-up workout: on the floor in a plank or push-up position (one hand may be raised)"
+  : "a person mid squat workout: standing with bent knees or in a squat (one hand may be raised)";
+
+/**
+ * The rep after which the app calls "Freeze!": picked by the server from the challenge (its Solana blockhash and time),
+ * between 30% and 70% of the set, so a recorded set can't be replayed for a new challenge without a freeze at a
+ * different rep. The app gets it with the challenge (POST /api/proof/challenge `freezeAfter`).
+ */
+export function freezeAfterRep(challenge: { blockhash?: string | null; issuedAt: Date }, target: number): number {
+  if (target < 2) return 0;
+  const byte = createHash("sha256").update(`kept:freeze:${challenge.blockhash ?? ""}:${challenge.issuedAt.toISOString()}`).digest()[0]!;
+  const lo = Math.max(1, Math.ceil(target * 0.3)), hi = Math.max(lo, Math.min(target - 1, Math.floor(target * 0.7)));
+  return lo + (byte % (hi - lo + 1));
+}
 
 export type RepReceipt = {
   engine: string; exercise: Exercise; target: number; repCount: number; phoneCount: number | null; durationMs: number;
@@ -39,7 +53,7 @@ const num = (v: unknown): v is number => typeof v === "number" && Number.isFinit
  * must be the freeze frame. Returns the receipt part, or why the set doesn't count.
  */
 export function checkRepEvidence(
-  raw: unknown, habit: { exercise: Exercise; target: number }, challenge: { gesture: string; issuedAt: Date }, photo: Buffer, nowMs = Date.now(),
+  raw: unknown, habit: { exercise: Exercise; target: number }, challenge: { gesture: string; issuedAt: Date; blockhash?: string | null }, photo: Buffer, nowMs = Date.now(),
 ): { receipt: RepReceipt } | { error: string } {
   const photoHash = sha(photo);
   const ev = (raw ?? {}) as { trace?: unknown; phoneCount?: unknown; freeze?: unknown; keyframes?: unknown };
@@ -74,7 +88,9 @@ export function checkRepEvidence(
     if (f.t < a || f.t > b) return { error: "The freeze photo wasn't taken during the freeze" };
     const k = f.afterRep;
     if (!Number.isInteger(k) || k < 1 || k > reps.length || reps[k - 1]!.endT >= a || (k < reps.length && reps[k]!.startT <= b)) return { error: "The freeze doesn't sit between two reps" };
-    if (f.gesture !== challenge.gesture) return { error: "The freeze gesture isn't the challenge's" };
+    // The gesture to hold is the challenge's (the app's own label in f.gesture is not trusted or compared); the vision model
+    // checks the freeze frame for it. The rep it comes after is the server's pick.
+    if (k !== freezeAfterRep(challenge, habit.target)) return { error: "The freeze came at the wrong rep" };
     if (f.sha256 !== photoHash) return { error: "The photo isn't the freeze frame" };
     freeze = { afterRep: k, gesture: challenge.gesture, t: f.t };
   }
