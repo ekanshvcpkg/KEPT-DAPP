@@ -56,6 +56,8 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SOL** on i
 | **Audit the Keeper** in the app: re-hash receipts on the phone and compare with the chain | `c966cf2`, [`frontend/src/features/keeper/audit.ts`](frontend/src/features/keeper/audit.ts) |
 | Live without the 2.6 GB on-device model download; honest Live (Bounty join hidden until proof works) | `c966cf2`, `e4698bf` |
 | Phantom fix (no silent re-authorization for an unverified identity) and the first full Live run on a phone | `995f76b`, [`docs/notes/app-devnet-run-2026-11-26.md`](docs/notes/app-devnet-run-2026-11-26.md) |
+| **Explain before sign**: the signing screen decodes the transaction with the program IDL and simulates it, shows what it does and exactly how much SOL leaves the wallet, and opens the wallet only on "Open wallet to sign"; foreign instructions are flagged | `8aa94bb`, [`packages/chain/src/explain.ts`](packages/chain/src/explain.ts) |
+| **The Keeper's voice** (ElevenLabs): the Keeper says its verdict after every photo check and reads each transaction aloud before you sign | `6c9cc5b`, [`backend/src/v4/voice.ts`](backend/src/v4/voice.ts), [`frontend/src/features/keeper/voice.ts`](frontend/src/features/keeper/voice.ts) |
 
 `git log afb1f0c..hackathon` lists every change made during the hackathon.
 
@@ -64,8 +66,9 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SOL** on i
 | Track | How KEPT qualifies |
 |---|---|
 | **Solana: Best App Overall** | Our Rust (Anchor) program `kept_test` on Devnet ([addresses](#-devnet-addresses-and-evidence)); native SOL escrow, shared HP, payouts by rules replayed on chain; Android app with Mobile Wallet Adapter; public repo, setup below. |
-| **Solana: Agentic** | The Keeper is an AI agent with a wallet: the only key the program accepts for check-ins is the verifier the Keeper's server holds. Every verdict is verifiable AI: a receipt (photo hash, challenge, model, verdict) whose hash is on chain, re-checkable by anyone. |
+| **Solana: Agentic** | The Keeper is an AI agent with a wallet: the only key the program accepts for check-ins is the verifier the Keeper's server holds. Every verdict is verifiable AI: a receipt (photo hash, challenge, model, verdict) whose hash is on chain, re-checkable by anyone. Before any signature, the Keeper explains the transaction (IDL-decoded, simulated balance change) and flags anything that isn't KEPT. |
 | **Solana Mobile** | Built for Android from the ground up: native camera proof, Mobile Wallet Adapter signing, Seeker-first design, APK release. |
+| **ElevenLabs** | The Keeper speaks: verdicts on proof photos and plain-words transaction explanations before signing, through ElevenLabs text-to-speech (`eleven_flash_v2_5`) from the backend (the key never reaches the app), cached per line and capped per wallet. `scripts/keeper_voice_design.ts` designs a custom reaper voice with Voice Design on a paid plan; on the free plan a premade voice is used. |
 
 ## 📸 Screenshots
 

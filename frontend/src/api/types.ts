@@ -120,8 +120,8 @@ export type GestureLabel = "thumbs_up" | "victory" | "open_palm" | "closed_fist"
 export interface Challenge { habit: number; dayIndex: number; object: string; gesture: GestureLabel; expiresAt: number }
 export type ProofOutcome =
   /** `dayKept`: this was the last habit of the day. */
-  | { status: "pass"; dayKept: boolean }
-  | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean }
+  | { status: "pass"; dayKept: boolean; reason?: string }
+  | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean; reason?: string }
   | { status: "unavailable" }
   | { status: "expired" };
 

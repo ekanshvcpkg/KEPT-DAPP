@@ -559,6 +559,9 @@
     "kindGroup": "with friends",
     "dayLen24h": "24 h",
     "dayLenMin": "{n} min",
-    "explainSign": "Open wallet to sign"
+    "explainSign": "Open wallet to sign",
+    "sayKept": "Kept. {reason}",
+    "sayFailed": "Not kept. {reason}",
+    "saySign": "{what}. Your wallet: {change} SOL. Sign only if that is what you meant."
   }
 }

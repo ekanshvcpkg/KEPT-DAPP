@@ -28,6 +28,7 @@ import { RowList } from "@/components/content/Rows";
 import { color } from "@/theme";
 import { useTxExplain } from "@/state/txExplain";
 import { explainRows } from "@/features/keeper/explain";
+import { keeperSay } from "@/features/keeper/voice";
 
 /** Where a failed signature goes. `retry` re-runs the same signing screen with the same params. */
 interface FailRoutes { retry: DesignId; edit: DesignId; params?: Params; failed?: DesignId; noSkr?: DesignId }
@@ -89,6 +90,12 @@ export function SigningScreen<T>({ title, sub, task, onDone, fail }: {
 function TxExplainer() {
   const e = useTxExplain((s) => s.current);
   const pending = useTxExplain((s) => s.pending);
+  // The Keeper reads the transaction aloud before the wallet opens.
+  useEffect(() => {
+    if (!e || !pending) return;
+    const first = explainRows(e)[0];
+    if (first) keeperSay(t("additions.keeper.saySign", { what: first.title, change: e.walletChange === null ? "?" : formatSol(e.walletChange) }));
+  }, [e, pending]);
   if (!e) return null;
   return (
     <>

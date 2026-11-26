@@ -32,6 +32,7 @@ import { nowSeconds } from "@/features/time";
 import { useUi } from "@/state/ui";
 import { haptic } from "@/lib/haptics";
 import { auditDay, explorerTx } from "@/features/keeper/audit";
+import { keeperSay } from "@/features/keeper/voice";
 import type { KeeperAudit } from "@/features/keeper/audit";
 
 /** "lift for 20 minutes" → "Lift for 20 minutes" (a habit starts a sentence on F3). */
@@ -212,6 +213,8 @@ function Check() {
     void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined).then(
       (r) => {
         if (r.status === "fail") useProof.getState().set({ feedback: { ...useProof.getState().feedback, [key(id, habit)]: { objectPresent: r.objectPresent, gestureMatches: r.gestureMatches } } });
+        // The Keeper says its verdict out loud (Live; ElevenLabs).
+        if ((r.status === "pass" || r.status === "fail") && r.reason) keeperSay(t(r.status === "pass" ? "additions.keeper.sayKept" : "additions.keeper.sayFailed", { reason: r.reason }));
         void refreshOaths(); if (r.status === "pass") haptic.success(); replace(next(r, view), { id, habit });
       },
       (e: unknown) => replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id, habit }),

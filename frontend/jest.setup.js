@@ -66,6 +66,10 @@ jest.mock("expo-camera", () => {
 
 // kept-gesture: the native on-device models don't exist in Jest. The pure parts (reading the model's answer, matching
 // the gesture) are the real code; the native calls answer "ready" and "passed" unless a test says otherwise.
+jest.mock("expo-audio", () => {
+  const player = { play: jest.fn(), replace: jest.fn(), remove: jest.fn() };
+  return { createAudioPlayer: jest.fn(() => player), __player: player };
+});
 jest.mock("kept-gesture", () => {
   const verdict = jest.requireActual("kept-gesture/src/verdict");
   const ready = { supported: true, gestureReady: true, visionReady: true, modelBytes: 2588147712, downloadedBytes: 2596521152, totalBytes: 2596521152 };

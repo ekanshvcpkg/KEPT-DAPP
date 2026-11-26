@@ -26,7 +26,10 @@
               "pathPrefix": "/o/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -45,6 +48,7 @@
         {
           "cameraPermission": "KEPT uses the camera for your two daily proof photos and to scan invite QR codes.",
           "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false,
           "barcodeScannerEnabled": true
         }
       ],
@@ -64,7 +68,15 @@
       ],
       "expo-secure-store",
       "./plugins/withReleaseSigning",
-      "./plugins/withDevMenuNoFab"
+      "./plugins/withDevMenuNoFab",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ]
   }
 }
