@@ -69,8 +69,11 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
         headers: { "content-type": "application/json", authorization: `Bearer ${config.openApiKey}` },
         body: JSON.stringify({ model: config.askModel, temperature: 0.4, max_tokens: 400, messages, ...(round < MAX_TOOL_ROUNDS ? { tools: TOOLS, tool_choice: "auto" } : {}) }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const msg = ((await res.json()) as { choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[] }).choices?.[0]?.message;
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
+      const json = (await res.json()) as { error?: { message?: string; code?: unknown }; choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[] };
+      // OpenRouter can report a provider error inside an HTTP 200.
+      if (json.error || !json.choices?.length) throw new Error(`model error: ${JSON.stringify(json.error ?? "no choices").slice(0, 300)}`);
+      const msg = json.choices[0]?.message;
       const calls = msg?.tool_calls ?? [];
       if (!calls.length) {
         const text = speakable(msg?.content ?? "");
@@ -87,7 +90,8 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
       messages.push(...results);
     }
     throw new Error("too many tool rounds");
-  } catch {
+  } catch (e) {
+    console.warn("[keeper ask] tool loop failed, answering from the summary:", e instanceof Error ? e.message : String(e));
     // The one-shot answer from the summary alone (the Keeper before it had tools).
     return answerQuestion(question, { wallet: deps.wallet, solBalance: await deps.balanceSol().catch(() => null), oaths: summary as unknown as AskContext["oaths"], recentVerdicts: [] }, fetchImpl);
   }
@@ -116,7 +120,8 @@ export async function answerQuestion(question: string, ctx: AskContext, fetchImp
     }),
   }).catch(() => null);
   if (!res?.ok) throw new VoiceUnavailableError(`The answer model failed${res ? ` (HTTP ${res.status})` : ""}`);
-  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const json = (await res.json()) as { error?: unknown; choices?: { message?: { content?: string } }[] };
+  if (json.error) console.warn("[keeper ask] one-shot answer failed:", JSON.stringify(json.error).slice(0, 300));
   // Spoken text: drop markdown emphasis/headers/bullets the model may still add.
   const text = (json.choices?.[0]?.message?.content ?? "").replace(/[*_`#>]+/g, "").replace(/\s+/g, " ").trim();
   if (!text) throw new VoiceUnavailableError("The answer model gave no answer");
