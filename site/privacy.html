@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KEPT Privacy Policy</title>
+  <meta name="description" content="What data the KEPT app and backend collect, why, who receives it, how long it is kept, and how to have it deleted.">
+  <meta name="theme-color" content="#131313">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="index.html"><span class="mark" aria-hidden="true">K</span>KEPT</a>
+    <nav aria-label="Site">
+      <a href="index.html">Home</a>
+      <a href="privacy.html" aria-current="page">Privacy</a>
+      <a href="terms.html">Terms</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>Privacy policy</h1>
+    <p class="meta">Last updated: 26 November 2026</p>
+
+    <p>This policy covers the KEPT Android app and the KEPT backend server ("KEPT", "we", "us"). It explains what we collect, why, who else receives it, how long we keep it and how to have it deleted. We have tried to describe exactly what the current version does. If we change that, we will update this page and the date above.</p>
+
+    <div class="note">
+      <strong>The short version.</strong> Your proof photos go to our server and to an AI vision model provider so the Keeper can check them. Only hashes of the photo and verdict go on the blockchain, never the photo. Your wallet address is public by nature. The Keeper's spoken lines are sent as text to ElevenLabs to make audio. We don't sell your data, show ads or use analytics trackers.
+    </div>
+
+    <h2>Demo mode</h2>
+    <p>Demo mode runs entirely on your phone with a sample account and works without a network connection. While you use Demo mode, the app sends nothing to our server or to any third party.</p>
+
+    <h2>What we collect in Live mode, and why</h2>
+
+    <h3>Your wallet address</h3>
+    <p>To sign in, your wallet signs a message that proves you control your wallet address (public key). That address is your KEPT account. We never see or store your private key or seed phrase, and the sign-in message cannot move funds. Wallet addresses and every transaction you sign are public on the Solana blockchain. Anyone can look them up, and that is outside our control.</p>
+
+    <h3>Proof photos</h3>
+    <ul>
+      <li>You take proof photos with the in-app camera. KEPT does not read your photo gallery. The app uses the camera only for proof photos.</li>
+      <li>Each photo is uploaded over HTTPS to the KEPT backend. The server computes its SHA-256 hash and sends the photo to the vision model provider we have configured, currently <strong>OpenRouter</strong>, which passes it to the company that hosts the model (today <code>google/gemma-3-27b-it</code>). The model answers whether the habit's object and the requested hand gesture are visible, and whether the image looks like a photo of a screen or a printout.</li>
+      <li><strong>How long we keep photos:</strong> in the current version, our server holds the photo only in memory while it is checked and does not save the photo file. If a photo is sent to group review (a feature that currently runs only in Demo mode), our server stores it until the group decides, for at most 48 hours, and deletes it when the Oath ends at the latest. OpenRouter and the model host process photos under their own privacy policies and retention settings, which we don't control.</li>
+      <li>What we keep from each check: the photo's hash, the expected object and gesture, the verdict, the model's short reason text (for example, "The photo shows a real scene with a water bottle and a clear thumbs up gesture."), confidence values, the model name and the time.</li>
+    </ul>
+
+    <h3>Keeper receipts (public)</h3>
+    <p>Each photo check produces a receipt so anyone can audit the Keeper. A receipt contains your wallet address, the Oath address, the day and habit, the photo's hash, the challenge, the model name, the verdict with its reason text, and the time. <strong>Receipts are public:</strong> anyone with a receipt's hash can fetch it from our server. When a day is kept, a hash of the receipts is written to the Solana blockchain with the check-in. When a check fails, the receipt's hash is published in an on-chain memo. The photo itself is never public and never goes on chain.</p>
+
+    <h3>Oath details</h3>
+    <p>When you create or join an Oath we store what you enter: its name, goal and habits, the proof objects, its length and stake, review mode, members, invite codes, nudges and inbox messages. Other members of the Oath can see these. We use them to run the app: reminders, invites, day results, payouts and your kept rate.</p>
+
+    <h3>The Keeper's voice</h3>
+    <p>To speak its lines, KEPT sends the text of the line to <strong>ElevenLabs</strong>, which turns it into audio. Examples are a verdict such as "Kept. The photo shows …" or a transaction summary such as "Stake 0.0703 SOL in a new Oath (solo). Your wallet: -0.0731 SOL." We don't send your photo or your wallet address with the text. Our server caches the audio for each line so it doesn't have to ask again. You can turn the voice off in Settings.</p>
+
+    <h3>Notifications</h3>
+    <p>If you allow notifications, we store your device's push token with your wallet address to send reminders, nudges and results. They are delivered through Google's Firebase Cloud Messaging.</p>
+
+    <h3>Blockchain access and server logs</h3>
+    <p>The app and our server read from and send transactions to Solana through an RPC provider, which can see your wallet address and IP address. Like most servers, our hosting provider may keep short-term request logs (IP address, time, requested path) for security and troubleshooting. We also count photo checks per wallet per day to enforce limits.</p>
+
+    <h2>What we don't do</h2>
+    <ul>
+      <li>We don't sell, rent or trade your data.</li>
+      <li>We don't show ads, and the app contains no advertising or analytics SDKs.</li>
+      <li>We don't collect your location, contacts or photo gallery.</li>
+      <li>We don't use your photos to train AI models. We have not given anyone permission to do so, but the providers above apply their own policies.</li>
+    </ul>
+
+    <h2>Who receives data</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Who</th><th>What</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>OpenRouter and the model host it routes to</td><td>Proof photos and the expected object and gesture</td><td>The Keeper's photo check</td></tr>
+          <tr><td>ElevenLabs</td><td>Text of the Keeper's spoken lines</td><td>Generating speech</td></tr>
+          <tr><td>Google Firebase Cloud Messaging</td><td>Push token and notification text</td><td>Delivering notifications</td></tr>
+          <tr><td>Our hosting and database providers</td><td>Everything our server stores</td><td>Running the backend</td></tr>
+          <tr><td>Solana RPC provider and the public blockchain</td><td>Wallet address, transactions, receipt hashes, memos</td><td>Escrow, check-ins and payouts on chain</td></tr>
+          <tr><td>Other members of your Oath</td><td>Your wallet address, Oath activity, kept days, kept rate</td><td>The shared Oath</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>We may also disclose data if the law requires it.</p>
+
+    <h2>How long we keep data</h2>
+    <ul>
+      <li>Proof photos: see "How long we keep photos" above.</li>
+      <li>Off-chain records (Oath details, receipts, check records, push tokens, messages): while the service runs, or until you ask us to delete them.</li>
+      <li>On-chain data (transactions, hashes, memos) is permanent. Nobody, including us, can delete it.</li>
+    </ul>
+
+    <h2>Deleting your data</h2>
+    <p>Email <a href="mailto:REPLACE_WITH_CONTACT_EMAIL">REPLACE_WITH_CONTACT_EMAIL</a> from any address and include your wallet address. We may ask you to sign a short message with that wallet to prove it is yours. We will then delete the off-chain records tied to your wallet: push tokens, inbox messages, nudges, photo-check records, receipts, and stored photos if there are any. Two limits apply. On-chain data cannot be deleted. And once a receipt is deleted, the matching on-chain hash can no longer be audited. The app does not have an in-app delete button yet. We will add one.</p>
+
+    <h2>Children</h2>
+    <p>KEPT is not meant for anyone under 18, and we don't knowingly collect data from children. If you believe a child has used KEPT, contact us and we will delete their data.</p>
+
+    <h2>Security</h2>
+    <p>Data travels over HTTPS. Service keys (the vision model key, the ElevenLabs key and the Keeper's verifier key) stay on our server and never ship in the app. No system is perfectly secure, so please don't put sensitive personal information in Oath names, goals or photos.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or requests: <a href="mailto:REPLACE_WITH_CONTACT_EMAIL">REPLACE_WITH_CONTACT_EMAIL</a></p>
+  </main>
+
+  <footer>
+    <a href="index.html">Home</a> · <a href="terms.html">Terms of use</a> · KEPT
+  </footer>
+</body>
+</html>
