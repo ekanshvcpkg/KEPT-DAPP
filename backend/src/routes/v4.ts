@@ -7,6 +7,7 @@ import { createAssociatedTokenAccountInstruction, createTransferInstruction, get
 import { prisma } from "../db.js";
 import { config } from "../config.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeVoiceQuota, VoiceUnavailableError } from "../v4/voice.js";
+import { answerQuestion, MAX_QUESTION_AUDIO_BYTES, takeAskQuota, transcribe, type AskContext } from "../v4/ask.js";
 import { authenticate, AuthedRequest, hashBytes, issueNonce, issueSession, verifyLogin } from "../auth.js";
 import { frozenDayList, lastClosedDay, missedDays, needsCarryoverSweep, needsHeldSweep, settleDecision, settleDueAt } from "../v4/jobs.js";
 import { CONFIG_BASE_LEN, decodeConfigEconomics, decodeOathTerms, heldSweepPending, oathEconomics, type OathTerms } from "../v4/terms.js";
@@ -75,6 +76,62 @@ get("/api/keeper/say", async (req: AuthedRequest, res) => {
     return res.send(audio);
   } catch (e) {
     if (e instanceof VoiceUnavailableError) return res.status(503).json({ error: "voice_unavailable", detail: e.message });
+    throw e;
+  }
+});
+
+/** What the Keeper may tell this wallet: its own Oaths (read from chain), its recent verdicts and its balance. */
+async function askContext(wallet: string): Promise<AskContext> {
+  const lists = await Promise.all([0, 1, 2, 3].map((i) => connection.getProgramAccounts(programId, { filters: [{ memcmp: { offset: 139 + 44 * i, bytes: wallet } }], dataSlice: { offset: 0, length: 0 } }).catch(() => [])));
+  const addresses = [...new Set(lists.flat().map((a) => a.pubkey.toBase58()))];
+  const reads = (await Promise.all(addresses.map(async (a) => ({ a, o: await readOath(a) })))).filter((x): x is { a: string; o: OathRead } => !!x.o)
+    .sort((x, y) => (y.o.startTs || Number.MAX_SAFE_INTEGER) - (x.o.startTs || Number.MAX_SAFE_INTEGER)).slice(0, 6);
+  const details = await prisma.oathDetails.findMany({ where: { oath: { in: reads.map((r) => r.a) } } });
+  const now = Math.floor(Date.now() / 1000);
+  const bits = (n: number) => n.toString(2).split("").filter((c) => c === "1").length;
+  const STATUS = ["open (waiting for members)", "active", "settled", "cancelled"];
+  const oaths = reads.map(({ a, o }) => {
+    const d = details.find((x) => x.oath === a);
+    const elapsed = o.status === 1 && o.startTs ? Math.min(o.numDays, Math.floor((now - o.startTs) / o.daySeconds)) : o.status >= 2 ? o.numDays : 0;
+    const kept = bits(o.daysKept[wallet] ?? 0);
+    const today = o.status === 1 && o.startTs ? Math.floor((now - o.startTs) / o.daySeconds) + 1 : null;
+    const settled = o.status >= 2;
+    return {
+      name: d?.name || d?.goalText || "an Oath", status: o.status === 1 && today !== null && today > o.numDays ? "ended, waiting to be settled" : STATUS[o.status] ?? "unknown",
+      solo: o.isSolo, members: o.members.length, day: today !== null && today <= o.numDays ? `day ${today} of ${o.numDays}` : `${o.numDays} days`,
+      myKeptDays: kept, myMissedDays: Math.max(0, elapsed - kept), stakeSol: Number(o.stakeAmount) / 1e9,
+      payoutSol: settled ? Number(o.payouts[wallet] ?? "0") / 1e9 : null, claimed: settled ? o.claimed[wallet] ?? false : null,
+    };
+  });
+  const verdicts = await prisma.proofVerification.findMany({ where: { wallet, status: { in: ["PASS", "FAIL"] } }, orderBy: { createdAt: "desc" }, take: 4 });
+  const solBalance = await connection.getBalance(new PublicKey(wallet), "confirmed").then((l) => l / 1e9).catch(() => null);
+  // oaths[0] is the most recent (newest start first; open Oaths, not started yet, first of all).
+  return { wallet, solBalance, oaths, recentVerdicts: verdicts.map((v) => ({ when: v.createdAt.toISOString(), pass: v.status === "PASS", reason: v.reason })) };
+}
+
+/**
+ * "Ask the Keeper": push-to-talk. Send { audio: base64, mime } (or { text } for a typed question). The question is
+ * transcribed (ElevenLabs Speech to Text), answered from the asker's own Oaths and receipts, and spoken back (ElevenLabs
+ * text-to-speech in the Keeper's voice, cached). Returns the question and the answer; the app plays it via /api/keeper/say.
+ */
+post("/api/keeper/ask", async (req: AuthedRequest, res) => {
+  const { audio, mime, text } = req.body ?? {};
+  if (!takeAskQuota(req.wallet)) return res.status(429).json({ error: "The Keeper has answered enough questions for today" });
+  try {
+    let question = typeof text === "string" ? text.trim().slice(0, 400) : "";
+    if (!question) {
+      if (typeof audio !== "string" || !audio) return res.status(400).json({ error: "Expected audio (base64) or text" });
+      const bytes = Buffer.from(audio, "base64");
+      if (bytes.length < 500 || bytes.length > MAX_QUESTION_AUDIO_BYTES) return res.status(400).json({ error: "The recording is too short or too long" });
+      question = await transcribe(bytes, typeof mime === "string" && /^audio\/[\w.+-]+$/.test(mime) ? mime : "audio/mp4");
+    }
+    if (!question) return res.status(422).json({ error: "The Keeper couldn't hear a question", heard: "" });
+    const answer = await answerQuestion(question, await askContext(req.wallet));
+    // Say it now, so the app's GET /api/keeper/say for this exact answer is served from the cache (no second charge).
+    await keeperSpeech(answer);
+    return res.json({ question, answer });
+  } catch (e) {
+    if (e instanceof VoiceUnavailableError) return res.status(503).json({ error: "keeper_unavailable", detail: e.message });
     throw e;
   }
 });

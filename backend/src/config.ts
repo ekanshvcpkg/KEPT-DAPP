@@ -26,4 +26,7 @@ export const config = {
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY || "",
   keeperVoiceId: process.env.KEEPER_VOICE_ID || "",
   elevenTtsModel: process.env.ELEVEN_TTS_MODEL || "eleven_flash_v2_5",
+  elevenSttModel: process.env.ELEVEN_STT_MODEL || "scribe_v3",
+  /** Text model for "Ask the Keeper" answers (same OpenAI-compatible endpoint and key as the vision judge). */
+  askModel: process.env.ASK_MODEL || process.env.VISION_MODEL || "google/gemma-3-27b-it",
 };
