@@ -1,5 +1,10 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import { LogBox } from "react-native";
 import { env } from "@/config/env";
+
+// The public Devnet RPC rate-limits bursts (a refresh after a check reads every Oath at once); web3.js retries a 429 by
+// itself and logs each retry with console.error, which dev builds show as a red toast although nothing failed.
+if (__DEV__) LogBox.ignoreLogs(["Server responded with 429"]);
 
 /** An RPC request that hasn't answered by then is dropped (web3.js has no timeout of its own). */
 const RPC_TIMEOUT_MS = 20_000;
