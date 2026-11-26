@@ -43,6 +43,30 @@ You swear an **Oath** (a daily habit, alone or with friends), stake **SOL** on i
 - 📈 **Kept rate.** A public trust score: how reliably you keep your word.
 - 💀 **The Keeper.** A half-warden, half-bookie reaper who holds the pot, judges proof and has opinions.
 
+## 🏁 Hackathon: what existed before, what we built during
+
+**Before the hackathon (inherited, by the original author, 2026-10-09 → 2026-11-16, up to commit `afb1f0c` "Release v1.2.0"):** the Expo app and its 116 designed screens, Demo mode, the Oath/HP/escrow rules engine, the Anchor program source, the Express backend, Mobile Wallet Adapter sign-in. Its Live mode could not create an Oath on the deployed program, and Live proofs trusted the phone's own verdict (see [`docs/notes/AUDIT_2026-11-26.md`](docs/notes/AUDIT_2026-11-26.md)).
+
+**During the hackathon (our team, from 2026-11-26, commit `31649d4` onward, branch `hackathon`):**
+
+| What | Where |
+|---|---|
+| Our own program instance on Devnet (new id, a separate verifier key that cannot upgrade, our mint and treasury) and an end-to-end escrow proof | `31649d4`, `4359a65`, [`onchain/scripts/e2e_devnet_sol.ts`](onchain/scripts/e2e_devnet_sol.ts) |
+| **The Keeper**: server-side AI judge of proof photos, public receipts, receipt hash recorded on chain, failed verdicts in an SPL Memo, blockhash-derived challenges | `8e192fe`, `d7eb915`, `68eb39d`, [`backend/src/v4/keeper.ts`](backend/src/v4/keeper.ts) |
+| **Audit the Keeper** in the app: re-hash receipts on the phone and compare with the chain | `c966cf2`, [`frontend/src/features/keeper/audit.ts`](frontend/src/features/keeper/audit.ts) |
+| Live without the 2.6 GB on-device model download; honest Live (Bounty join hidden until proof works) | `c966cf2`, `e4698bf` |
+| Phantom fix (no silent re-authorization for an unverified identity) and the first full Live run on a phone | `995f76b`, [`docs/notes/app-devnet-run-2026-11-26.md`](docs/notes/app-devnet-run-2026-11-26.md) |
+
+`git log afb1f0c..hackathon` lists every change made during the hackathon.
+
+## 🏆 Tracks
+
+| Track | How KEPT qualifies |
+|---|---|
+| **Solana: Best App Overall** | Our Rust (Anchor) program `kept_test` on Devnet ([addresses](#-devnet-addresses-and-evidence)); native SOL escrow, shared HP, payouts by rules replayed on chain; Android app with Mobile Wallet Adapter; public repo, setup below. |
+| **Solana: Agentic** | The Keeper is an AI agent with a wallet: the only key the program accepts for check-ins is the verifier the Keeper's server holds. Every verdict is verifiable AI: a receipt (photo hash, challenge, model, verdict) whose hash is on chain, re-checkable by anyone. |
+| **Solana Mobile** | Built for Android from the ground up: native camera proof, Mobile Wallet Adapter signing, Seeker-first design, APK release. |
+
 ## 📸 Screenshots
 
 <table>
