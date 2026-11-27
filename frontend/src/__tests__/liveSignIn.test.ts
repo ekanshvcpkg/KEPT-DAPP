@@ -75,7 +75,7 @@ describe("Live sign-in", () => {
       expect(wallet.authorize).toHaveBeenCalledTimes(2); // connect, then the signing session
       expect(wallet.authorize.mock.calls[0]![0]).toEqual({ chain: walletChain, identity: { name: env.identity.name, uri: env.identity.uri } });
       expect(wallet.authorize.mock.calls[1]![0]).toMatchObject({ auth_token: "fake-auth-token" });
-      expect(env.identity.uri).toBe("https://kept-keeper.vercel.app");
+      expect(env.identity.uri).toBe("https://keptdapp.vercel.app");
     } finally { identity.verified = false; }
   });
 
