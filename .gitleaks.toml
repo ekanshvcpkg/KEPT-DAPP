@@ -37,5 +37,5 @@ regexes = ['''^(photo-routes|recently-out)-test-secret$''']
 [[rules.allowlists]]
 description = "Placeholder key for the local stand-in vision server in the Keeper Devnet integration script"
 condition = "AND"
-paths = ['''(^|/)backend/scripts/keeper_e2e_devnet\.ts$''']
+paths = ['''(^|/)backend/scripts/(keeper_e2e_devnet|e2e_all_habits)\.ts$''']
 regexes = ['''^stand-in$''']
