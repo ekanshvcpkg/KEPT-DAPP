@@ -1,6 +1,6 @@
 # Builds the Android release APK and publishes it as a GitHub Release.
-#   - Push a tag:   git tag v0.2.0 && git push origin v0.2.0
-#   - Or by hand:   Actions › Release APK › Run workflow (enter a tag; it is created on the chosen branch)
+#   - By hand only: Actions › Release APK › Run workflow (enter a tag; it is created on the chosen branch). Pushing a
+#     tag no longer starts it (see `on:` below).
 # The APK is attached as KEPT.apk, so https://github.com/<owner>/<repo>/releases/latest/download/KEPT.apk
 # always serves the newest build (the README's Download button links there).
 #
@@ -13,9 +13,9 @@
 # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_STAKE_MINT, EXPO_PUBLIC_RPC_URL, EXPO_PUBLIC_PROGRAM_ID to override them.
 name: Release APK
 
+# By hand only (2026-11-27): releases from the hackathon branch are built and signed on the maintainer's machine with
+# KEPT's release key (the dApp Store key), so a pushed tag must not also publish a CI build signed with another key.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:

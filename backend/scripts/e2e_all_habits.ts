@@ -319,7 +319,12 @@ async function groupRun(env: any, members: Keypair[], latecomer: Keypair) {
   const end = started.startTs + MARKS.length * DAY;
   log("waiting for the Oath to end and the server to settle it…");
   let settled = onChain;
-  for (let i = 0; i < 80 && settled.status !== "settled" && (settled as any).status !== 2; i++) { await sleep(5000); settled = decodeOath((await conn.getAccountInfo(oath, "confirmed"))!.data); }
+  for (let i = 0; i < 80 && settled.status !== "settled" && (settled as any).status !== 2; i++) {
+    await sleep(5000);
+    // A dropped RPC request (Devnet blips) is retried on the next poll, not fatal.
+    const info = await conn.getAccountInfo(oath, "confirmed").catch(() => null);
+    if (info) settled = decodeOath(info.data);
+  }
   check(G, "the server settled the Oath on its own after it ended", settled.status === "settled" || (settled as any).status === 2, `status ${settled.status}, ${Math.round(Date.now() / 1000 - end)} s after the end`);
   const terms = decodeOathTerms((await conn.getAccountInfo(oath, "confirmed"))!.data)!;
   const expected = replayV3(STAKE, terms.missBps, false, masks, MARKS.length)!;
