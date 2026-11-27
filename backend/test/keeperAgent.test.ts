@@ -116,3 +116,8 @@ test('brief: a spoken answer keeps at most two whole sentences, about 150 charac
   assert.equal(brief('No sentence end here'), 'No sentence end here');
   assert.ok(brief('word '.repeat(80)).length <= 150);
 });
+
+test('numberSameNames: every same-named Oath gets its own number, others keep their name', async () => {
+  const { numberSameNames } = await import('../src/v4/ask.js');
+  assert.deepEqual(numberSameNames([{ name: 'Squarts' }, { name: 'S' }, { name: 'Squarts' }]).map((o) => o.name), ['Squarts (1)', 'S', 'Squarts (2)']);
+});
