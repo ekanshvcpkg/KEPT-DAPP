@@ -573,7 +573,7 @@
     "explainTitle": "The Keeper read this transaction",
     "explainCreate": "Stake {amount} SOL in a new Oath ({kind})",
     "explainCreateSub": "{days} days · {len} each · Oath {oath}",
-    "explainJoin": "Join Oath {oath} and stake its amount",
+    "explainJoin": "Join this Oath and stake its amount",
     "explainStart": "Start Oath {oath}",
     "explainCancel": "Cancel Oath {oath}: every stake is refunded",
     "explainSettle": "Settle Oath {oath} by the rules",

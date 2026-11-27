@@ -476,6 +476,15 @@ export type VerticalRules = RepGates & {
 };
 
 /** Push-up (vertical): the hip below the shoulder by more than this many arm lengths is an upright torso: not_plank. */
+/**
+ * The hip's drop as a share of the shoulder's in the vertical reading (front/oblique). The hips are behind and further
+ * away than the shoulders, so their image drop is a fraction of the shoulders': real front-view push-ups measured
+ * 0.10–0.33 (2026-11-27, phone on the floor in portrait); hips staying on the floor (a cobra) measure ~0. The side
+ * reading keeps PUSHUP_HIP_DROP_MIN.
+ */
+export const V_PUSHUP_HIP_DROP_MIN = 0.06;
+/** Smoothing of the ankles' visibility for seenAnkles (a hidden foot flickers; a seen one stays up). */
+export const ANKLE_VIS_TAU_MS = 600;
 export const V_PUSHUP_TORSO_MAX = 0.65;
 /** Push-up (vertical): the ankle below the shoulder by more than this many arm lengths (standing, kneeling up): not_plank. */
 export const V_PUSHUP_FEET_MAX = 2.1;
@@ -544,7 +553,7 @@ export const VERTICAL_RULES: Record<BaseExercise, Readonly<VerticalRules>> = {
   pushup: {
     // Extension 0.9 / 0.8 / 0.55 of the calibrated top: a full push-up goes to ~0.2–0.35, elbows at 90° to ~0.5.
     start: 144, bottom: 104, top: 162, minRepMs: 600, maxRepMs: 8_000, startHoldMs: 500,
-    dropMin: 0.3, dropFault: "no_shoulder_drop", hipDropMin: PUSHUP_HIP_DROP_MIN,
+    dropMin: 0.3, dropFault: "no_shoulder_drop", hipDropMin: V_PUSHUP_HIP_DROP_MIN,
     anchorMax: 0.3, anchorFault: "hands_not_planted", spreadMax: 0.25, bendMax: V_PUSHUP_BEND, depthMin: null, shallow: () => false,
     sideIn: 0.035, sideOut: 0.06, frontMin: 0.31, straight: 145, upright: 0.82,
     // aux = the wrists' horizontal offset from the shoulders (offset): rocking forward over locked arms moves it.
@@ -552,8 +561,9 @@ export const VERTICAL_RULES: Record<BaseExercise, Readonly<VerticalRules>> = {
     // Extended with the arms vertical (gap ≈ the straightest arm's 2D length). Straightness itself is only demanded
     // for calibrating the top, so resuming at the brief top after a freeze works like in the side reading.
     startPose: (f) => f.primary > VERTICAL_RULES.pushup.top && f.upright >= VERTICAL_RULES.pushup.upright,
-    // At the top the legs must be seen (the posture checks need the ankles) and the hands under the shoulders.
-    topFault: (f) => (f.feet < 0 ? "not_plank" : f.offset > V_PUSHUP_OFFSET_MAX ? "hands_not_planted" : VERTICAL_RULES.pushup.fault(f)),
+    // At the top the hands under the shoulders. Feet not seen (hidden behind the body from the front or back): the
+    // checks that need them are skipped and the torso check (upright vs plank) still applies.
+    topFault: (f) => (f.offset > V_PUSHUP_OFFSET_MAX ? "hands_not_planted" : VERTICAL_RULES.pushup.fault(f)),
     fault: (f) => {
       // Clearly upright (hips well below the shoulders and the feet further still): not_plank, whatever the hips say.
       if (f.torso > V_PUSHUP_TORSO_MAX && f.feet > V_PUSHUP_UPRIGHT_FEET) return "not_plank";
@@ -915,6 +925,9 @@ export class RepCounter {
   /** The first usable sample's time (VIEW_INIT_MS), null before it. */
   private viewT0: number | null = null;
   /** Push-up: smoothed |hip − knee| / |knee − ankle| in 2D (Z_ankle / Z_hip, see V_PUSHUP_BODY_RATIO), valid once vdepthN > 0. */
+  /** The ankles' visibility, smoothed (ANKLE_VIS_TAU_MS): -1 until the first pose. See seenAnkles. */
+  private ankleVis = -1;
+  private ankleVisT = 0;
   private vdepth = 1;
   private vdepthT = 0;
   private vdepthN = 0;
@@ -1285,12 +1298,13 @@ export class RepCounter {
       const dx = bottom.x - top.x;
       // Hip height above the floor under it (the line from the wrists to the ankles, ~40% of the way to the feet),
       // relative to the shoulder's height above the wrists, corrected for the hips' distance (V_PUSHUP_BODY_RATIO).
-      const { hipRel, kneeDrop, bodyLine } = this.plankShape(p, top, bottom, hip, an, gap, ref, ref, t);
+      const anSeen = this.seenAnkles(p, an, t);
+      const { hipRel, kneeDrop, bodyLine } = this.plankShape(p, top, bottom, hip, anSeen, gap, ref, ref, t);
       f = {
         primary, bodyLine, incline: 0, depth: kneeDrop, limb: ref, dropY: top.y, anchorX: ax, anchorY: ay,
         reach: ext, offset: (dx < 0 ? -dx : dx) / ref, hipY: hip.y, spread: sp, bend,
         straight: lm.straight ? 1 : 0, upright: lm.length > 0 ? gap / lm.length : 0,
-        torso: (hip.y - top.y) / ref, feet: an.n > 0 ? (an.y - top.y) / ref : -1, hipRel, aux: (dx < 0 ? -dx : dx) / ref,
+        torso: (hip.y - top.y) / ref, feet: anSeen.n > 0 ? (anSeen.y - top.y) / ref : -1, hipRel, aux: (dx < 0 ? -dx : dx) / ref,
       };
     } else {
       const kn = level(p, "knee", A, lr);
@@ -1401,6 +1415,20 @@ export class RepCounter {
    * (V_PUSHUP_BODY_RATIO; updates the leg depth ratio), the knee's drop below the middle of the hip and ankle heights
    * in units of `unit`, and the 2D body line where the body is not end-on (spans measured in `ref`).
    */
+  /**
+   * The ankles' level for the posture checks only while the ankles are steadily seen: their visibility smoothed over
+   * ANKLE_VIS_TAU_MS at VIS_MIN or more. Seen from the front or the back the feet are hidden behind the body and
+   * MediaPipe guesses them, flickering above VIS_MIN on single frames (27% of frames in a real front-view set, mostly
+   * 3–26 otherwise): judging hip height, the body line or the knees from a guess refused every honest front-view
+   * push-up and plank (real traces, 2026-11-27). Partly occluded but steadily seen ankles still count.
+   */
+  private seenAnkles(p: readonly number[], an: Level, t: number): Level {
+    const v = Math.max(at(p, 0, "ankle", 2), at(p, 1, "ankle", 2));
+    this.ankleVis = this.ankleVis < 0 ? v : this.ankleVis + (1 - expNeg((t - this.ankleVisT) / ANKLE_VIS_TAU_MS)) * (v - this.ankleVis);
+    this.ankleVisT = t;
+    return an.n > 0 && this.ankleVis >= VIS_MIN ? an : { y: 0, x: 0, n: 0, spread: -1 };
+  }
+
   private plankShape(p: readonly number[], sh: Level, sup: Level, hip: Level, an: Level, gap: number, unit: number, ref: number, t: number):
     { hipRel: number; kneeDrop: number; bodyLine: number } {
     let kneeDrop = 0;
@@ -1639,16 +1667,19 @@ export class RepCounter {
     const decayed = this.vscale * expNeg((t - this.vscaleT) / VIEW_SCALE_TAU_MS);
     this.vscale = ref > decayed ? ref : decayed;
     this.vscaleT = t;
-    if (an.n === 0) return { fault: "not_plank", primary };
+    const anSeen = this.seenAnkles(p, an, t);
     // Forearms on the floor: the wrist not above the elbow, and not a forearm's length below it (a bent-arm hold). A
     // camera above the floor sees the nearer of the two lower, so "below" gets more room.
     const forearmOk = high || wr.n === 0 || (wr.y - el.y >= -PLANK_FOREARM_FLAT * gap && wr.y - el.y <= 2 * PLANK_FOREARM_FLAT * gap);
     if (upright < (high ? VERTICAL_RULES.pushup.upright : PLANK_FOREARM_UPRIGHT) || !forearmOk) return { fault: "hands_not_planted", primary };
     const ox = sup.x - sh.x;
     if ((ox < 0 ? -ox : ox) > PLANK_OFFSET_MAX * gap) return { fault: "hands_not_planted", primary };
-    const shape = this.plankShape(p, sh, sup, hip, an, gap, gap, ref, t);
     // In units of a high plank's shoulder height (ref), so the push-up's limits mean the same on the forearms.
-    const torso = (hip.y - sh.y) / ref, feet = (an.y - sh.y) / ref;
+    const torso = (hip.y - sh.y) / ref;
+    // Feet not clearly seen (hidden from the front or back): only the torso check (upright vs plank) can be judged.
+    if (anSeen.n === 0) return { fault: torso > V_PUSHUP_TORSO_MAX ? "not_plank" : null, primary };
+    const shape = this.plankShape(p, sh, sup, hip, anSeen, gap, gap, ref, t);
+    const feet = (anSeen.y - sh.y) / ref;
     if (torso > V_PUSHUP_TORSO_MAX && feet > V_PUSHUP_UPRIGHT_FEET) return { fault: "not_plank", primary };
     if (shape.hipRel < V_PUSHUP_HIP_MIN || shape.hipRel > V_PUSHUP_HIP_MAX) return { fault: "hips", primary };
     if (shape.kneeDrop > V_PUSHUP_KNEE_DROP) return { fault: "not_plank", primary };

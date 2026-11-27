@@ -104,15 +104,28 @@ function agentNames(raw: unknown): Record<string, string> {
   return out;
 }
 
+/** Oath addresses the app is showing (its own chain reads): read directly, membership checked. Up to 12. */
+function agentHints(raw: unknown): string[] {
+  return Array.isArray(raw) ? [...new Set(raw.filter((a): a is string => typeof a === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)))].slice(0, 12) : [];
+}
+
+/** The wallet's Oaths by the program-accounts search (one per member slot); retried once when the RPC refused them all. */
+async function oathsOfWallet(wallet: string): Promise<string[]> {
+  const search = () => Promise.all([0, 1, 2, 3].map((i) => connection.getProgramAccounts(programId, { filters: [{ memcmp: { offset: 139 + 44 * i, bytes: wallet } }], dataSlice: { offset: 0, length: 0 } }).then((r) => r, () => null)));
+  let lists = await search();
+  if (lists.every((l) => l === null)) { await new Promise((r) => setTimeout(r, 1500)); lists = await search(); }
+  return [...new Set(lists.flatMap((l) => l ?? []).map((a) => a.pubkey.toBase58()))];
+}
+
 /** What Ask the Keeper's tools read: the asker's Oaths on chain, their details and habit proofs, receipts, balance. */
-function agentDeps(wallet: string, names: Record<string, string>): AgentDeps {
+function agentDeps(wallet: string, names: Record<string, string>, hints: string[] = []): AgentDeps {
   return {
     wallet,
     now: () => Math.floor(Date.now() / 1000),
     oaths: async () => {
-      const lists = await Promise.all([0, 1, 2, 3].map((i) => connection.getProgramAccounts(programId, { filters: [{ memcmp: { offset: 139 + 44 * i, bytes: wallet } }], dataSlice: { offset: 0, length: 0 } }).catch(() => [])));
-      const addresses = [...new Set(lists.flat().map((a) => a.pubkey.toBase58()))];
-      const reads = (await Promise.all(addresses.map(async (a) => ({ a, o: await readOath(a) })))).filter((x): x is { a: string; o: OathRead } => !!x.o)
+      // The app's list first (direct reads), plus the RPC search; only Oaths this wallet is a member of.
+      const addresses = [...new Set([...hints, ...(await oathsOfWallet(wallet))])];
+      const reads = (await Promise.all(addresses.map(async (a) => ({ a, o: await readOath(a) })))).filter((x): x is { a: string; o: OathRead } => !!x.o && x.o.members.includes(wallet))
         // Running and open Oaths first, newest first; at most 8.
         .sort((x, y) => (Number(x.o.status >= 2) - Number(y.o.status >= 2)) || ((y.o.startTs || Number.MAX_SAFE_INTEGER) - (x.o.startTs || Number.MAX_SAFE_INTEGER))).slice(0, 8);
       const ids = reads.map((r) => r.a);
@@ -160,7 +173,7 @@ post("/api/keeper/ask", async (req: AuthedRequest, res) => {
       question = await transcribe(bytes, typeof mime === "string" && /^audio\/[\w.+-]+$/.test(mime) ? mime : "audio/mp4");
     }
     if (!question) return res.status(422).json({ error: "The Keeper couldn't hear a question", heard: "" });
-    const answer = await askAgent(question, agentDeps(req.wallet, agentNames(req.body?.names)));
+    const answer = await askAgent(question, agentDeps(req.wallet, agentNames(req.body?.names), agentHints(req.body?.oaths)));
     // Say it now, so the app's GET /api/keeper/say for this exact answer is served from the cache (no second charge).
     if (!takeGlobalVoiceBudget(answer.length)) return res.status(503).json({ error: "keeper_unavailable", detail: "The Keeper's voice budget for today is spent" });
     await keeperSpeech(answer);

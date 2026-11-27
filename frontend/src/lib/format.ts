@@ -84,9 +84,14 @@ export function spokenSolChange(lamports: bigint | null): string {
   return abs < 10_000_000n ? `${dir} less than 0.01 SOL` : `${dir} about ${spoken2(Number(abs) / 1e9)} SOL`;
 }
 
-/** Decimal numbers with three or more decimals in a sentence, rounded for speech: "Stake 0.070786437 SOL" → "Stake about 0.07 SOL". */
+/** Decimal numbers with three or more decimals in a sentence, rounded for speech: "Stake 0.070786437 SOL" → "Stake about 0.07 SOL".
+ *  Shortened keys ("73qH…RRsv") and long codes are dropped: a person doesn't read them out. */
 export function speakableAmounts(text: string): string {
-  return text.replace(/\b(\d+\.\d{3,})\b/g, (m) => {
+  return text
+    .replace(/\b(Oath|oath)\s+[1-9A-HJ-NP-Za-km-z]{3,8}…[1-9A-HJ-NP-Za-km-z]{3,8}\b/g, "this Oath")
+    .replace(/\s*\b[1-9A-HJ-NP-Za-km-z]{3,8}…[1-9A-HJ-NP-Za-km-z]{3,8}\b/g, "")
+    .replace(/\s*\b[1-9A-HJ-NP-Za-km-z]{25,}\b/g, "")
+    .replace(/\b(\d+\.\d{3,})\b/g, (m) => {
     const n = Number(m);
     return n > 0 && n < 0.01 ? "less than 0.01" : `about ${spoken2(n)}`;
   });

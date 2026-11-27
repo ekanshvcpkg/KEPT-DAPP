@@ -27,7 +27,7 @@ test('facts: current day, HP after a missed day, habits with rep targets, today 
   assert.equal(d.habits[0]!.repTarget, 10); assert.equal(d.habits[1]!.exercise, 'squat');
   const me = d.members.find((m) => m.who === 'you')!, friend = d.members.find((m) => m.who !== 'you')!;
   assert.equal(me.daysKept, 1); assert.equal(me.daysMissed, 0); assert.match(me.today!, /proved habit 1 of 2/);
-  assert.equal(friend.who, 'friend with wallet 3uAB…R8Et'); assert.equal(friend.daysMissed, 1); assert.equal(friend.today, 'nothing proven yet today');
+  assert.equal(friend.who, 'friend 1'); assert.equal(friend.daysMissed, 1); assert.equal(friend.today, 'nothing proven yet today');
   assert.deepEqual(d.money, { stakePerMemberSol: 0.07, potSol: 0.14, costOfAMissSol: 0.01, myMissesSoFar: 0, whereMissesGo: d.money.whereMissesGo });
 });
 
@@ -86,11 +86,21 @@ test('askAgent: the model calls a tool, gets the facts, answers in speakable tex
     assert.ok(bodies[0].tools.some((t: any) => t.function.name === 'get_oath_details'));
     assert.match(bodies[0].messages[1].content, /Excercise/);
     const toolMsg = bodies[1].messages.find((m: any) => m.role === 'tool');
-    assert.equal(toolMsg.tool_call_id, 'c1'); assert.match(toolMsg.content, /live set of 10 squats/); assert.match(toolMsg.content, /3uAB…R8Et/);
+    assert.equal(toolMsg.tool_call_id, 'c1'); assert.match(toolMsg.content, /live set of 10 squats/); assert.match(toolMsg.content, /friend 1/); assert.doesNotMatch(toolMsg.content, /3uAB/);
 
     // The tool loop fails (HTTP 500): the one-shot answer from the summary is used instead.
     let n = 0;
     const flaky = (async () => (n++ === 0 ? new Response('no', { status: 500 }) : new Response(JSON.stringify({ choices: [{ message: { content: 'Day 2 of 3, HP 90.' } }] }), { status: 200 }))) as unknown as typeof fetch;
     assert.equal(await askAgent('how am I doing?', deps, flaky), 'Day 2 of 3, HP 90.');
   } finally { Object.assign(config, old); }
+});
+
+test('humanize: the Keeper never reads out addresses, shortened keys, hashes or signatures', async () => {
+  const { humanize, speakable } = await import('../src/v4/ask.js');
+  assert.equal(humanize('Join Oath 73qH…RRsv and stake its amount.'), 'Join this Oath and stake its amount.');
+  assert.equal(humanize('Your friend 3uAB…R8Et has kept today.'), 'Your friend has kept today.');
+  assert.equal(humanize('Receipt 0fb5a6af12a3639ea05c15d6ce86a2d8ec96061c6e373ee2f745ab565ebec1f2 passed.'), 'Receipt passed.');
+  assert.equal(humanize('Oath E88oqoakK6jsjfUmFeD885ibubMums92rXs6AZV4gqy5 is on day 2.'), 'Oath is on day 2.');
+  assert.equal(humanize('Ten push-ups, 18h left, about 0.07 SOL.'), 'Ten push-ups, 18h left, about 0.07 SOL.');
+  assert.equal(speakable('**Done.** Signature ZRjGVkx3AaYfsTVEghd3E463RG5G5b7jBJ3ooU8auGioQrYv1PAUu12x4Ut2cGscUUEwFFiAwriFvJ8TjwUpFSb landed.'), 'Done. Signature landed.');
 });

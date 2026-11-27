@@ -1060,8 +1060,15 @@ test("3D: piked hips are refused from every angle; hips 8 cm high or low still c
   }
 });
 
-test("3D: knees-on-the-floor push-ups are refused from every angle (the knee below the hip–ankle line, both readings)", () => {
-  assert.deepEqual(cheats(grid({ kind: "pushup", body: (e) => V.kneePushupBody(e), script: PUSH_SET })), []);
+/**
+ * Where the feet are steadily hidden behind the body (filmed from behind and to the side, ~120–240°), the knees on the
+ * floor can't be judged either (seenAnkles: a guessed foot refused every honest front-view push-up on real traces).
+ * Contract limit: knees-down push-ups and planks can pass from those angles.
+ */
+const feetHidden = (where: string) => { const a = az(where); return a >= 115 && a <= 245; };
+
+test("3D: knees-on-the-floor push-ups are refused wherever the feet are seen (the knee below the hip–ankle line, both readings)", () => {
+  assert.deepEqual(cheats(grid({ kind: "pushup", body: (e) => V.kneePushupBody(e), script: PUSH_SET })).filter((w) => !feetHidden(w)), []);
 });
 
 test("3D: rocking forward on locked arms (the body sliding over the hands) never counts", () => {
@@ -1217,7 +1224,9 @@ test("3D: a plank counts one rep per second held, on straight arms or on the for
 test("3D: a plank's clock never runs for sagging or piked hips, knees down, lying flat or standing", () => {
   for (const [name, o] of [["hips 25 cm low", { sag: 0.25 }], ["hips 30 cm high", { sag: -0.3 }], ["knees down", { knees: true }], ["lying on the belly", { prone: true }],
     ["forearms, hips 20 cm low", { forearm: true, sag: 0.2 }]] as const) {
-    assert.deepEqual(cheats(moveGrid({ kind: "plank", body: () => (e) => V.plankBody(e, o), script: PLANK_15 })), [], name);
+    const leaks = cheats(moveGrid({ kind: "plank", body: () => (e) => V.plankBody(e, o), script: PLANK_15 }));
+    // Knees down needs the feet seen (see feetHidden); every other broken plank is refused from every angle.
+    assert.deepEqual(name === "knees down" ? leaks.filter((w) => !feetHidden(w)) : leaks, [], name);
   }
   assert.deepEqual(cheats(moveGrid({ kind: "plank", body: () => (e) => V.standingArmsBody(e), script: PLANK_15 })), [], "standing");
 });
@@ -1543,4 +1552,21 @@ test("traceDigest notices a one-ulp change in a single angle input", () => {
   const b = traceDigest({ ...v!.trace, p });
   assert.equal(a.count, b.count);
   assert.notEqual(a.angleHash, b.angleHash);
+});
+
+// Real sets recorded on the phone (docs/notes/real-sets/*.jsonl, gitignored: the user's own pose data, never committed;
+// pulled with backend/scripts/fetch_rep_traces.ts or logged by a dev build). Each file name says what it is:
+// "<exercise>-<view>-<n>reps-*.jsonl". When present, every one must count exactly its reps.
+test("real recorded sets count exactly (local only, skipped when none are present)", async () => {
+  const { readdirSync, readFileSync, existsSync } = await import("node:fs");
+  const dir = new URL("../../../docs/notes/real-sets/", import.meta.url);
+  if (!existsSync(dir)) return;
+  for (const f of readdirSync(dir).filter((n) => /^[a-z]+-[a-z]+-\d+reps-.*\.jsonl$/.test(n))) {
+    const [exercise, , want] = f.split("-") as [Exercise, string, string];
+    const T: number[] = [], P: number[] = []; let aspect = 1;
+    for (const l of readFileSync(new URL(f, dir), "utf8").trim().split("\n")) { const d = JSON.parse(l); aspect = d.aspect; T.push(...d.t); P.push(...d.p); }
+    const c = new RepCounter(exercise, aspect);
+    for (let i = 0; i < T.length; i++) c.push({ t: T[i]!, p: P.slice(i * 36, i * 36 + 36) });
+    assert.equal(c.count, Number(want.replace("reps", "")), f);
+  }
 });

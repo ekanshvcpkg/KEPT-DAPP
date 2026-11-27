@@ -75,6 +75,12 @@ async function goalOf(c: HttpClient, oath: string): Promise<Details> {
   }
 }
 
+/** A goal as an Oath name: the habits as written, cut at a word near 32 characters. */
+const shortGoal = (goal: string): string => {
+  const g = goal.trim().replace(/\s+/g, " ");
+  return g.length <= 32 ? g : `${g.slice(0, 31).replace(/\s+\S*$/, "")}…`;
+};
+
 function toFacts(o: ChainOath, details: Details): OathFacts {
   const d = useDeviceOaths.getState();
   const started = o.status !== "open";
@@ -85,7 +91,10 @@ function toFacts(o: ChainOath, details: Details): OathFacts {
     asset: o.mint === NATIVE_SOL_MINT ? "sol" : "skr",
     oathId: o.oathId.toString(),
     creator: o.creator,
-    name: d.names[o.address] ?? oathName(o.objectId, o.numDays),
+    // The name given on this device; else the Oath's own habits ("Pushups · Squats"), which every member's phone gets
+    // from the backend. The generated "<object word> <length>" name ("Iron 3 days") only when neither is known: names
+    // live on the device, so a reinstall would otherwise rename every Oath to something the user never chose.
+    name: d.names[o.address] ?? (details.goalText?.trim() ? shortGoal(details.goalText) : oathName(o.objectId, o.numDays)),
     goal: details.goalText,
     habits: details.habits,
     ...(details.habitObjects.length ? { habitObjects: details.habitObjects } : {}),

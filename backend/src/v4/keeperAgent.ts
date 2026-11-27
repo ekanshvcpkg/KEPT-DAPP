@@ -34,7 +34,6 @@ const MISS_SHARE = 0.1; // a miss costs 10 % of the member's original stake (D-9
 
 const sol2 = (lamports: number) => Math.round(lamports / 1e7) / 100;
 const bitsSet = (n: number) => { let c = 0; for (let x = n >>> 0; x; x &= x - 1) c++; return c; };
-const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 const STATUS = ["open (waiting to start)", "active", "settled", "cancelled"];
 const hm = (s: number) => { const m = Math.max(0, Math.floor(s / 60)); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
 
@@ -125,12 +124,14 @@ export function oathDetails(f: AgentOath, wallet: string, now: number) {
   const { hp, broken, closedDays } = hpOf(f.chain, now);
   const stake = Number(f.chain.stakeAmount);
   const settled = f.chain.status >= 2;
+  // Friends are "friend 1", "friend 2"… in join order (the Keeper speaks; a wallet fragment is noise).
+  const friendNo = new Map(f.chain.members.filter((m) => m !== wallet).map((m, i) => [m, i + 1]));
   const members = f.chain.members.map((m) => {
     const kept = bitsSet(f.chain.daysKept[m] ?? 0);
     const missed = Math.max(0, closedDays - bitsSet((f.chain.daysKept[m] ?? 0) & ((1 << closedDays) - 1)));
     const today = todayOf(f, m, day, habits.length);
     return {
-      who: m === wallet ? "you" : `friend with wallet ${short(m)}`,
+      who: m === wallet ? "you" : `friend ${friendNo.get(m)}`,
       daysKept: kept, daysMissed: missed,
       ...(today ? { today: today.dayKept ? "kept today (recorded on Solana)" : today.habitsProven.length ? `proved habit ${today.habitsProven.join(", ")} of ${today.of}, not done yet` : "nothing proven yet today" } : {}),
       ...(settled ? { payoutSol: sol2(Number(f.chain.payouts[m] ?? "0")), claimed: f.chain.claimed[m] ?? false } : {}),

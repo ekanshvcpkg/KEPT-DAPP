@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createHttpClient } from "@/api/http/client";
 import { useSession } from "@/state/session";
 import { useDeviceOaths } from "@/features/oaths/device";
+import { queryClient } from "@/api/queries";
 
 const AskResponse = z.object({ question: z.string(), answer: z.string() });
 export type KeeperAnswer = z.output<typeof AskResponse>;
@@ -26,5 +27,10 @@ export async function fileToBase64(uri: string): Promise<string> {
  */
 export function askKeeper(audio: string, mime = "audio/mp4", http = createHttpClient(() => useSession.getState().token, undefined, undefined, 60_000)): Promise<KeeperAnswer> {
   const names = Object.fromEntries(Object.entries(useDeviceOaths.getState().names).slice(0, 20));
-  return http.post("/api/keeper/ask", { audio, mime, names }, AskResponse);
+  // The Oaths this phone is showing (its own chain reads): the server reads them directly, so the Keeper still knows
+  // them when the RPC throttles its own search for the wallet's Oaths. The server checks membership itself.
+  const shown = queryClient.getQueriesData<{ id: string; source?: string }[]>({ queryKey: ["oaths", "list"] })
+    .flatMap(([, data]) => data ?? []).filter((o) => o.source === "chain").map((o) => o.id);
+  const oaths = [...new Set(shown)].slice(0, 12);
+  return http.post("/api/keeper/ask", { audio, mime, names, oaths }, AskResponse);
 }
