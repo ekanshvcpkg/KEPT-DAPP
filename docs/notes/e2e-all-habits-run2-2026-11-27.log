@@ -1,0 +1,83 @@
+04:47:09 backend up on http://127.0.0.1:3197 | program 7VpBDwXiDvvaG29VBFUPankoSWFVanyD9KcT7wbmLVzj | stand-in vision, no Supabase, no ElevenLabs
+04:47:36 Oath "All moves A" started (solo, 8 habits) https://explorer.solana.com/address/CvqjVtHyWKsMmPGEKzNMEZWaCe2qcUxM5qyEsaeFkG4p?cluster=devnet
+04:47:44 PASS [All moves A] habit details saved on an Active solo Oath (first save) HTTP 201 
+04:47:45 PASS [All moves A] Oath registered for the server's jobs HTTP 204
+04:47:47 PASS [book] challenge names the habit's own proof object book, gesture Open_Palm
+04:47:47 PASS [book] photo passes the judge with a public receipt HTTP 200
+04:47:48 PASS [book] habit claimed for today done [0]
+04:47:51 PASS [10 push-ups] challenge names the habit's own proof object 10 push-ups, gesture Thumb_Up, freeze after 3
+04:48:04 PASS [10 push-ups] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 10 (phone counted 0)
+04:48:07 PASS [10 push-ups] honest set (10 counted, 21 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:48:07 PASS [10 push-ups] receipt carries the server's recount recount 10/10, freeze after 3
+04:48:11 PASS [10 push-ups] habit claimed for today done [0,1]
+04:48:12 PASS [10 squats] challenge names the habit's own proof object 10 squats, gesture Thumb_Up, freeze after 5
+04:48:30 PASS [10 squats] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 10 (phone counted 0)
+04:48:33 PASS [10 squats] honest set (10 counted, 25 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:48:33 PASS [10 squats] receipt carries the server's recount recount 10/10, freeze after 5
+04:48:33 PASS [10 squats] habit claimed for today done [0,1,2]
+04:48:33 PASS [20 jumping jacks] challenge names the habit's own proof object 20 jumping jacks, gesture Thumb_Up, freeze after 9
+04:48:51 PASS [20 jumping jacks] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 20 (phone counted 0)
+04:48:54 PASS [20 jumping jacks] honest set (20 counted, 25 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:48:54 PASS [20 jumping jacks] receipt carries the server's recount recount 20/20, freeze after 9
+04:48:54 PASS [20 jumping jacks] habit claimed for today done [0,1,2,3]
+04:48:55 PASS [10 lunges] challenge names the habit's own proof object 10 lunges, gesture Thumb_Up, freeze after 6
+04:49:16 PASS [10 lunges] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 10 (phone counted 0)
+04:49:19 PASS [10 lunges] honest set (10 counted, 29 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:49:19 PASS [10 lunges] receipt carries the server's recount recount 10/10, freeze after 6
+04:49:20 PASS [10 lunges] habit claimed for today done [0,1,2,3,4]
+04:49:20 PASS [10 sit-ups] challenge names the habit's own proof object 10 sit-ups, gesture Victory, freeze after 3
+04:49:41 PASS [10 sit-ups] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 10 (phone counted 0)
+04:49:44 PASS [10 sit-ups] honest set (10 counted, 29 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:49:44 PASS [10 sit-ups] receipt carries the server's recount recount 10/10, freeze after 3
+04:49:45 PASS [10 sit-ups] habit claimed for today done [0,1,2,3,4,5]
+04:49:45 PASS [20 high knees] challenge names the habit's own proof object 20 high knees, gesture Victory, freeze after 12
+04:49:59 PASS [20 high knees] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 20 (phone counted 0)
+04:50:02 PASS [20 high knees] honest set (20 counted, 21 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:50:02 PASS [20 high knees] receipt carries the server's recount recount 20/20, freeze after 12
+04:50:02 PASS [20 high knees] habit claimed for today done [0,1,2,3,4,5,6]
+04:50:02 PASS [5 burpees] challenge names the habit's own proof object 5 burpees, gesture Victory, freeze after 3
+04:50:16 PASS [5 burpees] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 5 (phone counted 0)
+04:50:19 PASS [5 burpees] honest set (5 counted, 21 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:50:19 PASS [5 burpees] receipt carries the server's recount recount 5/5, freeze after 3
+04:50:20 PASS [5 burpees] last habit: the day is recorded on chain https://explorer.solana.com/tx/3pZBWaMsfSRWKXVrTxsVWYdfuUN4LsKmfXm8pNg1ayKSqXknGk8oN1zNcsd3a7huAXi9hxfwnictJouKmD7fxuqS?cluster=devnet
+04:50:20 PASS [All moves A] every public receipt re-hashes to its published hash 8 receipts
+04:50:20 PASS [All moves A] on-chain proof_hash equals the combined receipt hashes chain 46adb201cacaecb098594f4e47b81143fedf5820bf189332696c30fad3d2c22b
+04:50:22 Oath "All moves B" started (solo, 3 habits) https://explorer.solana.com/address/qcG5zEghFLRPt5hcm2mTXrsXA55XsSjxyJZPLSqvKEF?cluster=devnet
+04:50:27 PASS [All moves B] habit details saved on an Active solo Oath (first save) HTTP 201 
+04:50:27 PASS [All moves B] Oath registered for the server's jobs HTTP 204
+04:50:27 PASS [10 overhead presses] challenge names the habit's own proof object 10 overhead presses, gesture Thumb_Up, freeze after 7
+04:50:43 PASS [10 overhead presses] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 10 (phone counted 0)
+04:50:46 PASS [10 overhead presses] honest set (10 counted, 23 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:50:46 PASS [10 overhead presses] receipt carries the server's recount recount 10/10, freeze after 7
+04:50:46 PASS [10 overhead presses] habit claimed for today done [0]
+04:50:46 PASS [30-second plank] challenge names the habit's own proof object 30-second plank, gesture Victory, freeze after 17
+04:51:22 PASS [30-second plank] a cheat set is refused by the server's recount HTTP 422: The Keeper counted 0 of 30 seconds (phone counted 0)
+04:51:22 PASS [30-second plank] honest set (35 counted, 34 s) passes the recount and the judge HTTP 200: Real scene; the object and the move are clearly visible.
+04:51:22 PASS [30-second plank] receipt carries the server's recount recount 30/30, freeze after 17
+04:51:24 PASS [30-second plank] habit claimed for today done [0,1]
+04:51:24 PASS [water bottle] challenge names the habit's own proof object water bottle, gesture Victory
+04:51:24 PASS [water bottle] photo passes the judge with a public receipt HTTP 200
+04:51:25 PASS [water bottle] last habit: the day is recorded on chain https://explorer.solana.com/tx/RbsHUdPWyFipKjE9nPm9ViM4LLxZ8FfZJTTB4yyCj72hJL6EYQnzKd52hGvtTxKnNQjEcU4CHFAb3o1Dxu9VF9b?cluster=devnet
+04:51:25 PASS [All moves B] every public receipt re-hashes to its published hash 3 receipts
+04:51:25 PASS [All moves B] on-chain proof_hash equals the combined receipt hashes chain ff39a4396f107e8e0c8e27815245648fd9034b3a1ccd66e3213946461339ffe3
+04:51:31 PASS [group] creator saves the habit while the Oath is open HTTP 201
+04:51:33 PASS [group] two friends joined (3 of 4 seats) 
+04:51:34 PASS [group] the creator starts it with 3 members (no need to fill all 4 seats) status active
+04:51:34 PASS [group] a 4th wallet can't join after the start 
+04:51:34 PASS [group] a member registers it for the server's jobs 
+04:51:34 group Oath https://explorer.solana.com/address/H5unvEEJGAw3KSzGS4yv6CVsUG5iu2oJxBEYgbVcYTGp?cluster=devnet | 3 days of 2 minutes
+04:51:37 PASS [group day 1 member A] proves and the day is recorded on chain HTTP 201 
+04:51:39 PASS [group day 1 member B] proves and the day is recorded on chain HTTP 201 
+04:51:40 PASS [group day 1 member C] proves and the day is recorded on chain HTTP 201 
+04:53:37 PASS [group day 2 member A] proves and the day is recorded on chain HTTP 201 
+04:53:39 PASS [group day 2 member B] proves and the day is recorded on chain HTTP 201 
+04:55:51 PASS [group day 3 member A] proves and the day is recorded on chain HTTP 201 
+04:55:52 PASS [group day 3 member B] proves and the day is recorded on chain HTTP 201 
+04:55:54 PASS [group day 3 member C] proves and the day is recorded on chain HTTP 201 
+04:55:54 PASS [group] on-chain days kept match (C missed day 2) [7,7,5]
+04:55:54 waiting for the Oath to end and the server to settle it…
+Error: failed to get info about account H5unvEEJGAw3KSzGS4yv6CVsUG5iu2oJxBEYgbVcYTGp: TypeError: fetch failed
+    at Connection.getAccountInfo (<repo>/node_modules/@solana/web3.js/src/connection.ts:3659:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async groupRun (<repo>/backend/scripts/e2e_all_habits.ts:322:140)
+    at async main (<repo>/backend/scripts/e2e_all_habits.ts:262:5)
