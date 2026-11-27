@@ -601,7 +601,8 @@
     "askExchange": "You: “{question}”\nThe Keeper: {answer}",
     "askMicDenied": "The Keeper needs the microphone to hear you. Allow it in Settings.",
     "askNotHeard": "The Keeper didn't catch that. Hold the button and speak.",
-    "askFailed": "The Keeper can't answer right now. Try again."
+    "askFailed": "The Keeper can't answer right now. Try again.",
+    "stopSpeaking": "Stop the Keeper"
   },
   "reps": {
     "$source": "hackathon 2026-11-26: live rep counter (docs/notes/REP_COUNTER_CONTRACT.md); 2026-11-27: every live activity (jumping jacks, lunges, sit-ups, high knees, burpees, overhead presses, plank)",

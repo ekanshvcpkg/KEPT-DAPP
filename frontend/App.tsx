@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ToastHost } from "@/components/chrome";
+import { KeeperStopHost } from "@/components/keeper/KeeperStop";
 import { FxHost, LoadFailHost, OfflineHost } from "@/app/hosts";
 import { CrashBoundary } from "@/app/CrashBoundary";
 import { RootNavigator } from "@/app/RootNavigator";
@@ -29,6 +30,7 @@ export default function App() {
               <FxHost />
               <OfflineHost />
               <LoadFailHost />
+              <KeeperStopHost />
               {DevMenu ? <DevMenu /> : null}
             </CrashBoundary>
           </ToastHost>
