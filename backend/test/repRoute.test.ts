@@ -16,6 +16,21 @@ const fr = JSON.parse(readFileSync(new URL('../../packages/engine/test-vectors/r
 const sha = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 /** A JPEG-looking freeze frame, 640x480 like RepCounterView.capture(); `fill` makes each one unique. */
 const frame = (fill: number) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(4000, fill)]);
+/** The same, portrait (480x640): the standing activities' camera frame. */
+const framePortrait = (fill: number) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x02, 0x80, 0x01, 0xe0, 0x03, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1]), Buffer.alloc(4000, fill)]);
+/**
+ * The golden vector "jumping-jacks" (5 reps) with a 3 s freeze after rep 2: the samples after that rep's end move 3 s
+ * later and the freeze holds the pose of its last sample (what the phone records while the person raises a hand).
+ */
+const jjTrace = (() => {
+  const jj = JSON.parse(readFileSync(new URL('../../packages/engine/test-vectors/reps-vectors.json', import.meta.url), 'utf8')).vectors.find((v: { name: string }) => v.name === 'jumping-jacks').trace;
+  const end = 2850, i0 = jj.t.indexOf(end);
+  const t: number[] = [], p: number[] = [];
+  for (let i = 0; i <= i0; i++) { t.push(jj.t[i]); p.push(...jj.p.slice(i * 36, i * 36 + 36)); }
+  for (let x = end + 50; x <= end + 3000; x += 50) { t.push(x); p.push(...jj.p.slice(i0 * 36, i0 * 36 + 36)); }
+  for (let i = i0 + 1; i < jj.t.length; i++) { t.push(jj.t[i] + 3000); p.push(...jj.p.slice(i * 36, i * 36 + 36)); }
+  return { ...jj, t, p, pauses: [[end + 50, end + 3000]] };
+})();
 
 test('POST /proof/verify for a rep habit: the server recounts the trace and judges the freeze frame', async () => {
   const wallet = '11111111111111111111111111111111';
@@ -36,7 +51,8 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
   // The set started 20 s after its challenge: past the 2-minute photo window's start, inside the rep window.
   const issuedAt = new Date(Date.now() - 20_000);
   // A blockhash for which the server's freeze pick is rep 4, where the vector's freeze is.
-  const blockhash = Array.from({ length: 400 }, (_, i) => `bh${i}`).find((bh) => freezeAfterRep({ blockhash: bh, issuedAt }, 8) === 4)!;
+  // ...and, for the jumping-jack set below (5 reps), rep 2.
+  const blockhash = Array.from({ length: 400 }, (_, i) => `bh${i}`).find((bh) => freezeAfterRep({ blockhash: bh, issuedAt }, 8) === 4 && freezeAfterRep({ blockhash: bh, issuedAt }, 5) === 2)!;
   stub(prisma.gestureChallenge, 'findFirst', async () => ({ gesture: 'Thumb_Up', issuedAt, slot: 777, blockhash }));
   let savedObjects: string[] | null = null; // the Oath's saved habit objects (null: none saved)
   stub(prisma.oathDetails, 'findUnique', async () => (savedObjects ? { habitObjects: savedObjects } : null));
@@ -88,6 +104,20 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
     assert.equal(replay.status, 409); assert.match(replay.body.error, /already used/);
     assert.equal(receipt.reps.keyframes[0].sha256, sha(frame(9)));
     assert.equal(receipt.expected.object, '8 push-ups');
+
+    // Every live activity takes the same route: a jumping-jack set, judged as a jumping-jack freeze frame.
+    const jPhoto = framePortrait(6);
+    const jEvidence = { trace: jjTrace, phoneCount: 5, freeze: { afterRep: 2, promptT: 2850, t: 4400, gesture: 'Thumb_Up', sha256: sha(jPhoto) }, keyframes: [] };
+    const jj = await verify(jPhoto, jEvidence, '5 jumping jacks');
+    assert.equal(jj.status, 200, JSON.stringify(jj.body)); assert.equal(jj.body.pass, true);
+    assert.match(asked.at(-1)!.object, /jumping-jack/); assert.match(asked.at(-1)!.gesture, /hand raised/);
+    const jr = (await (await fetch(`${base}/keeper/receipts/${jj.body.receiptHash}`)).json() as any).receipt;
+    assert.equal(jr.reps.exercise, 'jumpingjack'); assert.equal(jr.reps.repCount, 5); assert.equal(jr.reps.target, 5);
+    assert.deepEqual(jr.reps.freeze, { afterRep: 2, gesture: 'hand_up', t: 4400 });
+    // Short of the habit's count: refused before any model call.
+    const before = asked.length;
+    const jShort = await verify(framePortrait(7), { ...jEvidence, freeze: { ...jEvidence.freeze, sha256: sha(framePortrait(7)) } }, '6 jumping jacks');
+    assert.equal(jShort.status, 422); assert.match(jShort.body.error, /counted 5 of 6/); assert.equal(asked.length, before);
   } finally {
     server.closeAllConnections(); await new Promise<void>((r) => server.close(() => r()));
     restore.forEach((fn) => fn()); keeper.judge = originalJudge; Object.assign(config, old);

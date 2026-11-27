@@ -115,3 +115,37 @@ export const HYPE_LINES: readonly HypeLine[] = [...linesOf("long", TEXTS), ...li
 export function hypeIds(situation: HypeSituation, lang: HypeLang, tier: HypeTier = "long"): string[] {
   return HYPE_LINES.filter((l) => l.situation === situation && l.lang === lang && l.tier === tier).map((l) => l.id);
 }
+
+/**
+ * What a line's words need from the activity of the set (2026-11-27: every live activity, not just push-ups and squats).
+ * `down`: the effort goes down (push-ups, squats, lunges, burpees), so "deeper", "lower" and "get all the way down" make
+ * sense; a half jumping jack, sit-up, high knee or press is short going UP. `unit`: "reps", or "seconds" for a held
+ * plank, where "final rep", "the reps", "again", "move" or "keep the pace" would be wrong.
+ */
+export interface HypeActivity { down: boolean; unit: "reps" | "seconds" }
+/** A set of push-ups: what every line was written for. */
+export const REPS_DOWN: HypeActivity = { down: true, unit: "reps" };
+
+/** The lines that fit only some activities; every other line fits any (checked against the texts in the tests). */
+const NEEDS: Readonly<Record<string, "down" | "reps">> = {
+  // "Halfway down isn't down. Lower." / "That's a curtsy" / "Deeper" / "Get all the way down" / "Get bloody down."
+  "halfRep-clean-1": "down", "halfRep-clean-2": "down", "halfRep-clean-3": "down", "halfRep-clean-s1": "down",
+  "halfRep-nofilter-1": "down", "halfRep-nofilter-2": "down", "halfRep-nofilter-3": "down", "halfRep-nofilter-s1": "down",
+  // A slow rep, the final rep, the reps after the photo, "again", "move", "go", "the pace": a held plank has none of them.
+  "slow-clean-1": "reps", "slow-clean-2": "reps", "slow-clean-3": "reps", "slow-clean-s1": "reps",
+  "slow-nofilter-1": "reps", "slow-nofilter-2": "reps", "slow-nofilter-3": "reps", "slow-nofilter-s1": "reps",
+  "last-clean-3": "reps", "last-nofilter-3": "reps",
+  "resume-clean-3": "reps", "resume-nofilter-1": "reps", "resume-nofilter-2": "reps", "resume-nofilter-3": "reps",
+  "streak-clean-s1": "reps", "streak-nofilter-1": "reps", "streak-nofilter-s1": "reps", "streak-nofilter-s2": "reps", "streak-nofilter-s3": "reps",
+  // "Welcome back. The clock didn't stop.": a plank's clock does stop while the Keeper can't see you.
+  "back-clean-2": "reps",
+};
+
+/** Whether a line's words fit the activity (a line not listed in NEEDS fits any). */
+export function hypeFits(id: string, a: HypeActivity): boolean {
+  const need = NEEDS[id];
+  return need === undefined || (need === "down" ? a.down && a.unit === "reps" : a.unit === "reps");
+}
+
+/** The ids NEEDS restricts (the tests check each one exists). */
+export const HYPE_RESTRICTED_IDS = Object.keys(NEEDS);

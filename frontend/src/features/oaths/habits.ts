@@ -7,7 +7,7 @@
 // drafts keep loading. The program's single `object_id` is only a tag now (see `habitPatch`).
 import { HABIT_COUNT_MAX, OBJECTS } from "@kept/config";
 import type { OathDraft } from "@/state/drafts";
-import { catalogEntry, proofTextOf, validEntry } from "@/features/objects/proof";
+import { catalogEntry, proofTextOf, savedEntry } from "@/features/objects/proof";
 
 type Parallel = Pick<OathDraft, "habits" | "habitObjectIds" | "habitObjectEntries">;
 
@@ -19,8 +19,8 @@ export const validObjectId = (n: unknown): n is number => typeof n === "number" 
 
 /** The proof object of habit `i`: its entry, or (a draft saved before entries) the one of the eight its id names. */
 function entryAt(d: Parallel, i: number): string | null {
-  const key = d.habitObjectEntries?.[i];
-  if (validEntry(key)) return key;
+  const key = savedEntry(d.habitObjectEntries?.[i]);
+  if (key) return key;
   const id = d.habitObjectIds?.[i];
   return validObjectId(id) ? OBJECTS[id]!.id : null;
 }

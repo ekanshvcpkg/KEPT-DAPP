@@ -1,14 +1,16 @@
-// A live rep set (push-ups, squats): the camera counts on the phone (kept-gesture RepCounterView: CameraX + MediaPipe
-// Pose), the shared engine (@kept/engine reps) turns pose samples into reps, the Keeper counts aloud, and at a random
-// rep it calls "Freeze!" for a liveness photo showing the challenge gesture. The whole pose trace goes to the backend,
-// which recounts it with the same engine (docs/notes/REP_COUNTER_CONTRACT.md); the phone's number is only a display.
+// A live set (push-ups, squats, jumping jacks, lunges, sit-ups, high knees, burpees, overhead presses, or a timed plank):
+// the camera counts on the phone (kept-gesture RepCounterView: CameraX + MediaPipe Pose), the shared engine
+// (@kept/engine reps) turns pose samples into reps (a plank: one per second held), the Keeper counts aloud, and at a
+// random rep it calls "Freeze!" for a liveness photo showing the challenge gesture. The whole pose trace goes to the
+// backend, which recounts it with the same engine (docs/notes/REP_COUNTER_CONTRACT.md); the phone's number is only a
+// display.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { RepCounterView } from "kept-gesture";
 import type { RepCounterHandle } from "kept-gesture";
 import { RepCounter } from "@kept/engine";
-import type { Exercise, RepEvent, Trace } from "@kept/engine";
+import type { Exercise, RepEvent, RepFault, RepView, Trace } from "@kept/engine";
 import type { RepEvidence } from "@/api";
 import { t } from "@/copy";
 import { Button } from "@/components/actions";
@@ -16,23 +18,32 @@ import { Chip, ChipRow } from "@/components/content/Basics";
 import { Icon, Text, loopCycles, useAnimationLifecycle } from "@/components/primitives";
 import { color, duration, metrics, radius, type as typeStyles } from "@/theme";
 import { haptic } from "@/lib/haptics";
-import { repSetHype, sayCount, sayLine, stopHype } from "@/features/keeper/countVoice";
+import { REP_ICON } from "@/features/objects/proof";
+import { hasCountClip, repSetHype, sayCount, sayLine, stopHype } from "@/features/keeper/countVoice";
 import type { HypeCoach } from "@/features/keeper/hypeCoach";
+import { ACTIVITY, hypeActivityOf, isTimed, saysCount, setSeconds } from "@/features/reps/activity";
+import { uprightPose } from "@/features/reps/upright";
 
 type Phase = "setup" | "counting" | "freeze" | "done";
 const EMPTY = Array.from({ length: 36 }, () => 0);
 // The engine's incline checks need image-down = gravity-down. The camera reports per sample how far the phone is rolled off
-// its 90° bucket (`tilt`): above TILT_MAX the set doesn't start, and mid-set the samples go into the trace and the counter
-// as empty poses (occlusion: a rep in progress is dropped after the engine's LOST_MS, and the server's recount sees the
-// same zeros). Not a pause window: the server accepts exactly one pause, the freeze. Counting resumes below TILT_RESUME.
+// its 90° bucket (`tilt`): up to TILT_MAX every sample is turned back upright by it (features/reps/upright.ts) before the
+// counter and the trace; above it the set doesn't start, and mid-set the samples go into the trace and the counter as
+// empty poses (occlusion: a rep in progress is dropped after the engine's LOST_MS, and the server's recount sees the same
+// zeros). Not a pause window: the server accepts exactly one pause, the freeze. Counting resumes below TILT_RESUME.
 const TILT_MAX = 20;
 const TILT_RESUME = 16;
 // What the server's recount refuses (backend/src/v4/repProof.ts): a sample gap over 2 s or a set over 240 s. The phone
 // stops such a set at once (with a little margin) instead of letting the user finish it for nothing.
 const MAX_GAP_MS = 1_900;
 const MAX_SET_MS = 235_000;
-/** Seconds a set may need, so it isn't started on a challenge about to expire (~3 s a rep plus the freeze). */
-export const repSetSeconds = (target: number) => target * 3 + 20;
+/** Faults with their own hint (the added activities' moves); every other fault keeps the generic form hint. */
+const FAULT_HINT: Partial<Record<RepFault, `additions.reps.fault.${"legs" | "stance" | "same_leg" | "twist" | "not_lying" | "no_lockout"}`>> = {
+  legs: "additions.reps.fault.legs", stance: "additions.reps.fault.stance", same_leg: "additions.reps.fault.same_leg",
+  twist: "additions.reps.fault.twist", not_lying: "additions.reps.fault.not_lying", no_lockout: "additions.reps.fault.no_lockout",
+};
+/** Seconds a set may need, so it isn't started on a challenge about to expire (~3 s a rep, or the hold, plus the freeze). */
+export const repSetSeconds = (target: number, exercise: Exercise = "pushup") => setSeconds(exercise, target);
 
 export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, onCounting, onNoTime, onDone, onAbort }: {
   exercise: Exercise; target: number; gesture: string;
@@ -76,11 +87,14 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
   }, [onCounting]);
   // The Keeper's hype lines between the counts (features/keeper/hypeCoach.ts): one coach per attempt, on the attempt's
   // timers; a line plays only while counting (never in the Freeze), the done line also as the screen closes.
+  // The lines fit the activity (no "deeper" for a jumping jack, no "final rep" for a plank); a plank's line only has to
+  // end before its next spoken count (its tens), not the next second.
+  const timed = isTimed(exercise);
   const hype = useRef<HypeCoach | null>(null);
   const coach = useCallback(() => (hype.current ??= repSetHype(target, {
     schedule: (ms, fn, keep) => { if (keep) setTimeout(fn, ms); else later(ms, fn); },
     canSpeak: (s) => phaseRef.current === "counting" || (s === "done" && phaseRef.current === "done"),
-  })), [target, later]);
+  }, { activity: hypeActivityOf(exercise), speaksAt: (n) => saysCount(exercise, n) && hasCountClip(n) })), [target, later, exercise]);
   useEffect(() => () => { if (phaseRef.current !== "done") stopHype(); }, []);
   // The counter's "setup" right after the Freeze is the freeze's own (its end already got the "after the photo" line);
   // any other "setup" is a camera stall, which gets a welcome back at the next "ready".
@@ -94,6 +108,9 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
   const tilted = useRef(false);
   // Start waits for a level phone: the first onPose with |tilt| <= TILT_MAX (and none tilted since).
   const [level, setLevel] = useState(false);
+  // Which way the counter sees the person (side, front, at an angle): a small hint while counting.
+  const [view, setView] = useState<RepView | null>(null);
+  const viewRef = useRef<RepView | null>(null);
 
   /** Throws the set away and goes back to setup, saying why (the server would refuse it). */
   const restart = useCallback((why: Parameters<typeof t>[0]) => {
@@ -107,6 +124,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     startT.current = null; lastT.current = -1;
     setCount(0);
     setInPosition(false);
+    viewRef.current = null; setView(null);
     setPhase("setup");
     setHint(t(why));
     haptic.light();
@@ -114,12 +132,13 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
 
   const finish = useCallback(async (endT: number) => {
     setPhase("done"); // no sample after the one that completed the set enters the trace
-    if (!coach().done()) sayLine("done");
+    // The plain "done" clip says "every rep kept": not for a plank.
+    if (!coach().done() && !timed) sayLine("done");
     const shot = await cam.current?.capture().catch(() => null);
     const trace: Trace = { v: 1, engine: "reps@1", exercise, aspect: aspect.current, t: samples.current.t, p: samples.current.p, pauses: pauses.current };
     onDone({ trace, reps: reps.current, phoneCount: reps.current.length, freeze: freeze.current,
       keyframes: shot ? [{ kind: "final", t: shot.t || endT, jpeg: shot.jpeg, sha256: shot.sha256 }] : [] }, freezeJpeg.current);
-  }, [exercise, onDone, setPhase, coach]);
+  }, [exercise, onDone, setPhase, coach, timed]);
 
   const startFreeze = useCallback((repT: number, n: number) => {
     setPhase("freeze");
@@ -149,9 +168,11 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
     if (e.type === "rep") {
       reps.current.push({ startT: e.startT, bottomT: e.bottomT, endT: e.endT });
       setCount(e.n);
-      sayCount(e.n);
+      // A plank's "rep" is a second held: its tens are said (and felt), the hype lines fill in between.
+      const said = saysCount(exercise, e.n);
+      if (said) sayCount(e.n);
       coach().rep(e.n, e.endT - e.startT);
-      haptic.light();
+      if (said) haptic.light();
       setHint((h) => (h === t("additions.reps.holdTop") ? null : h));
       if (e.n >= target) void finish(e.endT);
       else if (e.n === freezeAt && !freeze.current) startFreeze(e.endT, e.n);
@@ -162,11 +183,13 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       coach().ready();
     } else if ((e.type === "half_rep" || e.type === "lost") && e.t - lastJab.current > 8000) {
       lastJab.current = e.t;
-      // A half rep gets a shaming hype line when one is due, else the plain "go lower".
-      if (e.type === "lost" || !coach().halfRep()) sayLine(e.type === "half_rep" ? "halfRep" : "lost");
-      setHint(t(e.type === "half_rep" ? "additions.reps.halfRep" : "additions.reps.lost"));
+      // A half rep gets a shaming hype line when one is due, else the plain "go lower" (only where lower is the point:
+      // a half jumping jack, sit-up, high knee or press is short going up).
+      if (e.type === "lost") sayLine("lost");
+      else if (!coach().halfRep() && ACTIVITY[exercise].down) sayLine("halfRep");
+      setHint(t(e.type === "half_rep" ? `additions.reps.ex.${exercise}.halfRep` : "additions.reps.lost"));
     } else if (e.type === "fault") {
-      setHint(t("additions.reps.formHint"));
+      setHint(t(timed ? "additions.reps.formHintSeconds" : FAULT_HINT[e.fault] ?? "additions.reps.formHint"));
       coach().fault();
     } else if (e.type === "setup") {
       // After a camera stall the counter resumes on a short hold at the top.
@@ -175,7 +198,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       if (freezeEnded.current) freezeEnded.current = false;
       else coach().lost();
     }
-  }, [target, finish, startFreeze, freezeAt, coach]);
+  }, [target, finish, startFreeze, freezeAt, coach, exercise, timed]);
 
   const onPose = useCallback((ev: { nativeEvent: { t: number; w: number; h: number; tilt?: number; p: number[] } }) => {
     const { t: ts, w, h, p } = ev.nativeEvent;
@@ -208,7 +231,8 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       if (rawLog.current.t.length >= 40) { console.warn("[kept] samples " + JSON.stringify({ aspect: aspect.current, ...rawLog.current })); rawLog.current = { t: [], p: [] }; }
     }
     // A tilted phone's pose can't be trusted (image-down isn't gravity-down): it is recorded and counted as no pose.
-    const sample = p.length === 36 && !tilted.current ? p : EMPTY;
+    // Below that, the residual roll is turned back first (the trace holds the upright numbers the server recounts).
+    const sample = p.length === 36 && !tilted.current ? uprightPose(p, ev.nativeEvent.tilt ?? 0, aspect.current) : EMPTY;
     samples.current.t.push(ts);
     samples.current.p.push(...sample);
     if (ph === "freeze") {
@@ -222,6 +246,8 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       if (tilted.current && (e.type === "lost" || e.type === "half_rep" || e.type === "fault")) continue;
       onEvent(e);
     }
+    const v = counter.current?.view ?? null;
+    if (v !== viewRef.current) { viewRef.current = v; setView(v); }
   }, [exercise, onEvent, restart]);
 
   // No frame within a few seconds (no camera, permission or model): say so instead of a silent, disabled Start.
@@ -234,10 +260,10 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
 
   const start = () => {
     if (!level || tilted.current) return;
-    if (secondsLeft() < repSetSeconds(target)) { onNoTime(); return; }
+    if (secondsLeft() < repSetSeconds(target, exercise)) { onNoTime(); return; }
     setPhase("counting"); sayLine("go");
   };
-  const label = exercise === "pushup" ? t("additions.reps.pushups") : t("additions.reps.squats");
+  const label = t(`additions.reps.ex.${exercise}.label`);
   return (
     <View style={{ flex: 1, gap: metrics.screen.gap }}>
       <View style={{ flex: 1, borderRadius: radius.cam, overflow: "hidden", backgroundColor: color.surface[1] }}>
@@ -245,13 +271,18 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
           onPose={onPose} onReady={onReady} onError={() => setHint(t("additions.reps.cameraError"))} />
         <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: metrics.screen.gap, alignItems: "center" }}>
           <Text style={[typeStyles.displayLg, { color: color.text.primary }]} accessibilityLiveRegion="polite">{String(count)}</Text>
-          <Text style={[typeStyles.monoLabel, { color: color.text.secondary }]}>{t("additions.reps.ofTarget", { target, label })}</Text>
+          <Text style={[typeStyles.monoLabel, { color: color.text.secondary }]}>{timed ? t("additions.reps.ofTargetSeconds", { target }) : t("additions.reps.ofTarget", { target, label })}</Text>
           {phase === "counting" ? (
             <Text style={[typeStyles.titleXl, { color: inPosition ? color.lime.base : color.text.primary, textAlign: "center" }]} accessibilityLiveRegion="polite">
-              {inPosition ? t("additions.reps.statusGo") : t(exercise === "pushup" ? "additions.reps.statusPositionPushup" : "additions.reps.statusPositionSquat")}
+              {inPosition ? t(timed ? "additions.reps.statusHold" : "additions.reps.statusGo") : t(`additions.reps.ex.${exercise}.position`)}
             </Text>
           ) : null}
         </View>
+        {phase === "counting" && view ? (
+          <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: metrics.screen.gap, alignItems: "center" }}>
+            <Chip text={t(`additions.reps.view.${view}`)} icon="eye-outline" tone="grey" small />
+          </View>
+        ) : null}
         {phase === "freeze" ? (
           <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: metrics.screen.gap, alignItems: "center" }}>
             {/* Read from 2 m away: the move to make, large and moving. */}
@@ -263,7 +294,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       {hint ? <ChipRow justify="center"><Chip text={hint} icon="information-outline" tone="grey" /></ChipRow> : null}
       {/* Before the set: how to place the phone and where to stand, step by step. The freeze move is shown only when it happens. */}
       {phase === "setup" ? <SetupSteps exercise={exercise} /> : null}
-      {phase === "setup" ? <Button kind="l" icon="arm-flex" label={t("additions.reps.start", { target, label })} onPress={start} disabled={!level} /> : null}
+      {phase === "setup" ? <Button kind="l" icon={REP_ICON[exercise]} label={timed ? t("additions.reps.startSeconds", { target, label }) : t("additions.reps.start", { target, label })} onPress={start} disabled={!level} /> : null}
       {phase === "counting" || phase === "freeze" ? <Button kind="t" label={t("additions.reps.stop")} onPress={onAbort} /> : null}
     </View>
   );
@@ -288,11 +319,12 @@ function RaiseHandCue({ size }: { size: number }) {
   );
 }
 
-/** The setup steps for an exercise: phone placement, where to stand, how to begin. */
+const PLACE = { floor: "additions.reps.placeFloor", floorTall: "additions.reps.placeFloorTall", chair: "additions.reps.placeChair" } as const;
+
+/** The setup steps for an exercise: phone placement, what must be in the picture (from any angle), how to begin. */
 function SetupSteps({ exercise }: { exercise: Exercise }) {
-  const keys = exercise === "pushup"
-    ? (["additions.reps.stepPushup1", "additions.reps.stepPushup2", "additions.reps.stepPushup3"] as const)
-    : (["additions.reps.stepSquat1", "additions.reps.stepSquat2", "additions.reps.stepSquat3"] as const);
+  const a = ACTIVITY[exercise];
+  const keys = [PLACE[a.placement], a.armsUp ? "additions.reps.frameArms" : "additions.reps.frame", `additions.reps.ex.${exercise}.begin`] as const;
   return (
     <View style={{ gap: metrics.screen.gap / 2 }} accessibilityRole="list">
       <Text style={[typeStyles.monoLabel, { color: color.text.secondary }]}>{t("additions.reps.stepsTitle")}</Text>

@@ -3,15 +3,23 @@
 // The identity of a proof object everywhere past C2 is its *text* (what the model is asked, and what the backend
 // stores per habit and compares at /proof/verify): a dumbbell, running shoes, a kettlebell.
 import { OBJECTS } from "@kept/config";
+import { parseRepHabit } from "@kept/engine";
+import type { Exercise } from "@kept/engine";
 import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
 import type { IconName } from "@/components/primitives";
-import { CATALOG } from "./catalog";
+import { CATALOG, currentEntryKey } from "./catalog";
 import type { CatalogEntry, ObjectCategory } from "./catalog";
 
 const BY_KEY = new Map<string, CatalogEntry>(CATALOG.map((e) => [e.key, e]));
 export const catalogEntry = (key: string): CatalogEntry | undefined => BY_KEY.get(key);
 export const validEntry = (key: unknown): key is string => typeof key === "string" && BY_KEY.has(key);
+/** A key from a saved draft as today's catalog key (an older build's `reps_pushups_20` is `reps_pushup_20`), or null. */
+export const savedEntry = (key: unknown): string | null => {
+  if (typeof key !== "string") return null;
+  const k = currentEntryKey(key);
+  return BY_KEY.has(k) ? k : null;
+};
 
 /** The entry's name as shown: "Kettlebell", "Running shoe". */
 export const entryLabel = (key: string): string => t(`additions.objects.entry.${key}` as CopyKey);
@@ -67,18 +75,24 @@ const ENTRY_ICON: Record<string, IconName> = {
   vegetable_garden: "carrot", violin: "violin", vitamins: "pill", volleyball: "volleyball", walking: "walk",
   watering_can: "watering-can-outline", weight_plate: "weight-kilogram", whiteboard: "human-male-board",
 };
-/** Live rep counts ("20 push-ups"): one icon per exercise, any count. */
-const REP_ICON: Record<string, IconName> = { pushups: "arm-flex", squats: "human-handsdown" };
+/** Live activities ("20 push-ups", "30-second plank"): one icon per exercise, any count. */
+export const REP_ICON: Record<Exercise, IconName> = {
+  pushup: "arm-flex", squat: "human-handsdown", jumpingjack: "human-handsup", lunge: "kabaddi", situp: "seat-recline-normal",
+  highknee: "run", burpee: "gymnastics", press: "weight-lifter", plank: "timer-sand",
+};
 
 /** The icon for an entry: the program's own icon for its eight, else the activity's own, else its category's. */
 export function entryIcon(key: string): IconName {
   const e = BY_KEY.get(key);
   if (!e) return "camera";
   const o = e.object !== null ? OBJECTS.find((x) => x.id === e.object) : undefined;
-  const rep = /^reps_([a-z]+)_\d+$/.exec(key)?.[1];
+  const rep = /^reps_([a-z]+)_\d+$/.exec(key)?.[1] as Exercise | undefined;
   return (o?.icon ?? ENTRY_ICON[key] ?? (rep ? REP_ICON[rep] : undefined) ?? CATEGORY_ICON[e.category]) as IconName;
 }
 export function objectIconOfText(text: string): IconName {
   const key = entryKeyOfText(text);
-  return key ? entryIcon(key) : "camera";
+  if (key) return entryIcon(key);
+  // A live activity at a count the catalog doesn't list ("25 jumping jacks", saved by another client).
+  const rep = parseRepHabit(text);
+  return rep ? REP_ICON[rep.exercise] : "camera";
 }

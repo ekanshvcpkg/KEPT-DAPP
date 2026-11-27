@@ -1,8 +1,10 @@
-// The Keeper's check of a live rep set ("20 push-ups"). The phone's count is only a display: the server recounts the
-// uploaded pose trace with the same engine (shared/reps.ts, byte-identical to packages/engine), checks the timing and
-// the "Freeze!" liveness moment, and the photo it judges is the freeze frame (the challenge gesture, mid-workout).
+// The Keeper's check of a live set ("20 push-ups", "20 jumping jacks", "60-second plank"). The phone's count is only a
+// display: the server recounts the uploaded pose trace with the same engine (shared/reps.ts, byte-identical to
+// packages/engine), checks the timing and the "Freeze!" liveness moment, and the photo it judges is the freeze frame
+// (the challenge gesture, mid-workout). The checks are the same for every activity: a plank's "reps" are its seconds held
+// (the engine emits one per full second in a valid plank), so its target, its freeze rep and its count are in seconds.
 import { createHash } from "node:crypto";
-import { countReps, parseTrace, REPS_ENGINE, type Exercise } from "../shared/reps.js";
+import { countReps, exerciseUnit, parseTrace, REPS_ENGINE, type Exercise } from "../shared/reps.js";
 import { canonicalJson } from "./keeper.js";
 
 /** A set may take up to 4 minutes after its challenge was issued. */
@@ -15,10 +17,22 @@ export const REP_SET_MAX_MS = 240_000;
 export const REP_FREEZE_GESTURE = "one hand raised (lifted off the floor or held up in the air; any hand shape counts)";
 export const REP_FREEZE_MOVE = "hand_up";
 
-/** What the vision model is asked to see in the freeze frame (with REP_FREEZE_GESTURE). */
-export const repFreezeObject = (exercise: Exercise) => exercise === "pushup"
-  ? "a person mid push-up workout: on the floor in a plank or push-up position (one hand may be raised)"
-  : "a person mid squat workout: standing with bent knees or in a squat (one hand may be raised)";
+/**
+ * What the vision model is asked to see in the freeze frame (with REP_FREEZE_GESTURE), per activity: the body position
+ * the person is in when "Freeze!" comes between two reps (or seconds of a plank), never a specific moment of the move.
+ */
+const FREEZE_OBJECT: Record<Exercise, string> = {
+  pushup: "a person mid push-up workout: on the floor in a plank or push-up position (one hand may be raised)",
+  squat: "a person mid squat workout: standing with bent knees or in a squat (one hand may be raised)",
+  jumpingjack: "a person mid jumping-jack workout, standing (one hand may be raised)",
+  lunge: "a person mid lunge workout: standing, or in a lunge with one leg forward and both knees bent (one hand may be raised)",
+  situp: "a person mid sit-up workout: on the floor, lying back or sitting up with knees bent (one hand may be raised)",
+  highknee: "a person mid high-knees workout, standing or with one knee raised (one hand may be raised)",
+  burpee: "a person mid burpee workout: standing, crouching or in a plank on the floor (one hand may be raised)",
+  press: "a person mid overhead-press workout, standing, hands at the shoulders or overhead, with or without weights (one hand may be raised)",
+  plank: "a person holding a plank on the floor (one hand may be raised)",
+};
+export const repFreezeObject = (exercise: Exercise): string => FREEZE_OBJECT[exercise];
 
 /**
  * The rep after which the app calls "Freeze!": picked by the server from the challenge (its Solana blockhash and time),
@@ -83,7 +97,7 @@ export function checkRepEvidence(
   if (!size || Math.abs(size.w / size.h - trace.aspect) > 0.02) return { error: "The set's frame shape doesn't match its photo" };
 
   const { count, reps } = countReps(trace);
-  if (count < habit.target) return { error: `The Keeper counted ${count} of ${habit.target}` };
+  if (count < habit.target) return { error: `The Keeper counted ${count} of ${habit.target}${exerciseUnit(habit.exercise) === "seconds" ? " seconds" : ""}` };
 
   // The freeze: one pause, after a counted rep and before the next, with the freeze frame inside it.
   let freeze: RepReceipt["freeze"] = null;

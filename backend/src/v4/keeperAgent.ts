@@ -2,7 +2,7 @@
 // own Oaths (on chain), their habits and today's proofs (backend records), their Keeper receipts, their balance and the
 // rules. It never signs, sends or moves anything. The facts are computed here, deterministically, from data the server
 // already has; the model only chooses what to look up and how to say it.
-import { parseRepHabit } from "../shared/reps.js";
+import { exerciseUnit, parseRepHabit, repHabitText, type Exercise } from "../shared/reps.js";
 
 /** One Oath as the server knows it: the on-chain account plus the backend's details and today's habit proofs. */
 export type AgentOath = {
@@ -58,15 +58,33 @@ export function hpOf(o: AgentOath["chain"], now: number): { hp: number; broken: 
   return { hp, broken: false, closedDays: closed };
 }
 
-/** A habit as the Keeper describes it: its name, what proves it, and for a live rep set the exercise and target. */
+/** Where the phone goes for each live activity (the app's set-up steps say the same). */
+const PHONE_PLACEMENT: Record<Exercise, string> = {
+  pushup: "on its side on the floor, about 2 m away", plank: "on its side on the floor, about 2 m away", situp: "on its side on the floor, about 2 m away",
+  burpee: "upright on the floor, about 3 m away", squat: "upright on a chair, 2.5 to 3 m away", lunge: "upright on a chair, 2.5 to 3 m away",
+  highknee: "upright on a chair, 2.5 to 3 m away", jumpingjack: "upright on a chair, 3 m away, raised hands in view", press: "upright on a chair, 3 m away, raised hands in view",
+};
+
+/** How a live set is proven, in words: "the camera counts 20 jumping jacks live …" / "the camera times a 60-second plank …". */
+export function repHowToProve(exercise: Exercise, target: number): string {
+  const where = `phone level and still ${PHONE_PLACEMENT[exercise]}, whole body in view, any angle`;
+  return exerciseUnit(exercise) === "seconds"
+    ? `the camera times a ${repHabitText(exercise, target)} live (${where}); the clock only runs while you hold a straight plank; at "Freeze!" raise one hand and keep holding`
+    : `the camera counts ${repHabitText(exercise, target)} live (${where}); at "Freeze!" hold still and raise one hand`;
+}
+
+/** A habit as the Keeper describes it: its name, what proves it, and for a live set the exercise, target and unit. */
 function habitList(f: AgentOath) {
   const names = f.details?.habits?.length ? f.details.habits : f.details?.goalText ? [f.details.goalText] : ["the habit"];
   return names.map((name, i) => {
     const proof = f.details?.habitObjects?.[i] ?? f.details?.habitObjects?.[0] ?? "a photo of the Oath's object";
     const rep = parseRepHabit(proof);
-    return rep
-      ? { index: i + 1, name, proof: `a live set of ${rep.target} ${rep.exercise === "pushup" ? "push-ups" : "squats"}`, howToProve: `the camera counts ${rep.target} ${rep.exercise === "pushup" ? "push-ups" : "squats"} live (any angle, phone level, whole body in view); at "Freeze!" raise one hand`, repTarget: rep.target, exercise: rep.exercise }
-      : { index: i + 1, name, proof: `a live photo showing ${proof}`, howToProve: `one live photo with ${proof} and the hand gesture the app asks for` };
+    if (!rep) return { index: i + 1, name, proof: `a live photo showing ${proof}`, howToProve: `one live photo with ${proof} and the hand gesture the app asks for` };
+    const timed = exerciseUnit(rep.exercise) === "seconds";
+    return {
+      index: i + 1, name, proof: timed ? `a live, timed ${repHabitText(rep.exercise, rep.target)}` : `a live set of ${repHabitText(rep.exercise, rep.target)}`,
+      howToProve: repHowToProve(rep.exercise, rep.target), repTarget: rep.target, unit: timed ? "seconds" : "reps", exercise: rep.exercise,
+    };
   });
 }
 
@@ -143,14 +161,14 @@ const RULES: Record<string, string> = {
   misses: "A miss costs 10 percent of your original stake, the same each time. That money goes to the members who kept that day, split equally, with one equal share to KEPT.",
   payouts: "When the Oath ends it is settled on chain: each member can claim their remaining stake plus what they won from others' misses. Claim it from the Oath's result screen.",
   proof: "Each habit is proven once a day with a live photo of its object plus the hand gesture the app asks for, taken in the app. The Keeper (an AI judge on the server) checks it; the verdict's receipt hash goes on Solana and anyone can audit it.",
-  rep_sets: "Push-up and squat habits are proven by a live set: put the phone level and still (push-ups: on the floor about 2 m away; squats: upright on a chair, 2.5 to 3 m away), whole body in view, any angle. Tap Start, hold the start position still, then go. At Freeze, hold still and raise one hand for two seconds. The server recounts every rep.",
+  rep_sets: "Live activities are proven by a live set the camera counts: push-ups, squats, jumping jacks, lunges, sit-ups, high knees, burpees and overhead presses (counted in reps), and the plank (timed in seconds: the clock only runs while you hold a straight plank). Put the phone level and still, whole body in view, from any angle: on the floor about 2 m away for push-ups, planks and sit-ups (on its side), upright on the floor about 3 m away for burpees, upright on a chair 2.5 to 3 m away for the standing ones (jumping jacks and overhead presses with raised hands in view). Tap Start, hold the start position still, then go. At Freeze, hold still and raise one hand for two seconds. The server recounts every rep and every second.",
   rematch: "After a broken Oath, a Rematch can win back half of what was lost: keep every day of the Rematch and the held half is returned.",
   wallet: "KEPT runs on Solana Devnet with test SOL, which has no value. Get more test SOL at faucet.solana.com.",
 };
 
 export const TOOLS = [
-  { type: "function", function: { name: "get_oath_details", description: "Everything about one of the user's Oaths: each habit and how to prove it (e.g. a live set of 10 push-ups), today's progress for the user and every friend, HP, days kept/missed per member, time left today, stake, pot, cost of a miss, payouts.", parameters: { type: "object", properties: { oath_id: { type: "string", description: "The id from the Oath summary" } }, required: ["oath_id"] } } },
-  { type: "function", function: { name: "get_my_receipts", description: "The Keeper's verdicts on the user's proofs for one Oath (optionally one day, 1-based): pass/fail, the reason, and for rep sets how many reps were counted.", parameters: { type: "object", properties: { oath_id: { type: "string" }, day: { type: "integer", description: "1-based day; omit for the latest" } }, required: ["oath_id"] } } },
+  { type: "function", function: { name: "get_oath_details", description: "Everything about one of the user's Oaths: each habit and how to prove it (e.g. a live set of 10 push-ups, 20 jumping jacks or a timed 60-second plank), today's progress for the user and every friend, HP, days kept/missed per member, time left today, stake, pot, cost of a miss, payouts.", parameters: { type: "object", properties: { oath_id: { type: "string", description: "The id from the Oath summary" } }, required: ["oath_id"] } } },
+  { type: "function", function: { name: "get_my_receipts", description: "The Keeper's verdicts on the user's proofs for one Oath (optionally one day, 1-based): pass/fail, the reason, and for live sets how many reps (or plank seconds) were counted.", parameters: { type: "object", properties: { oath_id: { type: "string" }, day: { type: "integer", description: "1-based day; omit for the latest" } }, required: ["oath_id"] } } },
   { type: "function", function: { name: "get_wallet_balance", description: "The user's wallet balance in SOL (Devnet test SOL).", parameters: { type: "object", properties: {} } } },
   { type: "function", function: { name: "get_rules", description: "How KEPT works, by topic.", parameters: { type: "object", properties: { topic: { type: "string", enum: Object.keys(RULES) } }, required: ["topic"] } } },
 ] as const;

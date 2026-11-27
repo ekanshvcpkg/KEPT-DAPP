@@ -59,7 +59,7 @@ async function runSet(o: { freezeAfter: number; skip?: [number, number]; until?:
   const { t: ts, p } = vector.trace as { t: number[]; p: number[] };
   await pose(-100, p.slice(0, 36));
   t0 = -100; d0 = Date.now();
-  await fireEvent.press(screen.getByText(t("additions.reps.start", { target: 8, label: t("additions.reps.pushups") })));
+  await fireEvent.press(screen.getByText(t("additions.reps.start", { target: 8, label: t("additions.reps.ex.pushup.label") })));
   let unmounted = false;
   for (let i = 0; i < ts.length && !done.mock.calls.length; i++) {
     const at = ts[i]!;

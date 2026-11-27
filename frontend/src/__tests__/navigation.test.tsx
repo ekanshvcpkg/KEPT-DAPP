@@ -217,8 +217,10 @@ describe("onboarding on mocks", () => {
     await fireEvent.changeText(field, "read 10 pages");
     await saveBtn(true);
     // The quick picks: live rep sets first, then the program's objects. Everything else is found by search.
-    for (const o of ["10 push-ups", "10 squats", "Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant", "Yoga mat"]) expect(screen.getByLabelText(o)).toBeTruthy();
+    for (const o of ["10 push-ups", "10 squats", "20 jumping jacks", "10 lunges", "10 sit-ups", "20 high knees", "5 burpees", "10 overhead presses", "30-second plank",
+      "Dumbbell", "Book", "Water bottle", "Guitar", "Running shoe", "Plant"]) expect(screen.getByLabelText(o)).toBeTruthy();
     expect(screen.queryByLabelText("Kettlebell")).toBeNull();
+    expect(screen.queryByLabelText("Yoga mat")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Book"));
     expect(screen.getByText(t("additions.oathCreate.proofSummary", { object: "Book" }))).toBeTruthy();
     // Nothing is committed until Save.
@@ -294,7 +296,7 @@ describe("onboarding on mocks", () => {
     await fireEvent.changeText(search, "zzzqx");
     expect(await screen.findByText(t("additions.objects.noResults", { query: "zzzqx" }))).toBeTruthy();
 
-    // An alias finds the object it is: "pilates" is a yoga mat (not one of the six quick picks).
+    // An alias finds the object it is: "pilates" is a yoga mat (not a quick pick).
     await fireEvent.changeText(search, "pilates");
     await fireEvent.press(await screen.findByLabelText(row("yoga_mat")));
     expect(await screen.findByText(t("additions.oathCreate.proofSummary", { object: "Yoga mat" }))).toBeTruthy();

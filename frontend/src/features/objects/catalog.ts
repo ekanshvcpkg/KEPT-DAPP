@@ -9,6 +9,7 @@
 //
 // Labels are copy (`additions.objects.entry.<key>`); aliases are search data only and are lower case.
 import type { ObjectId } from "@kept/config";
+import type { Exercise } from "@kept/engine";
 
 export type ObjectCategory =
   | "strength" | "cardio" | "sport" | "mind_body" | "reading" | "study" | "music" | "health"
@@ -29,6 +30,18 @@ export interface CatalogEntry {
 
 const e = (key: string, category: ObjectCategory, object: ObjectId | null, ...aliases: string[]): CatalogEntry => ({ key, category, object, aliases });
 
+/**
+ * A live activity's entries, `reps_<exercise>_<n>` for each count: the words for one count, plus the activity's own
+ * words on the count `common` (a plain "jumping jacks" leads there).
+ */
+const repSets = (ex: Exercise, category: ObjectCategory, counts: readonly number[], common: number, words: (n: number) => string[], plain: readonly string[]) =>
+  counts.map((n) => e(repEntryKey(ex, n), category, null, ...words(n), ...(n === common ? plain : [])));
+
+/** The catalog key of a live activity's count: `reps_jumpingjack_20`, `reps_plank_60`. */
+export const repEntryKey = (ex: Exercise, n: number) => `reps_${ex}_${n}`;
+/** Keys an older build saved in a draft (`reps_pushups_20`), as today's key. */
+export const currentEntryKey = (key: string): string => key.replace(/^reps_(pushup|squat)s_/, "reps_$1_");
+
 export const CATALOG: readonly CatalogEntry[] = [
   // ── the eight objects a proof can check today ──
   e("dumbbell", "strength", "dumbbell", "dumbbells", "dumb bell", "dumb bells", "hand weight", "hand weights", "free weights", "free weight", "weights", "adjustable dumbbell", "lifting weights", "weight training", "strength training", "arm workout", "bicep curls"),
@@ -40,13 +53,28 @@ export const CATALOG: readonly CatalogEntry[] = [
   e("skipping_rope", "cardio", "skipping_rope", "skipping rope", "jump rope", "jumping rope", "skip rope", "speed rope", "rope skipping", "rope jumping", "skipping", "jump roping", "jump rope workout"),
   e("yoga_mat", "mind_body", "yoga_mat", "yoga", "yoga mat", "exercise mat", "workout mat", "pilates mat", "pilates", "fitness mat", "stretching mat", "stretch", "stretching", "gym mat", "floor workout", "sun salutation"),
 
-  // ── live rep counts (the camera counts them on the phone; the Keeper checks the pose trace): the label is the proof
-  //    text, "20 push-ups", which packages/engine/src/reps.ts › parseRepHabit turns into exercise + target ──
-  //    Each search word means one entry (plain "push ups" is the photo proof): the counts lead to their own set.
-  ...[10, 20, 30, 50].flatMap((n) => [
-    e(`reps_pushups_${n}`, "strength", null, `${n} push ups`, `${n} pushups`, ...(n === 20 ? ["rep counter", "count reps", "live push ups", "counted push ups"] : [])),
-    e(`reps_squats_${n}`, "strength", null, `${n} squats`, ...(n === 20 ? ["bodyweight squats", "air squats", "live squats", "counted squats", "leg day"] : [])),
-  ]),
+  // ── live activities (the camera counts the reps, or times the plank, on the phone; the Keeper recounts the pose
+  //    trace): the label is the proof text, "20 push-ups" / "30-second plank", which packages/engine/src/reps.ts ›
+  //    parseRepHabit turns into exercise + target. Each search word means one entry (plain "push ups" is the photo
+  //    proof): a plain activity name leads to its first count, a count to its own set. ──
+  ...repSets("pushup", "strength", [10, 20, 30, 50], 20, (n) => [`${n} push ups`, `${n} pushups`, `${n} press ups`],
+    ["rep counter", "count reps", "live push ups", "counted push ups"]),
+  ...repSets("squat", "strength", [10, 20, 30, 50], 20, (n) => [`${n} squats`],
+    ["bodyweight squats", "air squats", "live squats", "counted squats", "leg day"]),
+  ...repSets("jumpingjack", "cardio", [20, 30, 50], 20, (n) => [`${n} jumping jacks`, `${n} jumpingjacks`, `${n} star jumps`],
+    ["jumping jacks", "jumping jack", "jumpingjacks", "star jumps", "jacks", "live jumping jacks", "counted jumping jacks", "cardio warm up"]),
+  ...repSets("lunge", "strength", [10, 20], 10, (n) => [`${n} lunges`],
+    ["lunges", "lunge", "forward lunges", "live lunges", "counted lunges"]),
+  ...repSets("situp", "strength", [10, 20, 30], 10, (n) => [`${n} sit ups`, `${n} situps`],
+    ["sit ups", "situps", "sit up", "abs", "ab workout", "live sit ups", "counted sit ups"]),
+  ...repSets("highknee", "cardio", [20, 40], 20, (n) => [`${n} high knees`],
+    ["high knees", "high knee", "running in place", "running on the spot", "run in place", "live high knees", "counted high knees"]),
+  ...repSets("burpee", "cardio", [5, 10, 15], 5, (n) => [`${n} burpees`],
+    ["burpees", "burpee", "live burpees", "counted burpees"]),
+  ...repSets("press", "strength", [10, 20], 10, (n) => [`${n} overhead presses`, `${n} shoulder presses`],
+    ["overhead press", "overhead presses", "shoulder press", "military press", "live overhead presses", "counted overhead presses"]),
+  ...repSets("plank", "strength", [30, 60, 90], 30, (n) => [`${n} second plank`, `${n} sec plank`, `${n}s plank`, ...(n === 60 ? ["1 minute plank", "one minute plank"] : [])],
+    ["plank", "planks", "plank hold", "timed plank", "plank challenge", "core", "core workout", "live plank"]),
 
   // ── strength (not a dumbbell) ──
   e("kettlebell", "strength", null, "kettle bell", "kettlebells", "kettlebell swing"),
@@ -56,7 +84,7 @@ export const CATALOG: readonly CatalogEntry[] = [
   e("pull_up_bar", "strength", null, "pullup bar", "pull up bar", "chin up bar", "pull ups", "pullups", "chin ups"),
   e("medicine_ball", "strength", null, "med ball", "slam ball", "wall ball"),
   e("gym_bench", "strength", null, "bench", "weight bench", "workout bench"),
-  e("push_ups", "strength", null, "pushups", "push up", "push ups", "press ups", "plank", "sit ups", "situps", "burpees", "calisthenics", "bodyweight workout"),
+  e("push_ups", "strength", null, "pushups", "push up", "push ups", "press ups", "calisthenics", "bodyweight workout"),
   e("foam_roller", "strength", null, "foam rolling", "massage roller", "roller", "mobility", "recovery"),
   e("gym", "strength", null, "gym membership", "go to the gym", "weight room", "fitness center", "workout", "exercise", "training"),
 
@@ -167,7 +195,11 @@ export const CATALOG: readonly CatalogEntry[] = [
 ];
 
 /**
- * The quick picks C2 offers (catalog entry keys): the live rep sets first (counted on the phone, recounted by the
- * server), then the program's most common objects, the most distinct on camera. Everything else is reachable by search.
+ * The quick picks C2 offers (catalog entry keys): every live activity first (counted or timed on the phone, recounted
+ * by the server), one count each, then the program's most common objects, the most distinct on camera, filling a
+ * 3-column grid. Everything else is reachable by search.
  */
-export const QUICK_PICK_OBJECTS: readonly string[] = ["reps_pushups_10", "reps_squats_10", "dumbbell", "book", "water_bottle", "guitar", "running_shoe", "plant", "yoga_mat"];
+export const QUICK_PICK_OBJECTS: readonly string[] = [
+  "reps_pushup_10", "reps_squat_10", "reps_jumpingjack_20", "reps_lunge_10", "reps_situp_10", "reps_highknee_20", "reps_burpee_5", "reps_press_10", "reps_plank_30",
+  "dumbbell", "book", "water_bottle", "guitar", "running_shoe", "plant",
+];

@@ -7,7 +7,7 @@ import { createAudioPlayer } from "expo-audio";
 import type { AudioPlayer } from "expo-audio";
 import { useSettings } from "@/state/settings";
 import { HypeCoach } from "./hypeCoach";
-import type { HypeCoachDeps } from "./hypeCoach";
+import type { HypeCoachDeps, HypeCoachOptions } from "./hypeCoach";
 import { HYPE_SOURCES } from "./hypeSources";
 import durations from "./voiceDurations.gen.json";
 
@@ -115,6 +115,9 @@ function play(source: number, ms: number): void {
   }
 }
 
+/** Whether there is a clip for count n (1–50). */
+export const hasCountClip = (n: number): boolean => COUNTS[n] !== undefined;
+
 /** The Keeper says the rep number (1–50; above 50 stays silent). */
 export function sayCount(n: number): void {
   const src = COUNTS[n];
@@ -154,12 +157,12 @@ export function sayHype(id: string): number {
  * `schedule` and `canSpeak` come from the set screen (its attempt-scoped timers, its phase); the rest can be overridden
  * (tests).
  */
-export function repSetHype(target: number, set: Pick<HypeCoachDeps, "schedule" | "canSpeak"> & Partial<HypeCoachDeps>): HypeCoach {
+export function repSetHype(target: number, set: Pick<HypeCoachDeps, "schedule" | "canSpeak"> & Partial<HypeCoachDeps>, options: HypeCoachOptions = {}): HypeCoach {
   const { schedule, ...rest } = set;
   return new HypeCoach(target, {
     now: Date.now, busyMs: () => keeperBusyMs(), play: sayHype, clipMs: hypeMs,
     lang: () => useSettings.getState().hypeLanguage, ...rest,
     // A line waiting when another Keeper line starts (silenceHype) is dropped.
     schedule: (ms, fn, keep) => { const epoch = hypeEpoch; schedule(ms, () => { if (epoch === hypeEpoch) fn(); }, keep); },
-  });
+  }, options);
 }

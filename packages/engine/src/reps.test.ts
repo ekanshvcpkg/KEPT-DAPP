@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { JOINTS, MAX_PAUSES, RepCounter, SAMPLE_INTS, countReps, parseRepHabit, parseTrace, repHabitText, traceDigest } from "./reps";
+import { EXERCISES, JOINTS, MAX_PAUSES, REP_TARGET_LIMIT, RepCounter, SAMPLE_INTS, countReps, exerciseUnit, parseRepHabit, parseTrace, repHabitText,
+  repTargetMin, traceDigest } from "./reps";
 import type { Exercise, RepEvent, RepSample, Trace } from "./reps";
 import * as V from "./reps3d.fixtures";
 
@@ -300,16 +301,42 @@ test("parseRepHabit accepts the rep habit texts and nothing else", () => {
   assert.deepEqual(parseRepHabit("  20 Push-Ups "), { exercise: "pushup", target: 20 });
   assert.deepEqual(parseRepHabit("1 SQUATS"), { exercise: "squat", target: 1 });
   assert.deepEqual(parseRepHabit("50 squats"), { exercise: "squat", target: 50 });
-  for (const bad of ["0 squats", "51 push-ups", "100 squats", "05 squats", "-5 squats", "2.5 squats", "squats", "20", "20 push ups",
-    "20 sit-ups", "20 push-ups daily", "twenty squats", "a book", ""]) {
+  // The activities added 2026-11-27, with the hyphen / space variants.
+  const ok: [string, string, number][] = [
+    ["20 push ups", "pushup", 20], ["20 jumping jacks", "jumpingjack", 20], ["20 Jumping-Jacks", "jumpingjack", 20], ["20 jumpingjacks", "jumpingjack", 20],
+    ["10 lunges", "lunge", 10], ["15 sit-ups", "situp", 15], ["15 situps", "situp", 15], ["15 sit ups", "situp", 15], ["40 high knees", "highknee", 40],
+    ["40 high-knees", "highknee", 40], ["40 highknees", "highknee", 40], ["5 burpees", "burpee", 5], ["10 overhead presses", "press", 10],
+    ["10 overhead-presses", "press", 10], ["60-second plank", "plank", 60], ["60 second plank", "plank", 60], ["60-Second Plank", "plank", 60],
+    ["10-second plank", "plank", 10], ["180-second plank", "plank", 180], ["  30-second   plank ", "plank", 30],
+  ];
+  for (const [text, exercise, target] of ok) assert.deepEqual(parseRepHabit(text), { exercise, target }, text);
+  for (const bad of ["0 squats", "51 push-ups", "100 squats", "05 squats", "-5 squats", "2.5 squats", "squats", "20", "20 push-ups daily",
+    "twenty squats", "a book", "", "51 jumping jacks", "0 burpees", "9-second plank", "181-second plank", "60 plank", "plank", "60-second planks",
+    "20 crunches", "20 jacks", "10 presses", "20 high knee"]) {
     assert.equal(parseRepHabit(bad), null, bad);
   }
 });
 
-test("repHabitText writes what parseRepHabit reads", () => {
+test("repHabitText writes what parseRepHabit reads, for every activity and every allowed target", () => {
   assert.equal(repHabitText("pushup", 20), "20 push-ups");
   assert.equal(repHabitText("squat", 30), "30 squats");
-  for (const ex of ["pushup", "squat"] as const) for (let n = 1; n <= 50; n++) assert.deepEqual(parseRepHabit(repHabitText(ex, n)), { exercise: ex, target: n });
+  assert.equal(repHabitText("jumpingjack", 20), "20 jumping jacks");
+  assert.equal(repHabitText("lunge", 10), "10 lunges");
+  assert.equal(repHabitText("situp", 15), "15 sit-ups");
+  assert.equal(repHabitText("highknee", 40), "40 high knees");
+  assert.equal(repHabitText("burpee", 5), "5 burpees");
+  assert.equal(repHabitText("press", 10), "10 overhead presses");
+  assert.equal(repHabitText("plank", 60), "60-second plank");
+  for (const ex of EXERCISES) for (let n = repTargetMin(ex); n <= REP_TARGET_LIMIT(ex); n++) assert.deepEqual(parseRepHabit(repHabitText(ex, n)), { exercise: ex, target: n });
+});
+
+test("exerciseUnit, REP_TARGET_LIMIT and repTargetMin: reps 1–50, a plank 10–180 seconds", () => {
+  assert.deepEqual(EXERCISES, ["pushup", "squat", "jumpingjack", "lunge", "situp", "highknee", "burpee", "press", "plank"]);
+  for (const ex of EXERCISES) {
+    assert.equal(exerciseUnit(ex), ex === "plank" ? "seconds" : "reps", ex);
+    assert.equal(REP_TARGET_LIMIT(ex), ex === "plank" ? 180 : 50, ex);
+    assert.equal(repTargetMin(ex), ex === "plank" ? 10 : 1, ex);
+  }
 });
 
 // ── Geometry ──
@@ -1020,22 +1047,263 @@ test("3D: when the far side is hidden more (stronger occlusion, more flips and j
   }
 });
 
-test("3D: piked hips are refused from the side and obliquely, as the side reading refuses them; slight form still counts", () => {
-  // The hips 20 cm above the straight line through the whole set. The hip-height check alone let this by from every
-  // angle (perspective changes the hip's apparent height); the side reading's body line, applied to the midpoints
-  // wherever the body is not seen end-on (V_PUSHUP_LINE_SPAN), refuses it from 75° to 135°. A limit: head-on, from
-  // 30–60° and from behind (150–180°) the body is too end-on for a 2D line and a pike can still pass.
-  const piked = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag: -0.2 }), script: PUSH_SET, azimuths: [75, 90, 105, 120, 135] });
-  assert.deepEqual(cheats(piked), []);
-  // Hips 8 cm high (ordinary form) still count from every angle.
-  const slight = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag: -0.08 }), script: PUSH_SET });
-  assert.deepEqual(misses(slight.filter((r) => !sideOn(r.where))), []);
-  for (const r of slight.filter((x) => sideOn(x.where))) assert.ok(r.count >= N3 - 1, `side-on ${r.where}: ${r.count}`);
+test("3D: piked hips are refused from every angle; hips 8 cm high or low still count (perspective-corrected hip height)", () => {
+  // The hips 20 cm above the straight line through the whole set. Before 2026-11-27 only the 2D body line caught this
+  // (75–135°): the hip-height band was perspective-biased. With the hip's distance corrected (V_PUSHUP_BODY_RATIO) a
+  // straight plank reads 0.6–0.65 from every angle and this pike ~1.0, over V_PUSHUP_HIP_MAX.
+  assert.deepEqual(cheats(grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag: -0.2 }), script: PUSH_SET, azimuths: [0, 30, 45, 60, 75, 90, 105, 120, 135, 150, 180] })), []);
+  // Hips 8 cm high or 8 cm low (ordinary form) count from every angle; the low ones were refused head-on before.
+  for (const sag of [-0.08, 0.08]) {
+    const slight = grid({ kind: "pushup", body: (e) => V.pushupBody(e, { sag }), script: PUSH_SET });
+    assert.deepEqual(misses(slight.filter((r) => !sideOn(r.where))), [], `sag ${sag}`);
+    for (const r of slight.filter((x) => sideOn(x.where))) assert.ok(r.count >= N3 - 1, `sag ${sag}, side-on ${r.where}: ${r.count}`);
+  }
 });
 
-test("3D: knees-on-the-floor push-ups are refused head-on (a limit: obliquely, from the side and from behind they can pass)", () => {
-  const rs = grid({ kind: "pushup", body: (e) => V.kneePushupBody(e), script: PUSH_SET, azimuths: [0] });
-  assert.deepEqual(cheats(rs), []);
+test("3D: knees-on-the-floor push-ups are refused from every angle (the knee below the hip–ankle line, both readings)", () => {
+  assert.deepEqual(cheats(grid({ kind: "pushup", body: (e) => V.kneePushupBody(e), script: PUSH_SET })), []);
+});
+
+test("3D: rocking forward on locked arms (the body sliding over the hands) never counts", () => {
+  for (const rock of [0.3, 0.4]) assert.deepEqual(cheats(grid({ kind: "pushup", body: (e) => V.pushupBody(e, { rock }), script: PUSH_SET })), [], `rock ${rock}`);
+});
+
+test("3D: with time-correlated landmark jitter, side-on sets still read side (signed, smoothed view measure) and count", () => {
+  // |left − right hip| per sample has a jitter floor near sideOut; the signed mean doesn't (VIEW_SPREAD_TAU_MS).
+  const ar: V.Noise = { px: 4, ar: 0.65 };
+  for (const kind of ["pushup", "squat"] as const) {
+    const rs = grid({ kind, body: (e) => (kind === "pushup" ? V.pushupBody(e) : V.squatBody(e)), script: kind === "pushup" ? PUSH_SET : SQUAT_SET, azimuths: [90], noise: ar });
+    for (const r of rs) assert.ok(r.count >= N3 - 1, `${kind} ${r.where}: ${r.count}`);
+    assert.ok(rs.filter((r) => r.view === "side").length >= 7, `${kind}: ${rs.map((r) => r.view).join(",")}`);
+  }
+});
+
+// ── The added activities (2026-11-27): jumping jacks, presses, lunges, high knees, burpees, sit-ups, planks ──
+// Filmed like the push-ups and squats above, from all the way round (0–330°), lens 0.05–1 m, 1.8–3.5 m away, with the
+// same noise, flips, jumps, visibility dips and far-side occlusion, at three body sizes. Standing activities are
+// filmed in portrait (the app asks for the phone upright on a chair), sit-ups and planks in landscape on the floor.
+
+const MOVE_AZ = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+const STAND_HEIGHTS = [0.05, 0.5, 1.0];
+const STAND_DIST = [2.2, 2.8, 3.5];
+const FLOOR_HEIGHTS = [0.05, 0.3, 0.6];
+const FLOOR_DIST = [1.8, 2.5, 3.3];
+const SCALES = [0.9, 1, 1.1];
+type MoveKind = "jumpingjack" | "press" | "lunge" | "highknee" | "burpee" | "situp" | "plank";
+type MoveGrid = { kind: MoveKind; body: () => (e: number, i: number) => V.Body; script: V.Seg[]; azimuths?: number[]; heights?: number[];
+  distances?: number[]; noise?: V.Noise };
+
+/** Films a move from every camera position (cycling the body size); a fresh body per run (alternate() keeps state). */
+function moveGrid(g: MoveGrid): { where: string; count: number; events: RepEvent[]; view: string | null }[] {
+  const floor = g.kind === "situp" || g.kind === "plank";
+  const out: { where: string; count: number; events: RepEvent[]; view: string | null }[] = [];
+  let k = 0;
+  for (const azimuth of g.azimuths ?? MOVE_AZ) for (const height of g.heights ?? (floor ? FLOOR_HEIGHTS : STAND_HEIGHTS))
+    for (const distance of g.distances ?? (floor ? FLOOR_DIST : STAND_DIST)) {
+      const cam: V.Cam = { azimuth, height, distance, landscape: floor };
+      const scale = SCALES[k++ % SCALES.length]!;
+      const samples = V.film(g.script, { kind: g.kind, body: g.body(), cam, scale, noise: { ...NOISE_3D, ...g.noise, seed: azimuth * 7 + height * 100 + distance * 10 + scale } });
+      const r = run(g.kind, V.aspectOf(cam), samples);
+      out.push({ where: `az ${azimuth}° h ${height} m d ${distance} m ×${scale}`, count: r.count, events: r.events, view: r.counter.view });
+    }
+  return out;
+}
+const set = (period: number, n = N3) => [V.hold(1, 1000), ...V.reps(n, period), V.hold(1, 600)];
+/** Honest: every run counts at least N3 − 1 (at most one miss in ten), except where `except` says otherwise. */
+const honestly = (rs: { where: string; count: number }[], name: string, except: (where: string) => boolean = () => false) => {
+  for (const r of rs) if (!except(r.where)) assert.ok(r.count >= N3 - 1, `${name}, ${r.where}: ${r.count}`);
+};
+const az = (where: string) => Number(where.split(" ")[1]!.replace("°", ""));
+
+test("3D: jumping jacks count fully from every angle, height, distance and body size; one arm, shoulder-height arms count nothing", () => {
+  for (const period of [800, 1300]) honestly(moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e), script: set(period) }), `jacks ${period} ms`);
+  assert.deepEqual(cheats(moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e, { arms: 90 }), script: set(1000) })), [], "arms to shoulder height");
+  assert.deepEqual(cheats(moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e, { oneArm: true }), script: set(1000) })), [], "one arm (waving)");
+  // The legs are a bonus check where they show: arms-only jacks are refused (legs) filmed from the front or the back
+  // (±30°), and count from the side, where the feet spreading can't be seen.
+  const noLegs = moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e, { noLegs: true }), script: set(1000), azimuths: [0, 180] });
+  assert.deepEqual(cheats(noLegs), [], "arms only, filmed from the front or the back");
+  assert.ok(noLegs.every((r) => faults(r.events).includes("legs")));
+  const noLegs30 = moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e, { noLegs: true }), script: set(1000), azimuths: [30, 150, 210, 330] });
+  assert.ok(counted(noLegs30) <= 5, `arms only, 30° off the front or back: ${cheats(noLegs30).join(", ")}`);
+});
+
+test("3D: overhead presses count fully from every angle; half presses and one-arm presses count nothing", () => {
+  for (const period of [1400, 2500]) honestly(moveGrid({ kind: "press", body: () => (e) => V.pressBody(e), script: set(period) }), `press ${period} ms`);
+  assert.deepEqual(cheats(moveGrid({ kind: "press", body: () => (e) => V.pressBody(e, { half: true }), script: set(2000) })), [], "half presses");
+  assert.deepEqual(cheats(moveGrid({ kind: "press", body: () => (e) => V.pressBody(e, { oneArm: true }), script: set(2000) })), [], "one arm");
+});
+
+test("3D: lunges (alternating legs) count fully from every angle; quarter dips, waist bends and feet-together dips count nothing", () => {
+  for (const period of [1800, 3000]) honestly(moveGrid({ kind: "lunge", body: () => V.alternate((e, l) => V.lungeBody(e, l)), script: set(period) }), `lunges ${period} ms`);
+  assert.deepEqual(cheats(moveGrid({ kind: "lunge", body: () => V.alternate((e, l) => V.lungeBody(e, l, { bottomY: 0.8 })), script: set(2500) })), [], "quarter dips");
+  assert.deepEqual(cheats(moveGrid({ kind: "lunge", body: () => V.alternate((e, l) => V.lungeBody(e, l, { waist: true })), script: set(2500) })), [], "bending at the waist");
+  // Feet side by side (no step): stance on almost every rep; a stray one may pass on a noisy knee.
+  const noStep = moveGrid({ kind: "lunge", body: () => V.alternate((e, l) => V.lungeBody(e, l, { noStep: true })), script: set(2500) });
+  assert.ok(counted(noStep) <= 12, `no step: ${cheats(noStep).join(", ")}`);
+});
+
+test("3D: high knees count each knee from every angle; marching lifts and one leg only count (almost) nothing", () => {
+  // A limit: filmed from behind (150–210°) by a phone on the floor, the knee rising away from the camera reads low
+  // and a set there can lose two in ten.
+  const lowBehind = (w: string) => w.includes("h 0.05 m") && az(w) >= 150 && az(w) <= 210;
+  for (const period of [700, 1000]) {
+    const rs = moveGrid({ kind: "highknee", body: () => V.alternate((e, l) => V.kneesBody(e, l)), script: set(period) });
+    honestly(rs, `high knees ${period} ms`, lowBehind);
+    for (const r of rs.filter((x) => lowBehind(x.where))) assert.ok(r.count >= N3 - 2, `high knees ${period} ms, ${r.where}: ${r.count}`);
+  }
+  assert.deepEqual(cheats(moveGrid({ kind: "highknee", body: () => V.alternate((e, l) => V.kneesBody(e, l, { lift: 45 })), script: set(700) })), [], "marching");
+  // One leg only: the first lift counts, every later one is the same leg (same_leg). Since the verification fixes
+  // (KNEE_OTHER: a lift of the other leg the counter missed still allows the next lift of the followed one), a
+  // left/right label flip that shows the lifting leg under the other name for two samples can let one more through.
+  const one = moveGrid({ kind: "highknee", body: () => V.alternate((e, l) => V.kneesBody(e, l), true), script: set(700) });
+  for (const r of one) assert.ok(r.count <= 2, `one leg, ${r.where}: ${r.count}`);
+  assert.ok(counted(one) <= 1.15 * one.length, `one leg: ${counted(one)} in ${one.length} sets`);
+  assert.ok(one.every((r) => faults(r.events).includes("same_leg")));
+});
+
+test("3D: brisk jumping jacks and high knees count (verification 2026-11-27: too_fast and the flip filter refused them)", () => {
+  // Jumping jacks at ~95 a minute: the start → count-line part of a 630 ms jack is ~400 ms (minRepMs was 400).
+  honestly(moveGrid({ kind: "jumpingjack", body: () => (e) => V.jackBody(e), script: set(630) }), "jacks 630 ms");
+  // High knees at ~2.2 and ~2.9 lifts a second (minRepMs was 200; a lift's start → count-line part is ~0.5 of it;
+  // before the fixes: 985 / 1080 and 810 / 1080 here).
+  for (const [period, min, each] of [[450, 1050, N3 - 2], [350, 1000, N3 - 4]] as const) {
+    const brisk = moveGrid({ kind: "highknee", body: () => V.alternate((e, l) => V.kneesBody(e, l)), script: set(period) });
+    assert.ok(counted(brisk) >= min, `high knees ${period} ms: ${counted(brisk)} / ${brisk.length * N3}`);
+    for (const r of brisk) assert.ok(r.count >= each, `high knees ${period} ms, ${r.where}: ${r.count}`);
+  }
+  // A missed frame mid-swing (no pose for 100 ms) doubles the next step: the arms' / knee's own flip threshold scales
+  // with the time since the last usable sample (SPIKE_STEP_MS), so the swing isn't dropped as a flip.
+  const swing = (n: number): V.Seg[] => Array.from({ length: n }, () => [V.move(1, 0.45, 180), V.gap(100), V.move(0.2, 0, 120), V.move(0, 1, 400)]).flat();
+  const cam: V.Cam = { azimuth: 30, height: 0.8, distance: 2.8, landscape: false };
+  const jj = run("jumpingjack", 3 / 4, V.film([V.hold(1, 1000), ...swing(6), V.hold(1, 600)], { kind: "jumpingjack", body: (e) => V.jackBody(e), cam, noise: { seed: 4, px: 2 } }));
+  assert.equal(jj.count, 6);
+  const hk = run("highknee", 3 / 4, V.film([V.hold(1, 1000), ...swing(6), V.hold(1, 600)], { kind: "highknee", body: V.alternate((e, l) => V.kneesBody(e, l)), cam, noise: { seed: 4, px: 2 } }));
+  assert.equal(hk.count, 6);
+});
+
+test("3D: burpees count fully from every angle; just squatting and just bending over count nothing", () => {
+  for (const period of [2200, 3500]) honestly(moveGrid({ kind: "burpee", body: () => (e) => V.burpeeBody(e), script: set(period) }), `burpees ${period} ms`);
+  assert.deepEqual(cheats(moveGrid({ kind: "burpee", body: () => (e) => V.burpeeBody(e, { squatOnly: true }), script: set(3000) })), [], "squats");
+  assert.deepEqual(cheats(moveGrid({ kind: "burpee", body: () => (e) => V.burpeeBody(e, { bendOnly: true }), script: set(3000) })), [], "bending over");
+});
+
+test("3D: sit-ups count fully from every angle; neck curls and rolling onto a side count nothing", () => {
+  // A limit: a phone on the floor right behind the head (180°, 1.8 m) sees the shoulders big and close; the torso
+  // length is overestimated and a set there can lose most reps (move it back or up).
+  const headClose = (w: string) => az(w) === 180 && w.includes("h 0.05 m d 1.8 m");
+  for (const period of [1500, 2500]) honestly(moveGrid({ kind: "situp", body: () => (e) => V.situpBody(e), script: set(period) }), `sit-ups ${period} ms`, headClose);
+  assert.deepEqual(cheats(moveGrid({ kind: "situp", body: () => (e) => V.situpBody(e, { top: 15 }), script: set(2000) })), [], "neck curls");
+  assert.deepEqual(cheats(moveGrid({ kind: "situp", body: () => (e) => V.situpBody(e, { roll: true }), script: set(2000) })), [], "rolling onto a side");
+});
+
+const PLANK_15 = [V.hold(1, 15_600)];
+test("3D: a plank counts one rep per second held, on straight arms or on the forearms, from every angle", () => {
+  for (const [name, o] of [["high", {}], ["forearm", { forearm: true }], ["hips 8 cm low", { sag: 0.08 }], ["hips 8 cm high", { sag: -0.08 }]] as const) {
+    const rs = moveGrid({ kind: "plank", body: () => (e) => V.plankBody(e, o), script: PLANK_15 });
+    // Ready after 0.5 s, then a rep every second: 15 in 15.6 s; a noisy second can be refused, at most one.
+    for (const r of rs) assert.ok(r.count >= 14 && r.count <= 15, `${name}, ${r.where}: ${r.count}`);
+    for (const r of rs) {
+      const reps = ofType(r.events, "rep");
+      reps.forEach((e, i) => {
+        assert.equal(e.n, i + 1);
+        assert.equal(e.endT - e.startT, 1000, "each rep is one second");
+        if (i > 0) assert.ok(e.startT >= reps[i - 1]!.endT, "seconds don't overlap");
+      });
+    }
+  }
+});
+
+test("3D: a plank's clock never runs for sagging or piked hips, knees down, lying flat or standing", () => {
+  for (const [name, o] of [["hips 25 cm low", { sag: 0.25 }], ["hips 30 cm high", { sag: -0.3 }], ["knees down", { knees: true }], ["lying on the belly", { prone: true }],
+    ["forearms, hips 20 cm low", { forearm: true, sag: 0.2 }]] as const) {
+    assert.deepEqual(cheats(moveGrid({ kind: "plank", body: () => (e) => V.plankBody(e, o), script: PLANK_15 })), [], name);
+  }
+  assert.deepEqual(cheats(moveGrid({ kind: "plank", body: () => (e) => V.standingArmsBody(e), script: PLANK_15 })), [], "standing");
+});
+
+test("3D: a posture break stops the plank's clock (a fault), which resumes once the plank is held again", () => {
+  // 5 s good, 3 s sagging, 5 s good: about 10 seconds, never the 3 sagging ones.
+  const rs = moveGrid({ kind: "plank", body: () => (e) => V.plankBody(e, {}, { sag: 0.25 }), script: [V.hold(1, 5_600), V.hold(0, 3_000), V.hold(1, 5_600)] });
+  for (const r of rs) {
+    assert.ok(r.count >= 9 && r.count <= 10, `${r.where}: ${r.count}`);
+    assert.equal(ofType(r.events, "ready").length, 2, `${r.where}: ready again after the break`);
+    assert.ok(faults(r.events).length >= 1);
+    for (const e of ofType(r.events, "rep")) assert.ok(e.endT <= 5_650 || e.startT >= 8_600, `${r.where}: no second during the sag (${e.startT})`);
+  }
+});
+
+test("plank: the freeze pause and a loss stop the clock; it resumes on a short hold, and the server recount agrees", () => {
+  const cam: V.Cam = { azimuth: 30, height: 0.1, distance: 2.5, landscape: true };
+  const sc: V.Scene = { kind: "plank", body: (e) => V.plankBody(e), cam, noise: { ...NOISE_3D, seed: 9 } };
+  // 12 s of plank: 5 counted seconds, then the app's freeze after second 5 (3 s pause window), then the rest.
+  const samples = V.film([V.hold(1, 12_000)], sc);
+  const live0 = run("plank", 4 / 3, samples.filter((s) => s.t <= 5_600));
+  const fifthEnd = ofType(live0.events, "rep")[4]!.endT;
+  const pause: [number, number] = [fifthEnd + 50, fifthEnd + 3_050];
+  const r = run("plank", 4 / 3, samples, [pause]);
+  assert.equal(ofType(r.events, "setup").length, 1, "the freeze is a feed gap: setup");
+  const reps = ofType(r.events, "rep");
+  assert.ok(reps[5]!.startT > pause[1], "the 6th second starts after the freeze");
+  assert.ok(reps[4]!.endT < pause[0], "the 5th ends before it");
+  assert.ok(r.count >= 7 && r.count <= 8, `${r.count}`);
+  // 600 ms with no pose mid-hold: lost (the second in progress is dropped), then it resumes.
+  const lost = run("plank", 4 / 3, V.film([V.hold(1, 4_000), V.gap(600), V.hold(1, 4_000)], sc));
+  assert.equal(ofType(lost.events, "lost").length, 1);
+  assert.equal(ofType(lost.events, "ready").length, 2);
+  assert.ok(lost.count >= 6 && lost.count <= 7, `${lost.count}`);
+});
+
+test("the added activities: freezes, occlusion and too-fast reps behave like push-ups and squats", () => {
+  const cam: V.Cam = { azimuth: 45, height: 0.8, distance: 2.8, landscape: false };
+  const cases: [MoveKind, (e: number, i: number) => V.Body, number][] = [
+    ["jumpingjack", (e) => V.jackBody(e), 1000], ["press", (e) => V.pressBody(e), 2000], ["lunge", V.alternate((e, l) => V.lungeBody(e, l)), 2500],
+    ["highknee", V.alternate((e, l) => V.kneesBody(e, l)), 800], ["burpee", (e) => V.burpeeBody(e), 3000],
+    ["situp", (e) => V.situpBody(e), 2000],
+  ];
+  for (const [kind, body, period] of cases) {
+    const c = kind === "situp" ? { ...cam, height: 0.3, distance: 2.2, landscape: true } : cam;
+    const sc: V.Scene = { kind, body, cam: c, noise: { ...NOISE_3D, seed: period } };
+    // 4 reps, a 3.5 s freeze (pause window) holding the rest pose, 4 more straight away.
+    const fr = 1000 + 4 * period;
+    const held = run(kind, V.aspectOf(c), V.film([V.hold(1, 1000), ...V.reps(4, period), V.hold(1, 3500), ...V.reps(4, period), V.hold(1, 600)], sc), [[fr + DT, fr + 3500]]);
+    assert.equal(held.count, 8, `${kind}: through the freeze`);
+    assert.equal(ofType(held.events, "setup").length, 1, `${kind}: setup after the freeze`);
+    // 600 ms without a pose mid-rep: that rep is lost, the rest count.
+    const lost = run(kind, V.aspectOf(c), V.film([V.hold(1, 1000), ...V.reps(3, period), V.move(1, 0, period / 2), V.gap(600), V.move(0, 1, period / 2),
+      V.hold(1, 800), ...V.reps(3, period), V.hold(1, 600)], { ...sc, body: kind === "lunge" ? V.alternate((e, l) => V.lungeBody(e, l)) : kind === "highknee" ? V.alternate((e, l) => V.kneesBody(e, l)) : body }));
+    assert.equal(lost.count, 6, `${kind}: occlusion`);
+    assert.equal(ofType(lost.events, "lost").length, 1, `${kind}: lost once`);
+  }
+  // Too fast: jumping jacks at 300 ms a cycle are under the 400 ms minimum.
+  const fast = run("jumpingjack", 3 / 4, V.film([V.hold(1, 1000), ...V.reps(6, 300), V.hold(1, 600)], { kind: "jumpingjack", body: (e) => V.jackBody(e), cam, noise: { seed: 3, px: 2 } }));
+  assert.equal(fast.count, 0);
+  assert.ok(faults(fast.events).includes("too_fast") || ofType(fast.events, "half_rep").length > 0);
+});
+
+test("the added activities: nothing counts before the rest pose, and the view label works", () => {
+  // Lying down doing arm presses never starts a press set (the rest pose is standing or sitting upright).
+  const c = new RepCounter("press", 3 / 4);
+  assert.equal(c.view, null);
+  assert.equal(c.side, null);
+  const cam: V.Cam = { azimuth: 0, height: 0.8, distance: 2.8, landscape: false };
+  for (const s of V.film([V.hold(1, 1500)], { kind: "press", body: (e) => V.pressBody(e), cam, noise: { seed: 1, px: 2 } })) c.push(s);
+  assert.equal(c.view, "front");
+  assert.equal(c.side, null);
+  const side = new RepCounter("lunge", 3 / 4);
+  for (const s of V.film([V.hold(1, 1500)], { kind: "lunge", body: (e) => V.lungeBody(e, 0), cam: { ...cam, azimuth: 90 }, noise: { seed: 1, px: 2, occlusion: 0.3 } })) side.push(s);
+  assert.equal(side.view, "side");
+  // Lying on the back pressing the arms up to the ceiling (the wrists rise ~0.5 m over the shoulders).
+  const supine = (e: number): V.Body => {
+    const b = V.situpBody(1);
+    const arm = (q: V.Body["left"]) => { const wr = { x: q[0]!.x, y: q[0]!.y + 0.08 + 0.45 * (1 - e), z: q[0]!.z }; q[2] = wr; q[1] = { x: q[0]!.x + 0.1, y: (q[0]!.y + wr.y) / 2, z: q[0]!.z }; };
+    arm(b.left);
+    arm(b.right);
+    return b;
+  };
+  const lying = run("press", 4 / 3, V.film(set(2000), { kind: "situp", body: supine, cam: { azimuth: 90, height: 0.3, distance: 2.2, landscape: true }, noise: { seed: 2, px: 2 } }));
+  assert.equal(lying.count, 0);
+  assert.equal(ofType(lying.events, "ready").length, 0);
 });
 
 test("view: side for the side-on fixtures, front head-on, oblique at 45°, null before a pose", () => {
@@ -1118,7 +1386,7 @@ test("parseTrace rejects malformed traces", () => {
   const good = toTrace("squat", PORTRAIT, series([hold(172, 500)], (a) => squatSample(a)), [[100, 200]]);
   assert.ok(parseTrace(good));
   const bad: unknown[] = [
-    null, 7, "trace", { ...good, v: 2 }, { ...good, engine: "reps@2" }, { ...good, exercise: "situp" }, { ...good, aspect: 0 },
+    null, 7, "trace", { ...good, v: 2 }, { ...good, engine: "reps@2" }, { ...good, exercise: "jogging" }, { ...good, exercise: "pushups" }, { ...good, aspect: 0 },
     { ...good, aspect: Number.NaN }, { ...good, t: good.t.slice(1) }, { ...good, t: [...good.t].reverse() },
     { ...good, t: good.t.map((t, i) => (i === 3 ? t + 0.5 : t)) }, { ...good, p: good.p.map((x, i) => (i === 2 ? 101 : x)) },
     { ...good, p: good.p.map((x, i) => (i === 0 ? 1.5 : x)) }, { ...good, pauses: [[200, 100]] }, { ...good, pauses: [[1]] },
@@ -1132,6 +1400,7 @@ test("parseTrace rejects malformed traces", () => {
   assert.ok(parseTrace({ ...good, pauses: Array.from({ length: MAX_PAUSES }, (_, i) => [i * 10, i * 10 + 5]) }), "16 disjoint pauses are fine");
   assert.ok(parseTrace({ ...good, pauses: [[100, 200], [201, 300]] }), "adjacent pauses are fine");
   assert.equal(parseTrace(good, 5), null, "sample cap");
+  for (const exercise of EXERCISES) assert.ok(parseTrace({ ...good, exercise }), `${exercise} is a trace exercise`);
 });
 
 // ── Golden vectors (test-vectors/reps-vectors.json) ──
@@ -1168,6 +1437,8 @@ function vectorTraces(): { name: string; about: string; count: number; trace: Tr
     toTrace(kind, V.aspectOf(cam), V.film(script, { kind, body, cam, noise: { ...NOISE_3D, seed } }));
   const frontCam: V.Cam = { azimuth: 0, height: 0.1, distance: 2.5, landscape: true };
   const obliqueSquatCam: V.Cam = { azimuth: 45, height: 0.9, distance: 2.5, landscape: false };
+  const standCam: V.Cam = { azimuth: 0, height: 0.8, distance: 2.8, landscape: false };
+  const floorCam: V.Cam = { azimuth: 90, height: 0.3, distance: 2.2, landscape: true };
   return [
     { name: "pushups", about: "5 push-ups, ±3° noise and a 70° landmark flip every 13 samples", count: 5, trace: toTrace("pushup", LANDSCAPE, pushups) },
     { name: "squats", about: "3 deep squats and one above parallel (counts, depth hint), ±3° noise, flips every 17 samples", count: 4, trace: toTrace("squat", PORTRAIT, squats) },
@@ -1188,6 +1459,38 @@ function vectorTraces(): { name: string; about: string; count: number; trace: Tr
       trace: film3("pushup", (e) => V.uprightDipBody(e), [V.hold(1, 1000), ...V.reps(5, 1500), V.hold(1, 500)], frontCam, 103) },
     { name: "cheat-oblique-good-morning", about: "good mornings (waist bend, legs straight) filmed at 45°: the hips never drop, nothing counts", count: 0,
       trace: film3("squat", (e) => V.goodMorningBody(e), [V.hold(1, 1000), ...V.reps(5, 2000), V.hold(1, 500)], obliqueSquatCam, 104) },
+    // The activities added 2026-11-27 (3D fixtures): one honest set and one cheat each.
+    { name: "jumping-jacks", about: "5 jumping jacks filmed at 30° from 0.8 m (portrait), noise, flips and jumps", count: 5,
+      trace: film3("jumpingjack", (e) => V.jackBody(e), [V.hold(1, 1000), ...V.reps(5, 1000), V.hold(1, 600)], { ...standCam, azimuth: 30 }, 105) },
+    { name: "cheat-jacks-one-arm", about: "jumping jacks with one arm only (waving), filmed head-on: nothing counts", count: 0,
+      trace: film3("jumpingjack", (e) => V.jackBody(e, { oneArm: true }), [V.hold(1, 1000), ...V.reps(5, 1000), V.hold(1, 600)], standCam, 106) },
+    { name: "overhead-presses", about: "4 overhead presses filmed head-on from 0.8 m, noise, flips and jumps", count: 4,
+      trace: film3("press", (e) => V.pressBody(e), [V.hold(1, 1000), ...V.reps(4, 2000), V.hold(1, 600)], standCam, 107) },
+    { name: "cheat-half-presses", about: "presses stopping with the elbows at ~90°, filmed at 60°: half reps, nothing counts", count: 0,
+      trace: film3("press", (e) => V.pressBody(e, { half: true }), [V.hold(1, 1000), ...V.reps(4, 2000), V.hold(1, 600)], { ...standCam, azimuth: 60 }, 108) },
+    { name: "lunges", about: "4 forward lunges, legs alternating, filmed at 60° from 0.8 m", count: 4,
+      trace: film3("lunge", V.alternate((e, l) => V.lungeBody(e, l)), [V.hold(1, 1000), ...V.reps(4, 2500), V.hold(1, 600)], { ...standCam, azimuth: 60 }, 109) },
+    { name: "cheat-quarter-lunges", about: "lunges dipping only a quarter of the way, filmed from the side: half reps, nothing counts", count: 0,
+      trace: film3("lunge", V.alternate((e, l) => V.lungeBody(e, l, { bottomY: 0.8 })), [V.hold(1, 1000), ...V.reps(4, 2500), V.hold(1, 600)], { ...standCam, azimuth: 90 }, 110) },
+    { name: "high-knees", about: "8 high knees (each knee lift counts, legs alternating) filmed from behind at 150°", count: 8,
+      trace: film3("highknee", V.alternate((e, l) => V.kneesBody(e, l)), [V.hold(1, 1000), ...V.reps(8, 800), V.hold(1, 600)], { ...standCam, azimuth: 150 }, 111) },
+    { name: "cheat-marching-knees", about: "marching with small knee lifts (thigh ~45°) filmed head-on: nothing counts", count: 0,
+      trace: film3("highknee", V.alternate((e, l) => V.kneesBody(e, l, { lift: 45 })), [V.hold(1, 1000), ...V.reps(8, 800), V.hold(1, 600)], standCam, 112) },
+    { name: "burpees", about: "3 burpees (stand, hands down, kick back to a plank, back up) filmed at 45° from 0.8 m", count: 3,
+      trace: film3("burpee", (e) => V.burpeeBody(e), [V.hold(1, 1000), ...V.reps(3, 3000), V.hold(1, 600)], { ...standCam, azimuth: 45 }, 113) },
+    { name: "cheat-squat-burpees", about: "squats instead of burpees (hands never reach the floor) filmed head-on: nothing counts", count: 0,
+      trace: film3("burpee", (e) => V.burpeeBody(e, { squatOnly: true }), [V.hold(1, 1000), ...V.reps(3, 3000), V.hold(1, 600)], standCam, 114) },
+    { name: "sit-ups", about: "4 sit-ups filmed from the side, phone on the floor (landscape)", count: 4,
+      trace: film3("situp", (e) => V.situpBody(e), [V.hold(1, 1000), ...V.reps(4, 2000), V.hold(1, 600)], floorCam, 115) },
+    { name: "cheat-neck-curls", about: "neck curls (the torso rises ~15°) filmed from the feet end: nothing counts", count: 0,
+      trace: film3("situp", (e) => V.situpBody(e, { top: 15 }), [V.hold(1, 1000), ...V.reps(4, 2000), V.hold(1, 600)], { ...floorCam, azimuth: 0 }, 116) },
+    { name: "plank-freeze", about: "a 12 s plank at 30° with the freeze after second 5 (3 s pause window): one rep per second held (5 + 3), none in the pause", count: 8,
+      trace: (() => {
+        const tr = film3("plank", (e) => V.plankBody(e), [V.hold(1, 12_000)], { ...frontCam, azimuth: 30 }, 117);
+        return { ...tr, pauses: [[5_600, 8_600]] as [number, number][] };
+      })() },
+    { name: "cheat-plank-sag", about: "a 10 s plank with the hips sagging 25 cm, filmed head-on: the clock never starts (hips)", count: 0,
+      trace: film3("plank", (e) => V.plankBody(e, { sag: 0.25 }), [V.hold(1, 10_000)], frontCam, 118) },
   ];
 }
 
@@ -1214,9 +1517,14 @@ test("golden vectors on disk replay to the same digest (regenerate: see the comm
   const file = JSON.parse(readFileSync(VECTORS_URL, "utf8")) as { vectors: { name: string; trace: unknown; expect: unknown }[] };
   assert.deepEqual(file.vectors.map((v) => v.name),
     ["pushups", "squats", "cheat-supine-press", "paused-session", "cheat-belly-prop", "cheat-cobra", "freeze-resume",
-      "front-pushups", "oblique-squats", "cheat-front-arm-dips", "cheat-oblique-good-morning"]);
+      "front-pushups", "oblique-squats", "cheat-front-arm-dips", "cheat-oblique-good-morning",
+      "jumping-jacks", "cheat-jacks-one-arm", "overhead-presses", "cheat-half-presses", "lunges", "cheat-quarter-lunges", "high-knees",
+      "cheat-marching-knees", "burpees", "cheat-squat-burpees", "sit-ups", "cheat-neck-curls", "plank-freeze", "cheat-plank-sag"]);
   const intended: Record<string, number> = { pushups: 5, squats: 4, "cheat-supine-press": 0, "paused-session": 5, "cheat-belly-prop": 0,
-    "cheat-cobra": 0, "freeze-resume": 8, "front-pushups": 6, "oblique-squats": 5, "cheat-front-arm-dips": 0, "cheat-oblique-good-morning": 0 };
+    "cheat-cobra": 0, "freeze-resume": 8, "front-pushups": 6, "oblique-squats": 5, "cheat-front-arm-dips": 0, "cheat-oblique-good-morning": 0,
+    "jumping-jacks": 5, "cheat-jacks-one-arm": 0, "overhead-presses": 4, "cheat-half-presses": 0, lunges: 4, "cheat-quarter-lunges": 0,
+    "high-knees": 8, "cheat-marching-knees": 0, burpees: 3, "cheat-squat-burpees": 0, "sit-ups": 4, "cheat-neck-curls": 0, "plank-freeze": 8,
+    "cheat-plank-sag": 0 };
   for (const v of file.vectors) {
     const trace = parseTrace(v.trace);
     assert.ok(trace, `${v.name}: a valid trace`);

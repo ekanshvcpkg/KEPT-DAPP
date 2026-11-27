@@ -6,7 +6,7 @@
 // audio come in as deps, so tests drive it directly.
 import { hypeSituation, pickHype } from "./hypeChooser";
 import type { HypeEvent } from "./hypeChooser";
-import type { HypeLang, HypeSituation } from "./hypeLines";
+import type { HypeActivity, HypeLang, HypeSituation } from "./hypeLines";
 
 export interface HypeCoachDeps {
   now(): number;
@@ -36,6 +36,16 @@ export const HYPE_AFTER_MS = 150;
 export const NEXT_REP_MARGIN_MS = 200;
 const DEFAULT_CADENCE_MS = 2500;
 
+export interface HypeCoachOptions {
+  /** The set's activity: no line contradicts it (hypeLines.ts › hypeFits); push-ups when not said. */
+  activity?: HypeActivity;
+  /**
+   * Whether the Keeper says count n out loud (a count cuts a hype line off). Every rep when not said; a held plank only
+   * its tens, so a line there only has to end before the next spoken count, not the next second.
+   */
+  speaksAt?: (n: number) => boolean;
+}
+
 export class HypeCoach {
   private lastAt = -Infinity;
   private lastId: string | null = null;
@@ -48,7 +58,7 @@ export class HypeCoach {
   private wasLost = false;
   private seq = 0;
 
-  constructor(private readonly target: number, private readonly d: HypeCoachDeps) {}
+  constructor(private readonly target: number, private readonly d: HypeCoachDeps, private readonly o: HypeCoachOptions = {}) {}
 
   /** The counter saw the start position: the first time the set's opener, after losing you a welcome back. */
   ready(): void {
@@ -82,18 +92,28 @@ export class HypeCoach {
     return this.firstRepMs > 0 ? this.firstRepMs + 400 : DEFAULT_CADENCE_MS;
   }
 
+  /** Reps (or seconds) from now until the next one the Keeper says out loud: the next one, or a plank's next ten. */
+  private repsToNextSpoken(): number {
+    const speaks = this.o.speaksAt;
+    if (!speaks) return 1;
+    let m = this.repN + 1;
+    while (m < this.target && !speaks(m)) m++;
+    return Math.max(1, m - this.repN);
+  }
+
   private say(event: HypeEvent, beforeNextRep: boolean): boolean {
     const now = this.d.now();
+    const activity = this.o.activity;
     const situation = hypeSituation({
-      event, target: this.target, sinceLastMs: now - this.lastAt, repsSinceHype: this.repN - this.hypeRep,
+      event, target: this.target, sinceLastMs: now - this.lastAt, repsSinceHype: this.repN - this.hypeRep, ...(activity ? { activity } : {}),
     }, this.d.rng);
     if (!situation) return false;
     const seq = ++this.seq; // a newer moment drops a pending line, even when its own line doesn't fit
-    const nextRepAt = beforeNextRep ? now + this.cadence() : Infinity;
+    const nextRepAt = beforeNextRep ? now + this.cadence() * this.repsToNextSpoken() : Infinity;
     const endsInTime = (at: number) => (id: string) => at + this.d.clipMs(id) - HYPE_TAIL_MS <= nextRepAt - NEXT_REP_MARGIN_MS;
     const wait = Math.max(0, this.d.busyMs() - HYPE_TAIL_MS) + HYPE_AFTER_MS;
     // A long line if one ends before the next rep, else a short one. None: say so now, so the caller's own line plays.
-    const pick = { lang: this.d.lang(), lastId: this.lastId, used: this.used, fits: endsInTime(now + wait) };
+    const pick = { lang: this.d.lang(), lastId: this.lastId, used: this.used, fits: endsInTime(now + wait), ...(activity ? { activity } : {}) };
     const id = pickHype(situation, pick, this.d.rng) ?? pickHype(situation, { ...pick, tier: "short" }, this.d.rng);
     if (!id) return false;
     this.d.schedule(wait, () => {

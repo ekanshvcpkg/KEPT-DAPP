@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { checkRepEvidence, freezeAfterRep, jpegSize } from '../src/v4/repProof.js';
+import { checkRepEvidence, freezeAfterRep, jpegSize, repFreezeObject } from '../src/v4/repProof.js';
 
 // The golden vector "freeze-resume": 8 push-ups with a 3.5 s freeze pause [7050, 10500] after rep 4.
 const vectors = JSON.parse(readFileSync(new URL('../../packages/engine/test-vectors/reps-vectors.json', import.meta.url), 'utf8'));
@@ -79,3 +79,37 @@ test('freezeAfterRep stays between 30% and 70% of the set and varies with the ch
 });
 rejects('no freeze', evidence({ trace: { ...trace, pauses: [] }, freeze: null }), /no freeze/);
 rejects('a pause in a one-rep set', evidence(), /unexpected pause/, { habit: { exercise: 'pushup', target: 1 } });
+
+test('every activity has its own freeze description for the vision model (the plank holds a plank)', () => {
+  const all = ['pushup', 'squat', 'jumpingjack', 'lunge', 'situp', 'highknee', 'burpee', 'press', 'plank'] as const;
+  const texts = all.map((ex) => repFreezeObject(ex));
+  assert.equal(new Set(texts).size, all.length);
+  for (const t of texts) assert.match(t, /^a person .*\(one hand may be raised\)$/);
+  assert.equal(repFreezeObject('plank'), 'a person holding a plank on the floor (one hand may be raised)');
+  assert.match(repFreezeObject('jumpingjack'), /jumping-jack/);
+  assert.match(repFreezeObject('pushup'), /push-up/);
+});
+
+test('a short plank says how many seconds the Keeper counted', () => {
+  const r = checkRepEvidence(evidence({ trace: { ...trace, exercise: 'plank' } }), { exercise: 'plank', target: 179 }, challenge, photo, now);
+  assert.ok('error' in r);
+  assert.match(r.error, /^The Keeper counted \d+ of 179 seconds$/);
+});
+
+test('a plank goes through the same checks in seconds: the golden vector "plank-freeze" (8 s, freeze after second 5)', () => {
+  const pf = vectors.vectors.find((v: { name: string }) => v.name === 'plank-freeze');
+  const bh = Array.from({ length: 400 }, (_, i) => `pl${i}`).find((b) => freezeAfterRep({ blockhash: b, issuedAt: issued }, 8) === 5)!;
+  const [a, b] = pf.trace.pauses[0] as [number, number];
+  const ev = { trace: pf.trace, phoneCount: 8, freeze: { afterRep: 5, t: a + 1500, gesture: 'hand_up', sha256: sha }, keyframes: [] };
+  const r = checkRepEvidence(ev, { exercise: 'plank', target: 8 }, { ...challenge, blockhash: bh }, photo, now);
+  assert.ok('receipt' in r, JSON.stringify(r));
+  assert.equal(r.receipt.exercise, 'plank'); assert.equal(r.receipt.repCount, 8);
+  assert.deepEqual(r.receipt.freeze, { afterRep: 5, gesture: 'hand_up', t: a + 1500 });
+  assert.ok(b - a >= 1500);
+  // Held a second short of a 9-second target: refused, in seconds.
+  const short = checkRepEvidence(ev, { exercise: 'plank', target: 9 }, { ...challenge, blockhash: bh }, photo, now);
+  assert.deepEqual(short, { error: 'The Keeper counted 8 of 9 seconds' });
+  // The plank's sag cheat counts nothing.
+  const sag = vectors.vectors.find((v: { name: string }) => v.name === 'cheat-plank-sag');
+  assert.match((checkRepEvidence({ ...ev, trace: sag.trace }, { exercise: 'plank', target: 8 }, { ...challenge, blockhash: bh }, photo, now) as { error: string }).error, /counted 0 of 8 seconds|no freeze/);
+});

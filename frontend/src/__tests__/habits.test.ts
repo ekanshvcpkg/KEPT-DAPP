@@ -88,10 +88,16 @@ describe("saving and removing", () => {
 });
 
 describe("quick picks", () => {
-  it("lead with the live rep sets, then program objects in the program's order, all real catalog entries", () => {
-    expect(QUICK_PICK_OBJECTS.slice(0, 2)).toEqual(["reps_pushups_10", "reps_squats_10"]);
-    expect(QUICK_PICK_OBJECTS.slice(0, 2).map((k) => parseRepHabit(proofTextOf(k) ?? ""))).toEqual([{ exercise: "pushup", target: 10 }, { exercise: "squat", target: 10 }]);
-    const ids = QUICK_PICK_OBJECTS.slice(2).map((id) => OBJECTS.findIndex((o) => o.id === id));
+  it("lead with every live activity (one count each), then program objects in the program's order, all real catalog entries", () => {
+    const live = QUICK_PICK_OBJECTS.slice(0, 9);
+    expect(live).toEqual(["reps_pushup_10", "reps_squat_10", "reps_jumpingjack_20", "reps_lunge_10", "reps_situp_10", "reps_highknee_20", "reps_burpee_5", "reps_press_10", "reps_plank_30"]);
+    expect(live.map((k) => parseRepHabit(proofTextOf(k) ?? ""))).toEqual([
+      { exercise: "pushup", target: 10 }, { exercise: "squat", target: 10 }, { exercise: "jumpingjack", target: 20 }, { exercise: "lunge", target: 10 },
+      { exercise: "situp", target: 10 }, { exercise: "highknee", target: 20 }, { exercise: "burpee", target: 5 }, { exercise: "press", target: 10 },
+      { exercise: "plank", target: 30 },
+    ]);
+    const ids = QUICK_PICK_OBJECTS.slice(9).map((id) => OBJECTS.findIndex((o) => o.id === id));
+    expect(ids.length).toBeGreaterThan(0);
     expect(ids.every((i) => i >= 0)).toBe(true);
     expect([...ids].sort((a, b) => a - b)).toEqual(ids);
     expect(QUICK_PICK_OBJECTS.length % 3).toBe(0); // a full 3-column grid

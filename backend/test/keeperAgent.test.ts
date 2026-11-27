@@ -31,6 +31,24 @@ test('facts: current day, HP after a missed day, habits with rep targets, today 
   assert.deepEqual(d.money, { stakePerMemberSol: 0.07, potSol: 0.14, costOfAMissSol: 0.01, myMissesSoFar: 0, whereMissesGo: d.money.whereMissesGo });
 });
 
+test('every live activity is described with its own count, unit and phone placement (the plank in seconds)', () => {
+  const live: AgentOath = { ...group, details: { goalText: 'Cardio', habits: ['Jacks', 'Plank', 'Abs', 'Shoulders'], habitObjects: ['20 jumping jacks', '60-second plank', '10 sit-ups', '10 overhead presses'] } };
+  assert.deepEqual(summarizeOath(live, ME, NOW).habits, ['Jacks: a live set of 20 jumping jacks', 'Plank: a live, timed 60-second plank', 'Abs: a live set of 10 sit-ups', 'Shoulders: a live set of 10 overhead presses']);
+  const [jacks, plank, abs, press] = oathDetails(live, ME, NOW).habits as Array<{ exercise?: string; repTarget?: number; unit?: string; howToProve: string }>;
+  assert.deepEqual([jacks!.exercise, jacks!.repTarget, jacks!.unit], ['jumpingjack', 20, 'reps']);
+  assert.deepEqual([plank!.exercise, plank!.repTarget, plank!.unit], ['plank', 60, 'seconds']);
+  assert.match(jacks!.howToProve, /counts 20 jumping jacks live .*chair.*raised hands/);
+  assert.match(plank!.howToProve, /times a 60-second plank live .*floor.*only runs while you hold/);
+  assert.match(abs!.howToProve, /floor/); assert.match(press!.howToProve, /raised hands/);
+  for (const h of [jacks, plank, abs, press]) assert.match(h!.howToProve, /any angle/);
+});
+
+test('the rules name every live activity', async () => {
+  const deps: AgentDeps = { wallet: ME, now: () => NOW, oaths: async () => [group], balanceSol: async () => 0, receipts: async () => [] };
+  const text = ((await runTool('get_rules', { topic: 'rep_sets' }, deps, [group])) as { text: string }).text;
+  for (const w of ['push-ups', 'squats', 'jumping jacks', 'lunges', 'sit-ups', 'high knees', 'burpees', 'overhead presses', 'plank', 'seconds', 'any angle']) assert.match(text, new RegExp(w));
+});
+
 test('HP breaks at 0 and solo misses cost 35', () => {
   const solo = { ...group.chain, isSolo: true, members: [ME], daysKept: { [ME]: 0 }, numDays: 7 };
   assert.deepEqual(hpOf(solo, T0 + 2 * 86_400 + 10), { hp: 50, broken: false, closedDays: 2 }); // 100-35+10=75, 75-35+10=50

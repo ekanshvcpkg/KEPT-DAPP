@@ -426,14 +426,32 @@
       "phone": "Phone",
       "tablet": "Tablet",
       "whiteboard": "Whiteboard",
-      "reps_pushups_10": "10 push-ups",
-      "reps_squats_10": "10 squats",
-      "reps_pushups_20": "20 push-ups",
-      "reps_squats_20": "20 squats",
-      "reps_pushups_30": "30 push-ups",
-      "reps_squats_30": "30 squats",
-      "reps_pushups_50": "50 push-ups",
-      "reps_squats_50": "50 squats"
+      "reps_pushup_10": "10 push-ups",
+      "reps_pushup_20": "20 push-ups",
+      "reps_pushup_30": "30 push-ups",
+      "reps_pushup_50": "50 push-ups",
+      "reps_squat_10": "10 squats",
+      "reps_squat_20": "20 squats",
+      "reps_squat_30": "30 squats",
+      "reps_squat_50": "50 squats",
+      "reps_jumpingjack_20": "20 jumping jacks",
+      "reps_jumpingjack_30": "30 jumping jacks",
+      "reps_jumpingjack_50": "50 jumping jacks",
+      "reps_lunge_10": "10 lunges",
+      "reps_lunge_20": "20 lunges",
+      "reps_situp_10": "10 sit-ups",
+      "reps_situp_20": "20 sit-ups",
+      "reps_situp_30": "30 sit-ups",
+      "reps_highknee_20": "20 high knees",
+      "reps_highknee_40": "40 high knees",
+      "reps_burpee_5": "5 burpees",
+      "reps_burpee_10": "10 burpees",
+      "reps_burpee_15": "15 burpees",
+      "reps_press_10": "10 overhead presses",
+      "reps_press_20": "20 overhead presses",
+      "reps_plank_30": "30-second plank",
+      "reps_plank_60": "60-second plank",
+      "reps_plank_90": "90-second plank"
     },
     "quickPicks": "Common proof objects",
     "searchMore": "Not here? Search every supported object.",
@@ -586,34 +604,101 @@
     "askFailed": "The Keeper can't answer right now. Try again."
   },
   "reps": {
-    "$source": "hackathon 2026-11-26: live rep counter (docs/notes/REP_COUNTER_CONTRACT.md)",
-    "pushups": "push-ups",
-    "squats": "squats",
+    "$source": "hackathon 2026-11-26: live rep counter (docs/notes/REP_COUNTER_CONTRACT.md); 2026-11-27: every live activity (jumping jacks, lunges, sit-ups, high knees, burpees, overhead presses, plank)",
     "frameHint": "Get your whole body in the picture",
     "start": "Start: {target} {label}",
+    "startSeconds": "Start: {target}-second {label}",
     "ofTarget": "of {target} {label}",
-    "halfRep": "Not deep enough: that one didn't count",
+    "ofTargetSeconds": "of {target} seconds",
     "lost": "The Keeper can't see you: get back in frame",
     "formHint": "Keep your form: that rep didn't count",
+    "formHintSeconds": "Hold a straight plank: the clock stops until you do",
+    "fault": {
+      "legs": "Feet out and back in too: that one didn't count",
+      "stance": "Step one leg forward or back: that one didn't count",
+      "same_leg": "Switch legs every time: that one didn't count",
+      "twist": "Come up straight, don't roll: that one didn't count",
+      "not_lying": "Lie back with your hips on the floor: that one didn't count",
+      "no_lockout": "Lock your arms out at the top: that one didn't count"
+    },
     "cameraError": "The camera couldn't start",
     "stop": "Stop the set",
     "keepStill": "Keep the phone still during the set: start again",
     "level": "Set the phone straight: level with the floor",
-    "holdTop": "Hold the top for a moment: the Keeper lost a beat",
+    "holdTop": "Back in position and hold still: the Keeper lost a beat",
     "restart": "The camera lost the set: start again",
     "tooLong": "That set took too long: start again",
     "noFreeze": "The Freeze photo didn't take: start again",
     "freezeHand": "Freeze! Raise one hand",
     "stepsTitle": "Set up",
-    "stepPushup1": "Phone on its side (landscape) on the floor, propped up a little, about 2 m away",
-    "stepPushup2": "Whole body in the picture, head to feet: side-on to the phone, or facing it",
-    "stepPushup3": "Tap Start, get into the top position with straight arms and hold still for a second",
-    "stepSquat1": "Phone upright on a chair or table, at knee to waist height, 2.5 to 3 m away",
-    "stepSquat2": "Whole body in the picture, feet included: side-on to the phone, or facing it",
-    "stepSquat3": "Tap Start, stand tall and hold still for a second, then squat",
-    "statusPositionPushup": "Get into position: arms straight, hold still",
-    "statusPositionSquat": "Stand tall and hold still",
-    "statusGo": "Go!"
+    "placeFloor": "Phone on its side (landscape) on the floor, level and propped up a little, about 2 m away",
+    "placeFloorTall": "Phone upright on the floor, level and propped up a little, about 3 m away: you must fit standing and down low",
+    "placeChair": "Phone upright on a chair or table at knee to waist height, level, 2.5 to 3 m away",
+    "frame": "Whole body in the picture, head to feet, from any angle: side-on, facing the phone or in between",
+    "frameArms": "Whole body in the picture, raised hands included, from any angle: side-on, facing the phone or in between",
+    "statusGo": "Go!",
+    "statusHold": "Hold it!",
+    "view": {
+      "side": "Side view",
+      "front": "Front view",
+      "oblique": "Angle view"
+    },
+    "ex": {
+      "pushup": {
+        "label": "push-ups",
+        "position": "Get into position: arms straight, hold still",
+        "begin": "Tap Start, get into the top position with straight arms and hold still for a second",
+        "halfRep": "Not deep enough: that one didn't count"
+      },
+      "squat": {
+        "label": "squats",
+        "position": "Get into position: stand tall, hold still",
+        "begin": "Tap Start, stand tall and hold still for a second, then squat",
+        "halfRep": "Not deep enough: that one didn't count"
+      },
+      "jumpingjack": {
+        "label": "jumping jacks",
+        "position": "Get into position: stand tall, arms down, hold still",
+        "begin": "Tap Start, stand tall with your arms down and hold still for a second, then jump",
+        "halfRep": "Hands all the way up: that one didn't count"
+      },
+      "lunge": {
+        "label": "lunges",
+        "position": "Get into position: stand tall, hold still",
+        "begin": "Tap Start, stand tall and hold still for a second, then lunge, one leg after the other",
+        "halfRep": "Not deep enough: that one didn't count"
+      },
+      "situp": {
+        "label": "sit-ups",
+        "position": "Get into position: lie back, knees bent, hold still",
+        "begin": "Tap Start, lie on your back with your knees bent and hold still for a second, then sit up",
+        "halfRep": "All the way up: that one didn't count"
+      },
+      "highknee": {
+        "label": "high knees",
+        "position": "Get into position: stand tall, hold still",
+        "begin": "Tap Start, stand tall and hold still for a second, then drive your knees up, left and right",
+        "halfRep": "Knees higher: that one didn't count"
+      },
+      "burpee": {
+        "label": "burpees",
+        "position": "Get into position: stand tall, hold still",
+        "begin": "Tap Start, stand tall and hold still for a second: then down, feet back, chest low, back up and jump",
+        "halfRep": "Not all the way: that one didn't count"
+      },
+      "press": {
+        "label": "overhead presses",
+        "position": "Get into position: stand tall, hands at your shoulders, hold still",
+        "begin": "Tap Start, stand tall with your hands at your shoulders and hold still for a second, then press up",
+        "halfRep": "Arms all the way up: that one didn't count"
+      },
+      "plank": {
+        "label": "plank",
+        "position": "Get into position: a straight plank, hold still",
+        "begin": "Tap Start, get into a straight plank on your hands or forearms and hold it: the clock only runs while you hold",
+        "halfRep": "Hold a straight plank: the clock stopped"
+      }
+    }
   },
   "live": {
     "$source": "hackathon 2026-11-26: live Oath updates over Supabase Realtime (features/oaths/realtime.ts)",
