@@ -119,7 +119,8 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   const pass = verdictPasses(verdict);
   const receipt: Receipt = {
     v: RECEIPT_VERSION, kind: "oath", wallet: req.wallet, target: withContext ? oath : null, dayIndex: withContext ? dayIndex : null, habit: habit ?? null,
-    photoSha256: photoHash, expected: { object: expectedObject, gesture: expectedGesture },
+    // What the vision model was asked to see: for a rep set the freeze move (the habit itself is in `reps`).
+    photoSha256: photoHash, expected: rep ? { object: repFreezeObject(rep.exercise), gesture: REP_FREEZE_GESTURE } : { object: expectedObject, gesture: expectedGesture },
     challenge: { gesture: challenge?.gesture ?? null, slot: challenge?.slot ?? null, blockhash: challenge?.blockhash ?? null, issuedAt: challenge?.issuedAt.toISOString() ?? null },
     model: judged.model, ...(repReceipt ? { reps: repReceipt } : {}), verdict, pass, checkedAt: new Date().toISOString(),
   };

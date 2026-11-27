@@ -61,14 +61,17 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
     { role: "system", content: AGENT_SYSTEM },
     { role: "user", content: `The user's Oaths (newest first):\n${JSON.stringify(summary)}\n\nQuestion: ${question.slice(0, 400)}` },
   ];
-  const deadline = Date.now() + 25_000;
+  // One deadline for the whole answer, fallback included, inside the app's wait (frontend ask.ts: 60 s, minus
+  // transcription and speech).
+  const deadline = Date.now() + 28_000;
   try {
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
       const res = await fetchImpl(config.visionApiUrl, {
         method: "POST", signal: AbortSignal.timeout(Math.max(3_000, deadline - Date.now())),
         headers: { "content-type": "application/json", authorization: `Bearer ${config.openApiKey}` },
         // No hidden reasoning: some providers enable it by default and it can use the whole budget, leaving no answer.
-        body: JSON.stringify({ model: config.askModel, temperature: 0.4, max_tokens: 1200, reasoning: { enabled: false }, messages, ...(round < MAX_TOOL_ROUNDS ? { tools: TOOLS, tool_choice: "auto" } : {}) }),
+        // Tools stay declared every round (the history has tool calls); the last round must answer (tool_choice none).
+        body: JSON.stringify({ model: config.askModel, temperature: 0.4, max_tokens: 1200, reasoning: { enabled: false }, messages, tools: TOOLS, tool_choice: round < MAX_TOOL_ROUNDS ? "auto" : "none" }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${(await res.text().catch(() => "")).slice(0, 300)}`);
       const json = (await res.json()) as { error?: { message?: string; code?: unknown }; provider?: string; usage?: unknown; choices?: { finish_reason?: string; message?: { content?: string | null; tool_calls?: ToolCall[] } }[] };
@@ -82,7 +85,9 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
         return text;
       }
       messages.push({ role: "assistant", content: msg?.content ?? null, tool_calls: calls });
-      const results = await Promise.all(calls.slice(0, 6).map(async (c) => {
+      // Every tool call gets an answer (an unanswered call id makes the next request fail); at most 6 are run.
+      const results = await Promise.all(calls.map(async (c, i) => {
+        if (i >= 6) return { role: "tool" as const, tool_call_id: c.id, content: JSON.stringify({ error: "Too many lookups at once; ask about fewer Oaths" }) };
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(c.function.arguments || "{}") as Record<string, unknown>; } catch { /* bad JSON: the tool sees no args */ }
         const out = await runTool(c.function.name, args, deps, oaths).catch(() => ({ error: "That lookup failed" }));
@@ -93,6 +98,7 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
     throw new Error("too many tool rounds");
   } catch (e) {
     console.warn("[keeper ask] tool loop failed, answering from the summary:", e instanceof Error ? e.message : String(e));
+    if (deadline - Date.now() < 8_000) throw new VoiceUnavailableError("The Keeper took too long to answer");
     // The one-shot answer from the summary alone (the Keeper before it had tools).
     return answerQuestion(question, { wallet: deps.wallet, solBalance: await deps.balanceSol().catch(() => null), oaths: summary as unknown as AskContext["oaths"], recentVerdicts: [] }, fetchImpl);
   }

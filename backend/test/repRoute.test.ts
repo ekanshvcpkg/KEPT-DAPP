@@ -103,7 +103,8 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
     const replay = await verify(frame(4), evidence(frame(4)));
     assert.equal(replay.status, 409); assert.match(replay.body.error, /already used/);
     assert.equal(receipt.reps.keyframes[0].sha256, sha(frame(9)));
-    assert.equal(receipt.expected.object, '8 push-ups');
+    // `expected` is what the vision model was asked (the freeze move); the habit itself is in `reps`.
+    assert.match(receipt.expected.object, /push-up/); assert.match(receipt.expected.gesture, /hand raised/);
 
     // Every live activity takes the same route: a jumping-jack set, judged as a jumping-jack freeze frame.
     const jPhoto = framePortrait(6);

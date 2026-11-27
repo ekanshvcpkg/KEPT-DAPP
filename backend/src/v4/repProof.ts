@@ -54,6 +54,21 @@ export type RepReceipt = {
 
 const sha = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
 
+/** Longest run of consecutive, bit-identical, non-empty pose samples (36 ints each) in a trace, outside its pause windows. */
+export const MAX_FROZEN_SAMPLES = 20; // 1 s at 20 Hz: real MediaPipe output jitters by a few thousandths every frame
+export function longestFrozenRun(p: readonly number[], n: number, t: readonly number[] = [], pauses: readonly (readonly [number, number])[] = []): number {
+  let best = 0, run = 0;
+  for (let i = 0; i < n; i++) {
+    if (pauses.some(([a, b]) => t[i]! >= a && t[i]! <= b)) { run = 0; continue; }
+    const cur = p.slice(i * 36, i * 36 + 36);
+    const empty = cur.every((x) => x === 0);
+    const same = i > 0 && !empty && cur.every((x, j) => x === p[(i - 1) * 36 + j]);
+    run = empty ? 0 : same ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
 /** Width and height from a JPEG's SOF marker, or null if it isn't a readable JPEG. */
 export function jpegSize(b: Buffer): { w: number; h: number } | null {
   if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null;
@@ -88,6 +103,9 @@ export function checkRepEvidence(
   if (durationMs > REP_SET_MAX_MS || durationMs > nowMs - challenge.issuedAt.getTime() + 5_000) return { error: "The set took longer than its challenge allows" };
   const gaps: number[] = [];
   for (let i = 1; i < n; i++) gaps.push(trace.t[i]! - trace.t[i - 1]!);
+  // A live pose model never returns the same 36 numbers for long: a run of identical non-empty poses is a replayed still.
+  // (The Freeze itself is a deliberate hold: its pause window is not checked.)
+  if (longestFrozenRun(trace.p, n, trace.t, trace.pauses) > MAX_FROZEN_SAMPLES) return { error: "The set looks frozen: the camera saw no movement" };
   if (gaps.some((g) => g > 2_000)) return { error: "The set has a gap: the camera stopped seeing it" };
   // The camera samples every ~50 ms; a trace far off that rate wasn't recorded live by the app.
   const median = [...gaps].sort((x, y) => x - y)[gaps.length >> 1]!;

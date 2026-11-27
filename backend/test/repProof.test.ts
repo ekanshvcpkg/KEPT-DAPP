@@ -113,3 +113,15 @@ test('a plank goes through the same checks in seconds: the golden vector "plank-
   const sag = vectors.vectors.find((v: { name: string }) => v.name === 'cheat-plank-sag');
   assert.match((checkRepEvidence({ ...ev, trace: sag.trace }, { exercise: 'plank', target: 8 }, { ...challenge, blockhash: bh }, photo, now) as { error: string }).error, /counted 0 of 8 seconds|no freeze/);
 });
+
+test('a frozen trace (one pose repeated, as a replayed still) is refused; real jitter passes', async () => {
+  const { longestFrozenRun, MAX_FROZEN_SAMPLES } = await import('../src/v4/repProof.js');
+  const n = trace.t.length;
+  assert.ok(longestFrozenRun(trace.p, n) <= MAX_FROZEN_SAMPLES, 'the honest golden vector moves');
+  const still = trace.p.slice(36 * 40, 36 * 41);
+  const frozen = { ...trace, p: Array.from({ length: n }, () => still).flat() };
+  assert.ok(longestFrozenRun(frozen.p, n) > MAX_FROZEN_SAMPLES);
+  const r = checkRepEvidence(evidence({ trace: frozen }), habit, challenge, photo, now);
+  assert.ok('error' in r); assert.match((r as { error: string }).error, /frozen/);
+  assert.equal(longestFrozenRun(Array(36 * 30).fill(0), 30), 0, 'empty samples (no pose) are not a frozen run');
+});
