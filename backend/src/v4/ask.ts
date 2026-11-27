@@ -62,7 +62,7 @@ export function humanize(text: string): string {
 
 /** Spoken text: no markdown, no codes, one line, within the voice limit. */
 /** A spoken answer stays short: whole sentences up to BRIEF_CHARS (at most two); one long sentence is cut at a word. */
-export const BRIEF_CHARS = 150; // about 25 spoken words
+export const BRIEF_CHARS = 200; // a backstop: the prompt asks for 25 words; two-part answers need ~160–190
 export function brief(text: string): string {
   // A sentence ends at . ! ? followed by a space or the end ("0.07 SOL" stays whole).
   const sentences = /[.!?]$/.test(text.trim()) || /[.!?]\s/.test(text) ? text.trim().split(/(?<=[.!?])\s+/) : [];

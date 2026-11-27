@@ -108,13 +108,14 @@ test('humanize: the Keeper never reads out addresses, shortened keys, hashes or 
   assert.equal(speakable('**Done.** Signature ZRjGVkx3AaYfsTVEghd3E463RG5G5b7jBJ3ooU8auGioQrYv1PAUu12x4Ut2cGscUUEwFFiAwriFvJ8TjwUpFSb landed.'), 'Done. Signature landed.');
 });
 
-test('brief: a spoken answer keeps at most two whole sentences, about 150 characters (25 words)', async () => {
+test('brief: a spoken answer keeps at most two whole sentences, at most 200 characters', async () => {
   const { brief } = await import('../src/v4/ask.js');
-  const long = 'Both Squarts Oaths are going well: each is kept today, with 12 hours and 11 hours 56 minutes left, at full HP and no misses. Each stakes 0.07 SOL, and a miss costs 0.01 SOL. Keep it up.';
+  const long = 'Both Squarts Oaths are going well: each is kept today, with 12 hours and 11 hours 56 minutes left, at full HP and no misses. Each stakes 0.07 SOL, and a miss costs 0.01 SOL and 35 HP on each of them, every single day. Keep it up.';
   assert.equal(brief(long), 'Both Squarts Oaths are going well: each is kept today, with 12 hours and 11 hours 56 minutes left, at full HP and no misses.');
+  assert.equal(brief('You have about 0.41 SOL. A miss costs about 0.01 SOL and 35 HP on a solo Oath, and 20 HP in a group. Ask me anything.'), 'You have about 0.41 SOL. A miss costs about 0.01 SOL and 35 HP on a solo Oath, and 20 HP in a group.');
   assert.equal(brief('Kept. Barely. Again tomorrow.'), 'Kept. Barely.');
   assert.equal(brief('No sentence end here'), 'No sentence end here');
-  assert.ok(brief('word '.repeat(80)).length <= 150);
+  assert.ok(brief('word '.repeat(80)).length <= 200);
 });
 
 test('numberSameNames: every same-named Oath gets its own number, others keep their name', async () => {
