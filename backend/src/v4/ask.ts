@@ -48,6 +48,9 @@ type ToolCall = { id: string; type: "function"; function: { name: string; argume
 export function humanize(text: string): string {
   return text
     .replace(/\b(Oath|oath)\s+[1-9A-HJ-NP-Za-km-z]{3,8}…[1-9A-HJ-NP-Za-km-z]{3,8}\b/g, "this Oath")
+    .replace(/\s*\(?\b(ending|ends|starting|starts) (in|with)\s+[1-9A-HJ-NP-Za-km-z…]{4,}\b\)?/gi, "")
+    // A key-like token: 10+ letters and digits mixing upper case, lower case and digits (no word looks like that).
+    .replace(/\b(?=[1-9A-HJ-NP-Za-km-z]*\d)(?=[1-9A-HJ-NP-Za-km-z]*[A-Z])(?=[1-9A-HJ-NP-Za-km-z]*[a-z])[1-9A-HJ-NP-Za-km-z]{10,}\b/g, "")
     .replace(/\b[1-9A-HJ-NP-Za-km-z]{3,8}…[1-9A-HJ-NP-Za-km-z]{3,8}\b/g, "")
     .replace(/\b[1-9A-HJ-NP-Za-km-z]{25,}\b/g, "")
     .replace(/\b(0x)?[0-9a-fA-F]{16,}\b/g, "")
@@ -72,7 +75,10 @@ export async function askAgent(question: string, deps: AgentDeps, fetchImpl: typ
   if (!config.openApiKey) throw new VoiceUnavailableError("The answer model key (OPEN_API_KEY) is not configured");
   const oaths: AgentOath[] = await deps.oaths();
   const now = deps.now();
+  // Same-named Oaths get a number ("Squarts (2)"), so the model never tells them apart by their address.
   const summary = oaths.map((o) => summarizeOath(o, deps.wallet, now));
+  const seen = new Map<string, number>();
+  for (const s of [...summary].reverse()) { const n = (seen.get(s.name) ?? 0) + 1; seen.set(s.name, n); if (summary.filter((x) => x.name === s.name).length > 1) s.name = `${s.name} (${n})`; }
   const messages: ChatMessage[] = [
     { role: "system", content: AGENT_SYSTEM },
     { role: "user", content: `The user's Oaths (newest first):\n${JSON.stringify(summary)}\n\nQuestion: ${question.slice(0, 400)}` },

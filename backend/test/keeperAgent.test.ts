@@ -81,7 +81,8 @@ test('askAgent: the model calls a tool, gets the facts, answers in speakable tex
       return new Response(JSON.stringify(reply), { status: 200 });
     }) as unknown as typeof fetch;
     const answer = await askAgent('what do I still have to do today and how is my friend doing?', deps, fake);
-    assert.equal(answer, 'Ten push-ups done, ten squats to go. Your friend ending in R8Et has proven nothing today.');
+    // The model's wallet fragment is never spoken (humanize).
+    assert.equal(answer, 'Ten push-ups done, ten squats to go. Your friend has proven nothing today.');
     assert.equal(bodies[0].model, 'anthropic/claude-haiku-5.5');
     assert.ok(bodies[0].tools.some((t: any) => t.function.name === 'get_oath_details'));
     assert.match(bodies[0].messages[1].content, /Excercise/);
@@ -102,5 +103,7 @@ test('humanize: the Keeper never reads out addresses, shortened keys, hashes or 
   assert.equal(humanize('Receipt 0fb5a6af12a3639ea05c15d6ce86a2d8ec96061c6e373ee2f745ab565ebec1f2 passed.'), 'Receipt passed.');
   assert.equal(humanize('Oath E88oqoakK6jsjfUmFeD885ibubMums92rXs6AZV4gqy5 is on day 2.'), 'Oath is on day 2.');
   assert.equal(humanize('Ten push-ups, 18h left, about 0.07 SOL.'), 'Ten push-ups, 18h left, about 0.07 SOL.');
+  assert.equal(humanize('Your Squarts Oath ending in BTGgz94nL5tBGr is kept.'), 'Your Squarts Oath is kept.');
+  assert.equal(humanize('Squarts (AHKhKHLY5f7ubL7f) is kept.'), 'Squarts is kept.');
   assert.equal(speakable('**Done.** Signature ZRjGVkx3AaYfsTVEghd3E463RG5G5b7jBJ3ooU8auGioQrYv1PAUu12x4Ut2cGscUUEwFFiAwriFvJ8TjwUpFSb landed.'), 'Done. Signature landed.');
 });
