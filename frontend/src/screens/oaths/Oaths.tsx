@@ -22,7 +22,7 @@ import { useGo, useParams, useSheetRoute } from "@/app/nav";
 import { useOath, useOathList, oathActions } from "@/features/oaths/hooks";
 import type { MemberView, OathView } from "@/features/oaths/model";
 import { isLowHp } from "@/features/oaths/model";
-import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, oathNumber, oathObjects, objectIcon, reviewText, shortDate, weekday, startsTitle } from "@/features/oaths/present";
+import { dayList, listNames, memberColor, memberInitial, memberName, oathAmount, oathAsset, oathIcon, oathNumber, oathObjects, objectIcon, proofKind, reviewText, shortDate, weekday, startsTitle } from "@/features/oaths/present";
 import { screenFor } from "@/features/oaths/route";
 import { useUi } from "@/state/ui";
 import { TabScreen } from "../tabs/TabScreen";
@@ -46,6 +46,9 @@ function seatsOf(v: OathView, withRate: boolean): Seat[] {
 }
 
 // ── D0 Oaths list ──
+/** How an Oath is proven, before joining: photos with a gesture, counted sets (rep habits) or both. */
+const OBJECTS_SUB = { photo: "additions.proof.objectsSub", reps: "additions.proof.objectsSubReps", mixed: "additions.proof.objectsSubMixed" } as const;
+
 export function OathsTab() {
   const { views, isLoading } = useOathList();
   const { go } = useGo();
@@ -134,7 +137,7 @@ function OpenHeader({ v, member }: { v: OathView; member?: boolean }) {
         <Chip text={member ? t("screens.D1·m.b0.chip.2", { amount: oathAmount(f, f.stake) }) : t("screens.D1.b0.chip.2", { amount: oathAmount(f, f.stake) })} icon="sack" tone="lime" tilt={-1} />
         {!f.isSolo && !member ? <Chip text={reviewText(f.reviewMode)} icon="account-group-outline" tilt={2} /> : null}
       </ChipRow>
-      <Title heading={t("screens.D1.b1.title", { goal: f.goal ?? f.name })} {...(!member ? { sub: t("additions.proof.objectsSub", { objects: oathObjects(f) }) } : {})} fs={28} />
+      <Title heading={t("screens.D1.b1.title", { goal: f.goal ?? f.name })} {...(!member ? { sub: t(OBJECTS_SUB[proofKind(f)], { objects: oathObjects(f) }) } : {})} fs={28} />
     </>
   );
 }

@@ -49,8 +49,9 @@ const TEXTS: Record<HypeSituation, Record<HypeLang, readonly string[]>> = {
     noFilter: ["Last one. Make it fucking count.", "One more, then you're bloody free.", "Final rep. Win me some damn money."],
   },
   done: {
-    clean: ["Kept. I trained you well, obviously.", "Done. I'd bet on you again. Probably.", "Set complete. You may thank me later."],
-    noFilter: ["Done. Fucking magnificent. My coaching.", "Kept. Bloody brilliant. You're welcome.", "Set done. Not half bloody bad."],
+    // Never "Kept." here: the server hasn't judged the set yet (it recounts and checks the Freeze photo after this).
+    clean: ["Set done. I trained you well, obviously.", "Done. I'd bet on you again. Probably.", "Set complete. You may thank me later."],
+    noFilter: ["Done. Fucking magnificent. My coaching.", "Done. Bloody brilliant. Now I judge it.", "Set done. Not half bloody bad."],
   },
   streak: {
     clean: ["Keep it coming. I'm counting.", "Not bad. Don't let it go to your head.", "That's it. Earn your freedom.", "Steady. The house hates a winner."],

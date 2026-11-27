@@ -80,6 +80,11 @@ test('POST /proof/verify: the Keeper judges the uploaded photo; the client verdi
     assert.equal(rejected.status, 200); assert.equal(rejected.body.pass, false); assert.equal(rejected.body.verificationId, null);
     assert.equal(rejected.body.looksLikeScreenOrPrintout, true);
 
+    // Everything "seen" but under the confidence bar: the model's reason describes a pass, so the server says why it failed.
+    judge = async () => ({ verdict: { objectPresent: true, objectConfidence: 0.4, gestureSeen: 'thumbs up', gestureMatches: true, looksLikeScreenOrPrintout: false, reason: 'A bottle and a thumbs up are visible.' }, model: 'test-model' });
+    const unsure = await verify({ photo: jpeg(9).toString('base64') });
+    assert.equal(unsure.body.pass, false); assert.equal(unsure.body.reason, "The Keeper wasn't sure it saw the water bottle.");
+
     // A passing photo: the receipt is public and its SHA-256 is the hash that would go on chain.
     judge = async () => ({ verdict: { objectPresent: true, objectConfidence: 0.92, gestureSeen: 'thumbs up', gestureMatches: true, looksLikeScreenOrPrintout: false, reason: 'bottle and thumb visible' }, model: 'test-model' });
     const photo = jpeg(3);

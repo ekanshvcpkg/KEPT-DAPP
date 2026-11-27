@@ -93,7 +93,7 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
     const photo = frame(3);
     const ok = await verify(photo, evidence(photo));
     assert.equal(ok.status, 200, JSON.stringify(ok.body)); assert.equal(ok.body.pass, true);
-    assert.match(asked.at(-1)!.object, /push-up/); assert.match(asked.at(-1)!.gesture, /hand raised/);
+    assert.match(asked.at(-1)!.object, /push-ups/); assert.match(asked.at(-1)!.gesture, /hand raised/);
     const receipt = (await (await fetch(`${base}/keeper/receipts/${ok.body.receiptHash}`)).json() as any).receipt;
     assert.equal(receipt.reps.repCount, 8); assert.equal(receipt.reps.target, 8); assert.equal(receipt.reps.exercise, 'pushup');
     assert.deepEqual(receipt.reps.freeze, { afterRep: 4, gesture: 'hand_up', t: 8550 });
@@ -102,16 +102,20 @@ test('POST /proof/verify for a rep habit: the server recounts the trace and judg
     rows.get(ok.body.verificationId).receipt = receipt;
     const replay = await verify(frame(4), evidence(frame(4)));
     assert.equal(replay.status, 409); assert.match(replay.body.error, /already used/);
+    // The same freeze frame again once used: refused in set wording (it is a rep set, not a photo).
+    rows.get(ok.body.verificationId).usedAt = new Date();
+    const samePhoto = await verify(photo, evidence(photo));
+    assert.equal(samePhoto.status, 409); assert.equal(samePhoto.body.error, 'That set was already used; do a new set'); assert.equal(samePhoto.body.reps, true);
     assert.equal(receipt.reps.keyframes[0].sha256, sha(frame(9)));
     // `expected` is what the vision model was asked (the freeze move); the habit itself is in `reps`.
-    assert.match(receipt.expected.object, /push-up/); assert.match(receipt.expected.gesture, /hand raised/);
+    assert.match(receipt.expected.object, /push-ups/); assert.match(receipt.expected.gesture, /hand raised/);
 
     // Every live activity takes the same route: a jumping-jack set, judged as a jumping-jack freeze frame.
     const jPhoto = framePortrait(6);
     const jEvidence = { trace: jjTrace, phoneCount: 5, freeze: { afterRep: 2, promptT: 2850, t: 4400, gesture: 'Thumb_Up', sha256: sha(jPhoto) }, keyframes: [] };
     const jj = await verify(jPhoto, jEvidence, '5 jumping jacks');
     assert.equal(jj.status, 200, JSON.stringify(jj.body)); assert.equal(jj.body.pass, true);
-    assert.match(asked.at(-1)!.object, /jumping-jack/); assert.match(asked.at(-1)!.gesture, /hand raised/);
+    assert.match(asked.at(-1)!.object, /jumping jacks/); assert.match(asked.at(-1)!.gesture, /hand raised/);
     const jr = (await (await fetch(`${base}/keeper/receipts/${jj.body.receiptHash}`)).json() as any).receipt;
     assert.equal(jr.reps.exercise, 'jumpingjack'); assert.equal(jr.reps.repCount, 5); assert.equal(jr.reps.target, 5);
     assert.deepEqual(jr.reps.freeze, { afterRep: 2, gesture: 'hand_up', t: 4400 });

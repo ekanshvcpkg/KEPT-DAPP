@@ -115,6 +115,9 @@ function play(source: number, ms: number): void {
   }
 }
 
+/** How long a set line ("freeze", "done"…) takes to say, in ms. */
+export const lineMs = (line: KeeperLine): number => MS[LINE_FILE[line]] ?? 1500;
+
 /** Whether there is a clip for count n (1–50). */
 export const hasCountClip = (n: number): boolean => COUNTS[n] !== undefined;
 

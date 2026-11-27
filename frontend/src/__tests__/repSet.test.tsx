@@ -9,6 +9,7 @@ import { t } from "@/copy";
 import type { RepEvidence } from "@/api";
 import { countReps, parseTrace } from "@kept/engine";
 import { RepSet } from "@/screens/proof/RepSet";
+import { FREEZE_EXTRA_MS, FREEZE_RESUME_HOLD_END, stretchFreeze } from "@/testing/stretchFreeze";
 
 let mockClockT = 0;
 jest.mock("kept-gesture", () => {
@@ -23,6 +24,8 @@ jest.mock("kept-gesture", () => {
 
 const vector = JSON.parse(readFileSync(join(__dirname, "../../../packages/engine/test-vectors/reps-vectors.json"), "utf8"))
   .vectors.find((v: { name: string }) => v.name === "freeze-resume");
+// Held as long as RepSet's freeze now lasts (testing/stretchFreeze.ts).
+const held = stretchFreeze(vector.trace, FREEZE_RESUME_HOLD_END, FREEZE_EXTRA_MS);
 
 test("a recorded 8 push-up set yields evidence the server's recount accepts", async () => {
   jest.useFakeTimers();
@@ -33,7 +36,7 @@ test("a recorded 8 push-up set yields evidence the server's recount accepts", as
     mockClockT = ts;
     await act(async () => { (screen.getByTestId("rep-counter").props.onPose as (e: object) => void)({ nativeEvent: { t: ts, w: 640, h: 480, rot: 90, tilt: 0, p } }); });
   };
-  const { t: ts, p } = vector.trace as { t: number[]; p: number[] };
+  const { t: ts, p } = held;
   await pose(-100, p.slice(0, 36)); // a level phone enables Start
   await fireEvent.press(screen.getByText(t("additions.reps.start", { target: 8, label: t("additions.reps.ex.pushup.label") })));
   for (let i = 0; i < ts.length && !done.mock.calls.length; i++) {
@@ -81,7 +84,7 @@ test("the same set filmed with the phone rolled 16° counts in full: RepSet turn
     mockClockT = ts;
     await act(async () => { (screen.getByTestId("rep-counter").props.onPose as (e: object) => void)({ nativeEvent: { t: ts, w: 640, h: 480, rot: 90, tilt: TILT, p } }); });
   };
-  const { t: ts, p } = vector.trace as { t: number[]; p: number[] };
+  const { t: ts, p } = held;
   await pose(-100, turn(p.slice(0, 36)));
   await fireEvent.press(screen.getByText(t("additions.reps.start", { target: 8, label: t("additions.reps.ex.pushup.label") })));
   for (let i = 0; i < ts.length && !done.mock.calls.length; i++) {
@@ -101,16 +104,16 @@ test("the same set filmed with the phone rolled 16° counts in full: RepSet turn
 });
 
 test("a jumping-jack set on the real engine (the golden vector with a freeze after rep 2), phone rolled 12°", async () => {
-  // "jumping-jacks" (5 reps, portrait) with a 4 s stretch after rep 2 holding its last pose: the Freeze's time (RepSet
-  // freezes for 3.5 s). The frames are turned by the tilt as the front camera would see them; RepSet turns them back.
+  // "jumping-jacks" (5 reps, portrait) with a 6.5 s stretch after rep 2 holding its last pose: the Freeze's time (RepSet
+  // freezes for about 4.6–5.4 s). The frames are turned by the tilt as the front camera would see them; RepSet turns them back.
   const jj = JSON.parse(readFileSync(join(__dirname, "../../../packages/engine/test-vectors/reps-vectors.json"), "utf8"))
     .vectors.find((v: { name: string }) => v.name === "jumping-jacks").trace as { t: number[]; p: number[]; aspect: number };
   const end = countReps({ ...jj, v: 1, engine: "reps@1", exercise: "jumpingjack", pauses: [] } as never).reps[1]!.endT;
   const i0 = jj.t.indexOf(end), TILT = 12, aspect = 480 / 640;
   const ts: number[] = [], ps: number[][] = [];
   for (let i = 0; i < jj.t.length; i++) {
-    ts.push(jj.t[i]! + (i > i0 ? 4000 : 0)); ps.push(jj.p.slice(i * 36, i * 36 + 36));
-    if (i === i0) for (let x = end + 50; x < end + 4000; x += 50) { ts.push(x); ps.push(jj.p.slice(i0 * 36, i0 * 36 + 36)); }
+    ts.push(jj.t[i]! + (i > i0 ? 6500 : 0)); ps.push(jj.p.slice(i * 36, i * 36 + 36));
+    if (i === i0) for (let x = end + 50; x < end + 6500; x += 50) { ts.push(x); ps.push(jj.p.slice(i0 * 36, i0 * 36 + 36)); }
   }
   const turn = (s: number[]) => {
     const a = (TILT * Math.PI) / 180, o = s.slice();

@@ -30,6 +30,7 @@ import type { DesignId } from "@/app/routes";
 import { oathActions, refreshOaths, useOath } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { gestureKey, gestureText, listNames, memberName, oathAmount } from "@/features/oaths/present";
+import { failHeadline, failKeeperLine, showsChallengeGesture, type ProofFeedback } from "@/features/oaths/proofFailure";
 import { nowSeconds } from "@/features/time";
 import { useUi } from "@/state/ui";
 import { haptic } from "@/lib/haptics";
@@ -43,7 +44,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const pinned = (n: number) => metrics.button.height * n + metrics.pinned.gap * (n - 1) + metrics.pinned.bottom;
 
 /** The proof in progress: today's challenge per habit and the last shot (kept for a retry on F2b). */
-type ProofFeedback = { objectPresent?: boolean; gestureMatches?: boolean };
 type ProofState = { challenges: Record<string, Challenge>; feedback: Record<string, ProofFeedback>; image: string | null; imageUri: string | null; reps: RepEvidence | null };
 const useProof = create<ProofState & { set(p: Partial<ProofState>): void }>((set) => ({
   challenges: {}, feedback: {}, image: null, imageUri: null, reps: null, set: (p) => set(p),
@@ -59,13 +59,13 @@ export const challengeFor = (id: string, habit?: number): Challenge | undefined 
   return mine[mine.length - 1];
 };
 
-type P = { id: string; habit?: string | number };
+type P = { id: string; habit?: string | number; why?: string };
 /** Which habit a proof screen is for comes in the route: every screen that opens one passes it. */
 function useProofScreen() {
   const p = useParams<P>();
   const habit = Number.isInteger(Number(p.habit)) && p.habit !== undefined && p.habit !== "" ? Number(p.habit) : 0;
   const { view } = useOath(p.id);
-  return { id: p.id ?? "", habit, total: view?.habits.length ?? 1, view, h: view?.habits[habit] };
+  return { id: p.id ?? "", habit, total: view?.habits.length ?? 1, view, h: view?.habits[habit], why: p.why };
 }
 const navTitle = (v: OathView | null, habit: number) => (v ? (v.habits.length > 1 ? t("additions.proof.navHabit", { name: v.facts.name, n: habit + 1, total: v.habits.length }) : v.facts.name) : "");
 const challengeLabel = (c: Challenge | undefined) => (c ? t("screens.F1.b0.label", { object: objectNameOfText(c.object), gesture: gestureText(c.gesture) }) : "");
@@ -105,7 +105,7 @@ function useChallenge(v: OathView | null, habit: number, fresh = false) {
 // ── F1·perm Camera permission ──
 export function F1perm() {
   const { back, replace, close } = useGo();
-  const { id, habit } = useProofScreen();
+  const { id, habit, h } = useProofScreen();
   const [perm, request, getPerm] = useCameraPermissions();
   const shoot = useCallback(() => replace("F1", { id, habit }), [replace, habit, id]);
   // Back from Settings with the camera allowed: on to the camera.
@@ -123,7 +123,7 @@ export function F1perm() {
       <Button kind="t" label={t("screens.F1·perm.pin.1")} onPress={back} />
     </>}>
       <ProofCamera state="off" object="camera-off-outline" label={t("screens.F1·perm.b1.label")} height={260} />
-      <Title heading={t("screens.F1·perm.b2.title")} sub={t("screens.F1·perm.b2.sub")} align="center" />
+      <Title heading={t("screens.F1·perm.b2.title")} sub={h && parseRepHabit(h.object) ? t("additions.proof.permRep") : t("screens.F1·perm.b2.sub")} align="center" />
     </Screen>
   );
 }
@@ -183,15 +183,17 @@ function Shoot() {
   const left = c ? Math.max(0, c.expiresAt - now) : 0;
   // A rep habit ("20 push-ups") is proven by a live counted set, not a photo. The photo camera is never mounted here,
   // so expo-camera can't unbind the rep counter's camera.
-  // Decided by the server's challenge (what the proof is judged against), so the phone and the server never disagree.
-  const rep = c ? parseRepHabit(c.object) : null;
+  // Decided by the server's challenge (what the proof is judged against), so the phone and the server never disagree;
+  // until it arrives, by the habit's own text, so a rep habit never shows the photo camera while it loads.
+  const rep = parseRepHabit(c?.object ?? h?.object ?? "");
   if (rep) {
+    const setOf = c ? parseRepHabit(c.object) : null;
     return (
       <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} scroll={false}>
-        {c && perm?.granted && focused ? (
-          <RepSet exercise={rep.exercise} target={rep.target} gesture={c.gesture}
+        {c && setOf && perm?.granted && focused ? (
+          <RepSet exercise={setOf.exercise} target={setOf.target} gesture={c.gesture}
             {...(c.freezeAfter ? { freezeAfter: c.freezeAfter } : {})}
-            secondsLeft={() => c.expiresAt - nowSeconds()} onNoTime={() => replace("F2c", { id, habit })}
+            secondsLeft={() => c.expiresAt - nowSeconds()} onNoTime={() => replace("F2c", { id, habit, why: "time" })}
             onCounting={onCounting}
             onDone={(evidence, freezeJpeg) => {
               useProof.getState().set({ image: freezeJpeg, imageUri: null, reps: evidence });
@@ -221,9 +223,11 @@ function Shoot() {
       <ProofCamera {...pillOf(total, habit)} state="idle" object={h ? objectIconOfText(h.object) : "camera"} label={challengeLabel(c)} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})}>
         {perm?.granted && focused ? <CameraView ref={cam} style={{ flex: 1 }} facing={facing} /> : undefined}
       </ProofCamera>
-      <ChipRow justify="center">
-        <Chip text={t("screens.F1.b1.chip.0", { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` })} tone={left < 60 ? "red" : "grey"} icon="timer-outline" />
-      </ChipRow>
+      {c ? (
+        <ChipRow justify="center">
+          <Chip text={t("screens.F1.b1.chip.0", { time: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` })} tone={left < 60 ? "red" : "grey"} icon="timer-outline" />
+        </ChipRow>
+      ) : null}
       <Shutter onShutter={() => { void shoot(); }} onFlip={() => setFacing((f) => (f === "back" ? "front" : "back"))} disabled={!c || busy || !perm?.granted} />
     </Screen>
   );
@@ -239,13 +243,19 @@ function Check() {
   const c = useProof((s) => s.challenges[key(id, habit)]);
   const started = useRef(false);
   const k = keeperLines("F2")[0]!;
+  // Nothing to check (no challenge or no shot or set on this run, e.g. Retry on F2b after the challenge itself failed
+  // to load): back to the camera instead of waiting on "Checking…" forever.
+  const nothing = !!view && (!c || (!useProof.getState().image && !useProof.getState().reps));
+  useEffect(() => { if (nothing && !started.current) replace("F1", { id, habit }); }, [nothing, replace, id, habit]);
   useEffect(() => {
-    if (!view || !c || started.current) return;
+    if (!view || !c || nothing || started.current) return;
     started.current = true;
     const { image, imageUri, reps } = useProof.getState();
     void getApi().proof.submit(view.facts, c, image ?? "", imageUri ?? undefined, reps ?? undefined).then(
       (r) => {
-        if (r.status === "fail") useProof.getState().set({ feedback: { ...useProof.getState().feedback, [key(id, habit)]: { objectPresent: r.objectPresent, gestureMatches: r.gestureMatches } } });
+        if (r.status === "fail") useProof.getState().set({ feedback: { ...useProof.getState().feedback, [key(id, habit)]: {
+          ...(r.objectPresent !== undefined ? { objectPresent: r.objectPresent } : {}), ...(r.gestureMatches !== undefined ? { gestureMatches: r.gestureMatches } : {}),
+          ...(r.looksLikeScreen !== undefined ? { looksLikeScreen: r.looksLikeScreen } : {}), ...(r.reason ? { reason: r.reason } : {}) } } });
         // The Keeper says its verdict out loud (Live; ElevenLabs).
         if (r.status === "fail") playSfx("rejected");
         if ((r.status === "pass" || r.status === "fail") && r.reason) keeperSay(t(r.status === "pass" ? "additions.keeper.sayKept" : "additions.keeper.sayFailed", { reason: r.reason }));
@@ -253,10 +263,10 @@ function Check() {
       },
       (e: unknown) => replace(isApiError(e) && e.code === "OFFLINE" ? "M2" : "F2b", { id, habit }),
     );
-  }, [view, c, replace, id, habit]);
+  }, [view, c, nothing, replace, id, habit]);
   return (
     <Screen bar={<NavBar onBack={back} title={navTitle(view, habit)} />}>
-      <ProofCamera {...pillOf(view?.habits.length ?? 1, habit)} state="check" object={h ? objectIconOfText(h.object) : "camera"} label={t("screens.F2.b0.label")} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
+      <ProofCamera {...pillOf(view?.habits.length ?? 1, habit)} state="check" object={h ? objectIconOfText(h.object) : "camera"} label={t("screens.F2.b0.label")} {...(c && showsChallengeGesture(c) && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
       <ScreenKeeper id="F2" lines={[k]} />
     </Screen>
   );
@@ -281,13 +291,15 @@ export function F2a() {
   const { id, habit, total, view, h } = useProofScreen();
   const c = useProof((s) => s.challenges[key(id, habit)]);
   const feedback = useProof((s) => s.feedback[key(id, habit)]);
-  const k = keeperLines("F2a")[0]!;
+  const k = c ? failKeeperLine(c, feedback) : keeperLines("F2a")[0]!;
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={navTitle(view, habit)} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="camera-retake-outline" label={t("screens.F2a.pin.0")} onPress={() => replace("F1", { id, habit })} />}>
-      <ProofCamera {...pillOf(total, habit)} state="fail" object={h ? objectIconOfText(h.object) : "camera"} label={c ? t("screens.F2a.b0.label", { gesture: gestureText(c.gesture) }) : ""} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
+      {/* The part that failed (a rep set: its pose, its raised hand or its recount; never the photo challenge's gesture). */}
+      <ProofCamera {...pillOf(total, habit)} state="fail" object={h ? objectIconOfText(h.object) : "camera"} label={c ? failHeadline(c, feedback) : ""} {...(c && showsChallengeGesture(c) && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
       <ScreenKeeper id="F2a" lines={[k]} />
-      {feedback?.objectPresent && feedback.gestureMatches === false && c && <Note text={t("additions.core.proofFeedback.objectOnly", { object: objectNameOfText(c.object), gesture: gestureText(c.gesture) })} />}
+      {feedback?.objectPresent && feedback.gestureMatches === false && c && showsChallengeGesture(c) && <Note text={t("additions.core.proofFeedback.objectOnly", { object: objectNameOfText(c.object), gesture: gestureText(c.gesture) })} />}
+      {feedback?.reason ? <Note text={t("additions.proof.failWhy", { reason: feedback.reason })} /> : null}
     </Screen>
   );
 }
@@ -295,13 +307,14 @@ export function F2a() {
 // ── F2b Check unavailable ── the photo is kept; Retry re-submits it.
 export function F2b() {
   const { replace, close } = useGo();
-  const { id, habit, view } = useProofScreen();
+  const { id, habit, view, h } = useProofScreen();
   const k = keeperLines("F2b")[0]!;
+  const repHabit = !!h && !!parseRepHabit(h.object);
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="refresh" label={t("screens.F2b.pin.0")} onPress={() => replace("F2", { id, habit })} />}>
       <ScreenKeeper id="F2b" lines={[k]} />
-      <Title heading={t("screens.F2b.b2.title")} sub={t("screens.F2b.b2.sub")} align="center" />
+      <Title heading={repHabit ? t("additions.proof.unavailableRepTitle") : t("screens.F2b.b2.title")} sub={repHabit ? t("additions.proof.unavailableRepSub") : t("screens.F2b.b2.sub")} align="center" />
       <MoneyMoment value={t("screens.F2b.b3.value", { time: hms(view?.secondsToReset ?? 0) })} caption={t("screens.F2b.b3.caption")} fs={44} />
     </Screen>
   );
@@ -310,14 +323,18 @@ export function F2b() {
 // ── F2c Challenge expired ── a fresh challenge replaces the old one.
 export function F2c() {
   const { replace, close } = useGo();
-  const { id, habit, view, h } = useProofScreen();
+  const { id, habit, view, h, why } = useProofScreen();
   const c = useChallenge(view, habit, true);
+  const repHabit = !!h && !!parseRepHabit(h.object);
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={view ? t("screens.F2b.nav.title", { name: view.facts.name }) : ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" icon="refresh" label={t("screens.F2c.pin.0")} disabled={!c} onPress={() => replace("F1", { id, habit })} />}>
-      <Title heading={t("screens.F2c.b0.title")} sub={t("screens.F2c.b0.sub")} />
+      {why === "time"
+        ? <Title heading={t("additions.proof.noTimeTitle")} sub={t("additions.proof.noTimeSub")} />
+        : <Title heading={t("screens.F2c.b0.title")} sub={repHabit ? t("additions.proof.expiredRepSub") : t("screens.F2c.b0.sub")} />}
       <ProofCamera {...pillOf(view?.habits.length ?? 1, habit)} state="idle" object={h ? objectIconOfText(h.object) : "camera"} height={300}
-        label={c ? t("screens.F2c.b1.label", { object: objectNameOfText(c.object).toLowerCase(), gesture: gestureText(c.gesture) }) : ""} {...(c && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
+        label={c ? (showsChallengeGesture(c) ? t("screens.F2c.b1.label", { object: objectNameOfText(c.object).toLowerCase(), gesture: gestureText(c.gesture) }) : t("additions.proof.newRep", { object: objectNameOfText(c.object) })) : ""}
+        {...(c && showsChallengeGesture(c) && gestureKey(c.gesture) ? { gesture: gestureKey(c.gesture)! } : {})} />
     </Screen>
   );
 }
@@ -350,8 +367,10 @@ export function F3() {
 // ── F4a 3 fails · AI only ──
 export function F4a() {
   const { go, close } = useGo();
-  const { view } = useProofScreen();
+  const { id, habit, view } = useProofScreen();
   const k = keeperLines("F4a")[0]!;
+  const c = useProof((s) => s.challenges[key(id, habit)]);
+  const feedback = useProof((s) => s.feedback[key(id, habit)]);
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={view?.facts.name ?? ""} />} bottomInset={pinned(1)}
       pinned={<Button kind="p" label={t("screens.F4a.pin.0")} onPress={() => go("B1")} />}>
@@ -362,6 +381,8 @@ export function F4a() {
         { label: t("screens.F4a.b3.row1.l"), value: t("screens.F4a.b3.row1.v", { hp: view?.facts.isSolo ? 35 : 20 }), color: color.red.base },
         { label: t("screens.F4a.b3.row2.l"), value: t("screens.F4a.b3.row2.v") },
       ]} />
+      {/* Why the last check failed (it was only spoken, and not at all with the voice off or in Demo). */}
+      {c ? <Note text={feedback?.reason ? `${failHeadline(c, feedback)}. ${t("additions.proof.failWhy", { reason: feedback.reason })}` : failHeadline(c, feedback)} /> : null}
     </Screen>
   );
 }
@@ -372,7 +393,8 @@ export function F4ag() {
   const { id, habit, view, h } = useProofScreen();
   const others = view ? view.members.filter((m) => !m.isMe).map(memberName) : [];
   const c = useProof((s) => s.challenges[key(id, habit)]);
-  const gk = c ? gestureKey(c.gesture) : undefined;
+  const feedback = useProof((s) => s.feedback[key(id, habit)]);
+  const gk = c && showsChallengeGesture(c) ? gestureKey(c.gesture) : undefined;
   return (
     <Screen bar={<NavBar onBack={() => close()} close title={view?.facts.name ?? ""} />} bottomInset={pinned(2)} pinned={<>
       <Button kind="p" icon="account-group-outline" label={t("screens.F4a·g.pin.0")} onPress={() => replace("G2", { id, habit })} />
@@ -380,6 +402,7 @@ export function F4ag() {
     </>}>
       <ProofCamera state="fail" object={h ? objectIconOfText(h.object) : "camera"} {...(gk ? { gesture: gk } : {})} label={t("screens.F4a·g.b0.label")} height={260} />
       <Title heading={t("screens.F4a·g.b1.title")} sub={t("additions.proof.groupSub", { names: listNames(others) })} fs={28} />
+      {c ? <Note text={feedback?.reason ? `${failHeadline(c, feedback)}. ${t("additions.proof.failWhy", { reason: feedback.reason })}` : failHeadline(c, feedback)} /> : null}
     </Screen>
   );
 }

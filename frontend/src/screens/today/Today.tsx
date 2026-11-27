@@ -21,7 +21,7 @@ import { useGo, useSheetRoute } from "@/app/nav";
 import { useOathList } from "@/features/oaths/hooks";
 import type { OathView } from "@/features/oaths/model";
 import { useDeviceOaths } from "@/features/oaths/device";
-import { listNames, memberColor, memberInitial, memberName, objectIcon, oathAmount, oathIcon, weekday } from "@/features/oaths/present";
+import { listNames, memberColor, memberInitial, memberName, objectIcon, oathAmount, oathIcon, proofKind, weekday } from "@/features/oaths/present";
 import { TabScreen } from "../tabs/TabScreen";
 import { useResultMoments } from "../results/Results";
 import { useBounties, useStats } from "@/features/queries";
@@ -33,6 +33,9 @@ const keptToday = (v: OathView) => myToday(v)?.pendingToday === false;
 /** The Oaths that have a proof due today, mine first by deadline. */
 // A Bounty you've missed a day of has knocked you out (H4): it has nothing left for you to prove today.
 const outOfBounty = (v: OathView) => !!v.facts.bountyId && v.members[v.me]!.missed.length > 0;
+
+/** An Oath card's line before anything is proven today: photos, counted sets (rep habits) or both. */
+const LINE_NONE = { photo: "additions.proof.lineNone", reps: "additions.proof.lineNoneReps", mixed: "additions.proof.lineNoneMixed" } as const;
 
 export function todayItems(views: OathView[]) {
   return views.filter((v) => v.life === "active" && v.dayIndex !== null && v.me >= 0 && !outOfBounty(v)).sort((a, b) => (a.secondsToReset ?? 0) - (b.secondsToReset ?? 0));
@@ -126,7 +129,7 @@ function TodayCard({ v, urgent }: { v: OathView; urgent?: boolean }) {
   return (
     <OathCard
       icon={oathIcon(v.facts)} name={v.facts.name} meta={meta} hp={v.hp}
-      line={partial && next ? t("additions.proof.linePartial", { done, total: v.habits.length, next: next.name }) : t("additions.proof.lineNone", { goal: capitalise(goal) })}
+      line={partial && next ? t("additions.proof.linePartial", { done, total: v.habits.length, next: next.name }) : t(LINE_NONE[proofKind(v.facts)], { goal: capitalise(goal) })}
       onPress={() => go("D2", { id: v.facts.id })}
       tags={[
         { text: t("screens.B1.b3.tag.0", { amount: oathAmount(v.facts, mine.inPlay) }), icon: "sack", tone: "lime" },

@@ -84,10 +84,18 @@ test('every activity has its own freeze description for the vision model (the pl
   const all = ['pushup', 'squat', 'jumpingjack', 'lunge', 'situp', 'highknee', 'burpee', 'press', 'plank'] as const;
   const texts = all.map((ex) => repFreezeObject(ex));
   assert.equal(new Set(texts).size, all.length);
-  for (const t of texts) assert.match(t, /^a person .*\(one hand may be raised\)$/);
-  assert.equal(repFreezeObject('plank'), 'a person holding a plank on the floor (one hand may be raised)');
-  assert.match(repFreezeObject('jumpingjack'), /jumping-jack/);
-  assert.match(repFreezeObject('pushup'), /push-up/);
+  for (const t of texts) assert.match(t, /^a real person .*\(one hand may be raised( off the floor)?\)$/);
+  assert.equal(repFreezeObject('plank'), 'a real person holding a plank on the floor, on the forearms or on straight arms (one hand may be raised)');
+  assert.match(repFreezeObject('jumpingjack'), /jumping jacks/);
+  assert.match(repFreezeObject('pushup'), /push-ups/);
+});
+
+test('the freeze description accepts each activity\'s rest pose (the freeze comes right after a rep ends)', () => {
+  // The engine's startPose per activity: where a rep ends and the freeze finds the person.
+  const rest = { squat: /standing upright between reps/, lunge: /standing upright between reps/, burpee: /standing upright between reps/,
+    jumpingjack: /standing upright with arms down/, highknee: /standing upright/, situp: /lying on the back between reps/,
+    press: /hands at the shoulders/, pushup: /arms straight/, plank: /plank/ } as const;
+  for (const [ex, re] of Object.entries(rest)) assert.match(repFreezeObject(ex as keyof typeof rest), re, ex);
 });
 
 test('a short plank says how many seconds the Keeper counted', () => {

@@ -1,7 +1,7 @@
 // A live set (push-ups, squats, jumping jacks, lunges, sit-ups, high knees, burpees, overhead presses, or a timed plank):
 // the camera counts on the phone (kept-gesture RepCounterView: CameraX + MediaPipe Pose), the shared engine
 // (@kept/engine reps) turns pose samples into reps (a plank: one per second held), the Keeper counts aloud, and at a
-// random rep it calls "Freeze!" for a liveness photo showing the challenge gesture. The whole pose trace goes to the
+// random rep it calls "Freeze!" for a liveness photo with one hand raised (the server judges that, not the challenge gesture). The whole pose trace goes to the
 // backend, which recounts it with the same engine (docs/notes/REP_COUNTER_CONTRACT.md); the phone's number is only a
 // display.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,7 +19,7 @@ import { Icon, Text, loopCycles, useAnimationLifecycle } from "@/components/prim
 import { color, duration, metrics, radius, type as typeStyles } from "@/theme";
 import { haptic } from "@/lib/haptics";
 import { REP_ICON } from "@/features/objects/proof";
-import { hasCountClip, repSetHype, sayCount, sayLine, stopHype } from "@/features/keeper/countVoice";
+import { hasCountClip, repSetHype, sayCount, sayLine, stopHype, keeperBusyMs, lineMs } from "@/features/keeper/countVoice";
 import type { HypeCoach } from "@/features/keeper/hypeCoach";
 import { ACTIVITY, hypeActivityOf, isTimed, saysCount, setSeconds } from "@/features/reps/activity";
 import { uprightPose } from "@/features/reps/upright";
@@ -44,6 +44,13 @@ const FAULT_HINT: Partial<Record<RepFault, `additions.reps.fault.${"legs" | "sta
 };
 /** Seconds a set may need, so it isn't started on a challenge about to expire (~3 s a rep, or the hold, plus the freeze). */
 export const repSetSeconds = (target: number, exercise: Exercise = "pushup") => setSeconds(exercise, target);
+
+/** The Freeze line waits at most this long for the rep's number to finish. */
+const FREEZE_WAIT_MAX_MS = 1200;
+/** The Freeze photo, this long after "…Hold it." ends: time to raise a hand. */
+const FREEZE_SHOT_AFTER_MS = 800;
+/** After the photo the freeze lasts this much longer (its retry fits inside), then counting resumes. */
+const FREEZE_HOLD_MS = 2000;
 
 export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, onCounting, onNoTime, onDone, onAbort }: {
   exercise: Exercise; target: number; gesture: string;
@@ -132,26 +139,30 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
 
   const finish = useCallback(async (endT: number) => {
     setPhase("done"); // no sample after the one that completed the set enters the trace
-    // The plain "done" clip says "every rep kept": not for a plank.
-    if (!coach().done() && !timed) sayLine("done");
+    // The plain "done" clip ("Done. Now I judge your set.") claims nothing before the server's verdict: any activity.
+    if (!coach().done()) sayLine("done");
     const shot = await cam.current?.capture().catch(() => null);
     const trace: Trace = { v: 1, engine: "reps@1", exercise, aspect: aspect.current, t: samples.current.t, p: samples.current.p, pauses: pauses.current };
     onDone({ trace, reps: reps.current, phoneCount: reps.current.length, freeze: freeze.current,
       keyframes: shot ? [{ kind: "final", t: shot.t || endT, jpeg: shot.jpeg, sha256: shot.sha256 }] : [] }, freezeJpeg.current);
-  }, [exercise, onDone, setPhase, coach, timed]);
+  }, [exercise, onDone, setPhase, coach]);
 
   const startFreeze = useCallback((repT: number, n: number) => {
     setPhase("freeze");
-    sayLine("freeze");
+    // "Freeze! One hand up. Hold it." starts once the rep's number has been said (no overlap), and the photo is taken
+    // FREEZE_SHOT_AFTER_MS after it ends (time to get a hand up, even from a plank), with one retry if the camera had no
+    // frame. The freeze ends FREEZE_HOLD_MS later: the whole pause stays well inside the server's 1.5–8 s.
+    const said = Math.min(keeperBusyMs(), FREEZE_WAIT_MAX_MS);
+    later(said, () => { if (phaseRef.current === "freeze") sayLine("freeze"); });
+    const shotAt = said + lineMs("freeze") + FREEZE_SHOT_AFTER_MS;
     // Samples during the freeze go into the trace but not the counter; their exact [first, last] t becomes a pause
     // window, which the server's recount skips the same way.
-    // The photo is taken 1.5 s in (time to raise the hand), with one retry if the camera had no frame.
     const shoot = (retry: boolean) => void cam.current?.capture().then((shot) => {
       freezeJpeg.current = shot.jpeg;
       freeze.current = { afterRep: n, promptT: repT, t: shot.t, gesture, sha256: shot.sha256 };
     }).catch(() => { if (retry) later(700, () => shoot(false)); });
-    later(1500, () => shoot(true));
-    later(3500, () => {
+    later(shotAt, () => shoot(true));
+    later(shotAt + FREEZE_HOLD_MS, () => {
       if (phaseRef.current !== "freeze") return;
       // No freeze photo, no proof: the set starts again now, not after the last rep.
       if (!freeze.current) { restart("additions.reps.noFreeze"); return; }
@@ -173,7 +184,7 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       if (said) sayCount(e.n);
       coach().rep(e.n, e.endT - e.startT);
       if (said) haptic.light();
-      setHint((h) => (h === t("additions.reps.holdTop") ? null : h));
+      setHint((h) => (h === t("additions.reps.holdTop") || h === t("additions.reps.afterFreeze") ? null : h));
       if (e.n >= target) void finish(e.endT);
       else if (e.n === freezeAt && !freeze.current) startFreeze(e.endT, e.n);
     } else if (e.type === "ready") {
@@ -192,8 +203,9 @@ export function RepSet({ exercise, target, gesture, freezeAfter, secondsLeft, on
       setHint(t(timed ? "additions.reps.formHintSeconds" : FAULT_HINT[e.fault] ?? "additions.reps.formHint"));
       coach().fault();
     } else if (e.type === "setup") {
-      // After a camera stall the counter resumes on a short hold at the top.
-      setHint(t("additions.reps.holdTop"));
+      // After a camera stall the counter resumes on a short hold at the top. Right after the Freeze that is expected:
+      // no "the Keeper lost a beat".
+      setHint(t(freezeEnded.current ? "additions.reps.afterFreeze" : "additions.reps.holdTop"));
       setInPosition(false);
       if (freezeEnded.current) freezeEnded.current = false;
       else coach().lost();

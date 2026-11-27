@@ -41,7 +41,7 @@
     "addHabit": "Add a habit",
     "removeHabit": "Remove habit {n}",
     "stackFull": "Your lineup is full",
-    "oneProofNote": "Every habit is proven with its own photo, every day.",
+    "oneProofNote": "Every habit is proven every day: a live photo, or a counted set.",
     "emptyTitle": "No habits yet",
     "emptySub": "Add your first habit and choose the object that proves it.",
     "cardNoProof": "Choose a proof object",
@@ -55,7 +55,8 @@
     "proofForHabit": "Proof: {object}",
     "inviteRecovering": "Your Oath is on chain. Setting up its invite link…",
     "inviteRecoveryFailed": "Your Oath is on chain, but its invite link is not ready. Retry to finish setup; your stake will not be charged again.",
-    "retryInvite": "Retry invite setup"
+    "retryInvite": "Retry invite setup",
+    "proofSummaryRepSub": "The camera counts the set live. At the Freeze, hold still and raise one hand."
   },
   "rematch": {
     "winBackHalf": "Win back half of what you had left."
@@ -524,7 +525,39 @@
     "f3SubMany": "{left} habits left today. Any time before midnight, no timer.",
     "objectsSub": "A photo of {objects} + a hand gesture, for each habit, every day.",
     "groupSub": "Send the photo to {names}. Majority approves; a tie rejects. The photo is deleted after the vote, 48 hours at most.",
-    "reviewSub": "{oath} · day {day} · a photo needs a {object} and {gesture}."
+    "reviewSub": "{oath} · day {day} · a photo needs a {object} and {gesture}.",
+    "failScreen": "That looks like a screen or a printout",
+    "failObject": "Couldn't see the {object}",
+    "failRepPose": "Couldn't see you doing {activity}",
+    "failRepHand": "Couldn't see a raised hand at the Freeze",
+    "failRepSet": "That set didn't count",
+    "failOther": "That proof wasn't accepted",
+    "failWhy": "The Keeper: {reason}",
+    "newRep": "New: {object}",
+    "failRepPlank": "Couldn't see you holding a plank",
+    "keeperFail": {
+      "$source": "owner 2026-11-27: the design's F2a line ('Close. Two fingers, like you mean it.') is a victory-sign hint shown after every failure; these follow what failed",
+      "repPose": "Close. Stay in the move\nwhen I say Freeze.",
+      "repHand": "Close. One hand up\nwhen I say Freeze.",
+      "repSet": "Close. Every rep,\nfull range.",
+      "object": "Close. Get the {object}\nin the shot.",
+      "screen": "A screen? Nice try.\nThe real thing.",
+      "thumbs_up": "Close. Thumb up,\nlike you mean it.",
+      "victory": "Close. Two fingers,\nlike you mean it.",
+      "open_palm": "Close. Open hand,\nlike you mean it.",
+      "other": "Close. Try again.",
+      "repOther": "Close. One clean set,\nstart to finish."
+    },
+    "permRep": "The camera counts your set on the phone. At the Freeze it keeps one frame, which the Keeper checks.",
+    "unavailableRepTitle": "We can't check sets\nright now.",
+    "unavailableRepSub": "Your set is saved. Retry in a minute. You still have time.",
+    "expiredRepSub": "Challenges last a few minutes, so nobody reuses an old set. Here's a fresh one.",
+    "noTimeTitle": "Not enough time left for this set.",
+    "noTimeSub": "A full set wouldn't fit in what's left of this challenge. Here's a fresh one.",
+    "lineNoneReps": "{goal}. One counted set per habit before midnight.",
+    "lineNoneMixed": "{goal}. One proof per habit before midnight.",
+    "objectsSubReps": "A counted set of {objects}, every day: raise a hand at the Freeze.",
+    "objectsSubMixed": "{objects}, every day: a live photo with a hand gesture, or a counted set."
   },
   "bountyTasks": {
     "$source": "owner: a Bounty has several daily tasks, each with its own proof object (2026-10-12, DECISIONS D-99)",
@@ -699,7 +732,8 @@
         "begin": "Tap Start, get into a straight plank on your hands or forearms and hold it: the clock only runs while you hold",
         "halfRep": "Hold a straight plank: the clock stopped"
       }
-    }
+    },
+    "afterFreeze": "Back in position and hold still to carry on"
   },
   "live": {
     "$source": "hackathon 2026-11-26: live Oath updates over Supabase Realtime (features/oaths/realtime.ts)",

@@ -11,7 +11,7 @@ import { config } from "../config.js";
 import { keypairFromEnv } from "../solana.js";
 import { CheckUnavailableError } from "../v4/verdict.js";
 import { keeperSpeech, MAX_LINE_CHARS, takeGlobalVoiceBudget } from "../v4/voice.js";
-import { parseRepHabit, parseTrace } from "../shared/reps.js";
+import { parseRepHabit, parseTrace, repHabitText } from "../shared/reps.js";
 import { publicReceiptUrl, publishReceipt, storeRepTrace } from "../v4/receiptStore.js";
 import { checkRepEvidence, REP_FREEZE_GESTURE, repFreezeObject, REP_SET_MAX_MS, type RepReceipt } from "../v4/repProof.js";
 import { decodePhoto, keeper, receiptHash, RECEIPT_VERSION, sendFailMemo, sha256Hex, UnusableVerdictError, type Receipt } from "../v4/keeper.js";
@@ -31,6 +31,13 @@ const startOfUtcDay = () => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); r
  * verdict with a public receipt whose SHA-256 is what goes on chain (record_checkin for a kept day, an SPL Memo for a
  * failed check). Any verdict the app sends is ignored. A passing result returns a one-use ID for proof recording.
  */
+/** A refused check is spoken by the app as "Not kept. <reason>" (additions.json › keeper.sayFailed): said now, so its
+ *  /api/keeper/say is a cache hit (the say route only speaks lines already said). Best effort, in the background. */
+function sayRefusal(reason: string): void {
+  const line = `Not kept. ${reason}`.slice(0, MAX_LINE_CHARS);
+  if (config.elevenLabsApiKey && config.keeperVoiceId && takeGlobalVoiceBudget(line.length)) void keeperSpeech(line).catch(() => undefined);
+}
+
 proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute(async (req: AuthedRequest, res) => {
   const { expectedObject, expectedGesture, oath, dayIndex, habit, photo } = req.body ?? {};
   if (typeof expectedObject !== "string" || typeof expectedGesture !== "string") {
@@ -73,7 +80,7 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   let repReceipt: RepReceipt | undefined;
   if (rep) {
     const checked = checkRepEvidence(req.body?.reps, rep, challenge!, image.bytes);
-    if ("error" in checked) return res.status(422).json({ error: checked.error, reps: true });
+    if ("error" in checked) { sayRefusal(checked.error); return res.status(422).json({ error: checked.error, reps: true }); }
     repReceipt = checked.receipt;
   }
 
@@ -83,13 +90,18 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   if (prior) {
     const retry = prior.wallet === req.wallet && prior.usedAt === null && prior.oath === (withContext ? oath : null) && prior.dayIndex === (withContext ? dayIndex : null)
       && prior.habit === (habit ?? null) && prior.expectedObject === expectedObject && prior.expectedGesture === expectedGesture;
-    if (!retry) return res.status(409).json({ error: "That photo was already used; take a new one" });
+    if (!retry) {
+      const error = rep ? "That set was already used; do a new set" : "That photo was already used; take a new one";
+      sayRefusal(error);
+      return res.status(409).json({ error, ...(rep ? { reps: true } : {}) });
+    }
     return res.json({ pass: true, verificationId: prior.id, proofHash: photoHash, receiptHash: prior.receiptHash, objectPresent: prior.objectPresent, objectConfidence: prior.objectConfidence,
       gestureSeen: prior.gestureSeen, gestureMatches: prior.gestureMatches, looksLikeScreenOrPrintout: prior.looksLikeScreen, reason: prior.reason, model: prior.model, ms: 0, retry: true });
   }
 
   // A pose trace proves one set once: the same trace (any wallet) can't pass again for another day or habit.
   if (repReceipt && await prisma.proofVerification.findFirst({ where: { status: "PASS", receipt: { path: ["reps", "traceSha256"], equals: repReceipt.traceSha256 } } })) {
+    sayRefusal("That rep set was already used; do a new set");
     return res.status(409).json({ error: "That rep set was already used; do a new set", reps: true });
   }
 
@@ -105,7 +117,7 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   const started = Date.now();
   let judged: Awaited<ReturnType<typeof keeper.judge>>;
   try {
-    // For a rep set the photo is the freeze frame: a person mid-workout, holding the challenge gesture.
+    // For a rep set the photo is the freeze frame: a person mid-workout with one hand raised (not the challenge gesture).
     judged = await keeper.judge(image, rep ? { object: repFreezeObject(rep.exercise), gesture: REP_FREEZE_GESTURE } : { object: expectedObject, gesture: expectedGesture });
   } catch (e) {
     // The model answered but unusably: it was a paid call, so it counts toward the daily limit (not as a failed try).
@@ -117,6 +129,12 @@ proofVerifyRouter.post("/proof/verify", authenticate, requireGenesis, asyncRoute
   }
   const verdict = judged.verdict;
   const pass = verdictPasses(verdict);
+  // Failed only on confidence (everything "seen", but under MIN_OBJECT_CONFIDENCE): the model's reason describes a pass,
+  // so the server says why it failed (stored, published, spoken).
+  if (!pass && verdict.objectPresent && verdict.gestureMatches && !verdict.looksLikeScreenOrPrintout) {
+    const doing = rep ? (rep.exercise === "plank" ? "holding a plank" : `doing ${repHabitText(rep.exercise, rep.target).replace(/^\d+\s+/, "")}`) : "";
+    verdict.reason = rep ? `The Keeper wasn't sure it saw you ${doing} at the Freeze.` : `The Keeper wasn't sure it saw the ${expectedObject}.`;
+  }
   const receipt: Receipt = {
     v: RECEIPT_VERSION, kind: "oath", wallet: req.wallet, target: withContext ? oath : null, dayIndex: withContext ? dayIndex : null, habit: habit ?? null,
     // What the vision model was asked to see: for a rep set the freeze move (the habit itself is in `reps`).

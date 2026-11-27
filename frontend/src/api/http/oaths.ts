@@ -197,7 +197,7 @@ const GESTURE: Record<string, GestureLabel> = { Thumb_Up: "thumbs_up", Victory: 
 const GESTURE_TEXT: Record<GestureLabel, string> = { thumbs_up: "thumbs up", victory: "victory sign (index and middle finger in a V)", open_palm: "open palm facing the camera", closed_fist: "closed fist", pointing_up: "pointing up" };
 const VerifyResponse = z.object({
   pass: z.boolean(), verificationId: z.string().nullable(), failedChecks: z.number().int().optional(),
-  objectPresent: z.boolean().optional(), gestureMatches: z.boolean().optional(), receiptHash: z.string().optional(), reason: z.string().optional(),
+  objectPresent: z.boolean().optional(), gestureMatches: z.boolean().optional(), looksLikeScreenOrPrintout: z.boolean().optional(), receiptHash: z.string().optional(), reason: z.string().optional(),
 });
 
 /**
@@ -250,6 +250,7 @@ export function httpProof(c: HttpClient): ProofApi {
         status: "fail", attempts: checked.failedChecks ?? 1,
         ...(checked.objectPresent !== undefined ? { objectPresent: checked.objectPresent } : {}),
         ...(checked.gestureMatches !== undefined ? { gestureMatches: checked.gestureMatches } : {}),
+        ...(checked.looksLikeScreenOrPrintout !== undefined ? { looksLikeScreen: checked.looksLikeScreenOrPrintout } : {}),
         ...(checked.reason ? { reason: checked.reason } : {}),
       };
       const r = await c.post("/api/proof/habit", { oath: oath.id, dayIndex: challenge.dayIndex, habit: challenge.habit, verificationId: checked.verificationId }, HabitProofResponse);

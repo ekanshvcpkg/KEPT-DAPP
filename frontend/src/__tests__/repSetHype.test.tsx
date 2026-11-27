@@ -9,6 +9,7 @@ import { t } from "@/copy";
 import type { RepEvidence } from "@/api";
 import { RepSet } from "@/screens/proof/RepSet";
 import { useSettings } from "@/state/settings";
+import { FREEZE_EXTRA_MS, FREEZE_RESUME_HOLD_END, stretchFreeze } from "@/testing/stretchFreeze";
 
 let mockClockT = 0;
 jest.mock("kept-gesture", () => {
@@ -30,6 +31,8 @@ jest.mock("@/features/keeper/hypeSources", () => {
 const audio = jest.requireMock("expo-audio") as { createAudioPlayer: jest.Mock; __player: { play: jest.Mock; pause: jest.Mock; replace: jest.Mock } };
 const vector = JSON.parse(readFileSync(join(__dirname, "../../../packages/engine/test-vectors/reps-vectors.json"), "utf8"))
   .vectors.find((v: { name: string }) => v.name === "freeze-resume");
+// Held as long as RepSet's freeze now lasts (testing/stretchFreeze.ts).
+const held = stretchFreeze(vector.trace, FREEZE_RESUME_HOLD_END, FREEZE_EXTRA_MS);
 
 /** What a play was: a hype line ("hype/start-clean-1", from the mock above) or a count / set line ("voice"). */
 const clipOf = (src: unknown): string => (typeof src === "string" && src.startsWith("hype/") ? src : "voice");
@@ -56,7 +59,7 @@ async function runSet(o: { freezeAfter: number; skip?: [number, number]; until?:
     mockClockT = ts;
     await act(async () => { (screen.getByTestId("rep-counter").props.onPose as (e: object) => void)({ nativeEvent: { t: ts, w: 640, h: 480, rot: 90, tilt: 0, p } }); });
   };
-  const { t: ts, p } = vector.trace as { t: number[]; p: number[] };
+  const { t: ts, p } = held;
   await pose(-100, p.slice(0, 36));
   t0 = -100; d0 = Date.now();
   await fireEvent.press(screen.getByText(t("additions.reps.start", { target: 8, label: t("additions.reps.ex.pushup.label") })));
@@ -87,9 +90,9 @@ describe("RepSet › the Keeper's hype lines", () => {
     expect(ids[0]).toMatch(/^hype\/start-clean-\d$/);
     expect(ids.at(-1)).toMatch(/^hype\/done-clean-\d$/);
     expect(ids.filter((id) => id.startsWith("hype/resume-"))).toHaveLength(1);
-    // The Freeze: from the count of rep 4 until counting resumes 3.5 s later, no hype line starts.
+    // The Freeze: from the count of rep 4 until counting resumes (at least 4.6 s later), no hype line starts.
     const freezeAt = reps[3]!.endT;
-    expect(r.hype.filter((x) => x.t >= freezeAt && x.t < freezeAt + 3500)).toEqual([]);
+    expect(r.hype.filter((x) => x.t >= freezeAt && x.t < freezeAt + 4600)).toEqual([]);
     // No hype line starts while a count or a set line is still playing (they're ≤ 1.4 s; the coach waits for them).
     for (const h of r.hype) {
       const before = r.plays.filter((x) => !x.clip.startsWith("hype/") && x.t <= h.t).at(-1);
@@ -121,10 +124,13 @@ describe("RepSet › the Keeper's hype lines", () => {
   });
 
   it("stops a hype line still playing when the screen closes mid-set", async () => {
-    const r = await runSet({ freezeAfter: 4, unmountAt: 11_000 });
+    // Rep 4's end + the freeze (~5.2 s: its number, "Freeze! One hand up. Hold it.", 0.8 s, the photo, 2 s) + 0.8 s:
+    // the line after the Freeze photo is playing.
+    const closeAt = reps[3]!.endT + 6_000;
+    const r = await runSet({ freezeAfter: 4, unmountAt: closeAt });
     const last = r.hype.at(-1)!;
     expect(last.clip).toMatch(/^hype\/resume-clean-s?\d$/);
-    expect(r.pauses.some((x) => x.t >= 11_000)).toBe(true);
+    expect(r.pauses.some((x) => x.t >= closeAt)).toBe(true);
     expect(r.evidence).toBeNull();
   });
 });

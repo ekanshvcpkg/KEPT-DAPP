@@ -1,7 +1,7 @@
 // The Keeper's check of a live set ("20 push-ups", "20 jumping jacks", "60-second plank"). The phone's count is only a
 // display: the server recounts the uploaded pose trace with the same engine (shared/reps.ts, byte-identical to
 // packages/engine), checks the timing and the "Freeze!" liveness moment, and the photo it judges is the freeze frame
-// (the challenge gesture, mid-workout). The checks are the same for every activity: a plank's "reps" are its seconds held
+// (one hand raised mid-workout, REP_FREEZE_GESTURE: not the challenge's gesture, which only supplies freshness). The checks are the same for every activity: a plank's "reps" are its seconds held
 // (the engine emits one per full second in a valid plank), so its target, its freeze rep and its count are in seconds.
 import { createHash } from "node:crypto";
 import { countReps, exerciseUnit, parseTrace, REPS_ENGINE, type Exercise } from "../shared/reps.js";
@@ -22,15 +22,18 @@ export const REP_FREEZE_MOVE = "hand_up";
  * the person is in when "Freeze!" comes between two reps (or seconds of a plank), never a specific moment of the move.
  */
 const FREEZE_OBJECT: Record<Exercise, string> = {
-  pushup: "a person mid push-up workout: on the floor in a plank or push-up position (one hand may be raised)",
-  squat: "a person mid squat workout: standing with bent knees or in a squat (one hand may be raised)",
-  jumpingjack: "a person mid jumping-jack workout, standing (one hand may be raised)",
-  lunge: "a person mid lunge workout: standing, or in a lunge with one leg forward and both knees bent (one hand may be raised)",
-  situp: "a person mid sit-up workout: on the floor, lying back or sitting up with knees bent (one hand may be raised)",
-  highknee: "a person mid high-knees workout, standing or with one knee raised (one hand may be raised)",
-  burpee: "a person mid burpee workout: standing, crouching or in a plank on the floor (one hand may be raised)",
-  press: "a person mid overhead-press workout, standing, hands at the shoulders or overhead, with or without weights (one hand may be raised)",
-  plank: "a person holding a plank on the floor (one hand may be raised)",
+  // The freeze comes right after a rep ends, so the person is usually in the activity's rest pose (the engine's
+  // startPose: standing tall, arms straight at the top of a push-up, lying back for a sit-up, hands at the rack for a
+  // press). Each description names that pose first: a strict judge failed a real squat set as "standing, not squatting".
+  pushup: "a real person doing push-ups: on the floor in a plank or push-up position, arms straight or bent (one hand may be raised off the floor)",
+  squat: "a real person doing squats, in any position of the exercise: standing upright between reps, knees bent, or down in a squat (one hand may be raised)",
+  jumpingjack: "a real person doing jumping jacks, in any position of the exercise: standing upright with arms down between reps, or arms and legs spread (one hand may be raised)",
+  lunge: "a real person doing lunges, in any position of the exercise: standing upright between reps, or in a lunge with one leg forward (one hand may be raised)",
+  situp: "a real person doing sit-ups on the floor, in any position of the exercise: lying on the back between reps, or sitting up with knees bent (one hand may be raised)",
+  highknee: "a real person doing high knees: standing upright, with or without one knee raised (one hand may be raised)",
+  burpee: "a real person doing burpees, in any position of the exercise: standing upright between reps, crouching, or in a plank on the floor (one hand may be raised)",
+  press: "a real person doing overhead presses, standing or seated: hands at the shoulders or overhead, with or without weights (one hand may be raised)",
+  plank: "a real person holding a plank on the floor, on the forearms or on straight arms (one hand may be raised)",
 };
 export const repFreezeObject = (exercise: Exercise): string => FREEZE_OBJECT[exercise];
 
@@ -128,8 +131,9 @@ export function checkRepEvidence(
     if (f.t < a || f.t > b) return { error: "The freeze photo wasn't taken during the freeze" };
     const k = f.afterRep;
     if (!Number.isInteger(k) || k < 1 || k > reps.length || reps[k - 1]!.endT >= a || (k < reps.length && reps[k]!.startT <= b)) return { error: "The freeze doesn't sit between two reps" };
-    // The gesture to hold is the challenge's (the app's own label in f.gesture is not trusted or compared); the vision model
-    // checks the freeze frame for it. The rep it comes after is the server's pick.
+    // The freeze move is one raised hand (REP_FREEZE_GESTURE), never the challenge's gesture: the challenge only supplies
+    // freshness (freezeAfterRep from its blockhash). The app's label in f.gesture is not trusted or compared. The rep it
+    // comes after is the server's pick.
     if (k !== freezeAfterRep(challenge, habit.target)) return { error: "The freeze came at the wrong rep" };
     if (f.sha256 !== photoHash) return { error: "The photo isn't the freeze frame" };
     freeze = { afterRep: k, gesture: REP_FREEZE_MOVE, t: f.t };

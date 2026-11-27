@@ -148,7 +148,7 @@ export function HabitListEditor({ fields, onChange, steps, onBack, onNext, copy 
           <SentenceInput label={t(copy.name)} value={editor.name} onChange={(name) => setEditor({ ...editor, name })} max={GOAL_MAX} placeholder={t(copy.placeholder)} />
           {editor.entry === null
             ? <Banner tone="grey" icon="image-outline" title={t("additions.oathCreate.noProof")} sub={t("additions.oathCreate.noProofSub")} />
-            : <Banner tone="lime" icon={entryIcon(editor.entry)} title={t("additions.oathCreate.proofSummary", { object: entryLabel(editor.entry) })} sub={t("additions.oathCreate.proofSummarySub")} />}
+            : <Banner tone="lime" icon={entryIcon(editor.entry)} title={t("additions.oathCreate.proofSummary", { object: entryLabel(editor.entry) })} sub={t(/^reps_/.test(editor.entry) ? "additions.oathCreate.proofSummaryRepSub" : "additions.oathCreate.proofSummarySub")} />}
         </>
       )}
       <ProofObjectPicker key="proof-picker" value={editor.entry} onPick={(entry) => setEditor({ ...editor, entry })} onActiveChange={setSearching} />

@@ -1,5 +1,6 @@
 // Turning Oath views into display strings and visuals. Money is formatted only here and in screens
 // (CLAUDE.md › Money); all numbers come from the view.
+import { parseRepHabit } from "@kept/engine";
 import { OBJECTS } from "@kept/config";
 import { t } from "@/copy";
 import type { CopyKey } from "@/copy";
@@ -54,6 +55,12 @@ export const objectName = (objectId: number) => t(`common.objects.${OBJECTS[obje
 /** An Oath's icon: that of its first habit's proof object. */
 export const oathIcon = (f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): IconName => objectIconOfText(habitsOf(f)[0]!.object);
 /** The objects an Oath's habits are proven with, each once: "Dumbbell · Book". */
+/** How an Oath's habits are proven: all by live photo, all by a counted set (rep habits), or a mix of both. */
+export function proofKind(f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): "photo" | "reps" | "mixed" {
+  const hs = habitsOf(f);
+  const reps = hs.filter((h) => parseRepHabit(h.object)).length;
+  return reps === 0 ? "photo" : reps === hs.length ? "reps" : "mixed";
+}
 export const oathObjects = (f: Pick<OathFacts, "habits" | "goal" | "name" | "habitObjects" | "objectId">): string => [...new Set(habitsOf(f).map((h) => objectNameOfText(h.object)))].join(" · ");
 
 export const reviewText = (m: ReviewMode) => t(m === "ai" ? "screens.C5.b1.o0.t" : "screens.C5.b1.o1.t");

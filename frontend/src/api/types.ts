@@ -121,7 +121,7 @@ export interface Challenge { habit: number; dayIndex: number; object: string; ge
 export type ProofOutcome =
   /** `dayKept`: this was the last habit of the day. */
   | { status: "pass"; dayKept: boolean; reason?: string }
-  | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean; reason?: string }
+  | { status: "fail"; attempts: number; objectPresent?: boolean; gestureMatches?: boolean; looksLikeScreen?: boolean; reason?: string }
   | { status: "unavailable" }
   | { status: "expired" };
 
